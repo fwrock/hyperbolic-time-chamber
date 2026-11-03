@@ -130,4 +130,22 @@ class GraphSqliteLoaderSpec extends AnyFlatSpec with Matchers {
       Files.deleteIfExists(dbPath)
     }
   }
+
+  it should "load the optional sidewalk metadata while preserving legacy row defaults" in {
+    val path = Files.createTempFile("graph-sidewalk", ".db")
+    try {
+      writeDb(path)
+      val conn = DriverManager.getConnection(s"jdbc:sqlite:$path")
+      try {
+        val stmt = conn.createStatement()
+        try {
+          stmt.execute("ALTER TABLE city_map_edge ADD COLUMN sidewalk TEXT")
+          stmt.execute("""UPDATE city_map_edge SET sidewalk='{"enabled":false,"width":2.5,"gap":0.4}' WHERE id='11'""")
+        } finally stmt.close()
+      } finally conn.close()
+      val data = Graph.loadFromSqliteFile(path.toString).get
+      data.edgeLabelsById(11L).sidewalk shouldBe org.interscity.htc.model.hybrid.entity.state.model.SidewalkConfig(false, 2.5, 0.4)
+      data.edgeLabelsById(12L).sidewalk shouldBe org.interscity.htc.model.hybrid.entity.state.model.SidewalkConfig()
+    } finally Files.deleteIfExists(path)
+  }
 }

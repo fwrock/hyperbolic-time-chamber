@@ -113,6 +113,43 @@ performance remain outside the validated scope. See the
 
 ## Simulation Models
 
+### Generic actor filtering at load time
+
+`htc.load-filter.include-classes` and `exclude-classes` work with actor classes from
+any model. Empty inclusion means all classes; exclusions take precedence. Names can
+be short, relative or fully qualified. Include shared infrastructure when using an
+allow-list. Settings also accept comma-separated `HTC_LOAD_INCLUDE_CLASSES` and
+`HTC_LOAD_EXCLUDE_CLASSES` environment values.
+
+Filtering applies to sources and records in EAGER/PROGRESSIVE JSON and SQLite,
+after what-if modifications and before partial selection. A retained record with an
+explicit dependency on an excluded class fails instead of being loaded with that
+broken dependency. The original scenario files are never written. Configuration is
+resolved at startup and does not alter a running simulation.
+
+Optional model-owned transforms implement `core.actor.manager.load.ActorLoadTransform`
+with a public `Config` constructor. List their fully qualified names in
+`htc.load-filter.transforms` / `HTC_LOAD_TRANSFORMS`. Transforms can adapt data and
+relationships before dependency checking; they cannot change actor identity/class.
+The core filter contains no mobility-specific classes, plan fields or mode rules.
+
+For hybrid mobility, the optional `MobilityLoadTransform` handles transit-dependent
+plans. The explicit walking policy replaces each affected trip by one walk between
+its activity locations, preserving activity schedules and existing private-vehicle
+trips. Mixed private-vehicle/transit trips are rejected to avoid stranding a vehicle.
+The adapter defaults to `reject`; it is inactive unless listed in `transforms`.
+
+```bash
+HTC_LOAD_EXCLUDE_CLASSES=Bus,BusStop,BusStation,Subway,SubwayStation,RailLink \
+HTC_LOAD_TRANSFORMS=org.interscity.htc.model.hybrid.support.MobilityLoadTransform \
+HTC_TRANSIT_TRIP_POLICY=walk \
+HTC_SIMULATION_CONFIG_FILE=/path/to/simulation.json \
+java -jar target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar
+```
+
+The policy's HOCON key is `htc.mobility.load-policy.transit-trip-policy`.
+ClickHouse reporting is configured independently to export vehicle flow for SimEDaPE.
+
 ### Mesoscopic (MESO)
 
 Each link maintains a **count** of registered vehicles and computes aggregate speed via a

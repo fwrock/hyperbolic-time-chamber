@@ -74,6 +74,15 @@ class IndependentRuntimeCodecSpec extends AnyFlatSpec with Matchers with BeforeA
     }
   }
 
+  it should "preserve remote timing snapshots on an independent cold codec" in {
+    val original = core.metrics.ExecutionTimingCollector.Captured("remote-jvm", 2,
+      Vector(core.metrics.core.TimingSnapshot("route_walking", 3L, 1L, 2.0, 1.0, 0.5, 0, 0.0)))
+    val from = SerializationExtension(writer)
+    val serializer = from.findSerializerFor(original)
+    serializer.getClass.getName should include ("Kryo")
+    SerializationExtension(reader).deserialize(from.serialize(original).get, serializer.identifier, "").get shouldBe original
+  }
+
   "production worker Props" should "use class constructors rather than remotely serialized creator closures" in {
     val ref = writer.deadLetters
     val optimistic = AccountedOptimisticLocalTimeManager.props(100L, ref, ref)

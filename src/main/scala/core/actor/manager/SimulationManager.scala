@@ -82,6 +82,7 @@ class SimulationManager(
     case event: LoadBalanceReadyEvent           => handleLoadBalanceReady(event)
     case _: StopSimulationEvent                 => handleStopSimulation()
     case core.runtime.accounting.RuntimeFailure(reason) =>
+      PhaseMetrics.recordPhaseEnd("loading", failed = true)
       logError(s"[SIMULATION-FAILED] $reason")
       core.api.SimulationController.markFailed()
     case RetryPrepareSimulation =>
@@ -277,7 +278,9 @@ class SimulationManager(
       createSingletonProxy(LOAD_MANAGER_ACTOR_NAME) ! LoadDataEvent(
         actorRef = selfProxy,
         actorsDataSources = configuration.actorsDataSources,
-        postLoadRegistrationClasses = configuration.postLoadRegistrationClasses
+        postLoadRegistrationClasses = configuration.postLoadRegistrationClasses,
+        partial = configuration.partial,
+        modifications = configuration.modifications
       )
     } else {
       logWarn(
@@ -316,6 +319,7 @@ class SimulationManager(
   }
 
   private def onSimulationConfigLoadFailed(event: SimulationConfigLoadFailedEvent): Unit = {
+    PhaseMetrics.recordPhaseEnd("config_load", failed = true)
     configLoadInProgress = false
     logError(s"Failed to load simulation configuration: ${event.cause.getMessage}", event.cause)
     selfDestruct()
@@ -328,6 +332,7 @@ class SimulationManager(
     * check before creating `creatorRef`/`creatorPoolRef`.
     */
   private def onScenarioPreflightValidationFailed(event: ScenarioPreflightValidationFailedEvent): Unit = {
+    PhaseMetrics.recordPhaseEnd("loading", failed = true)
     logError(s"Scenario load aborted: ${event.error.message}")
     selfDestruct()
   }
@@ -504,6 +509,7 @@ class SimulationManager(
 
   private def handleStopSimulation(): Unit = {
     PhaseMetrics.recordPhaseEnd("simulation")
+    if (reportManager == null) core.api.SimulationController.markCompleted()
     logInfo("Received StopSimulationEvent. Stopping simulation managers gracefully")
     try {
       if (loadBalanceManager != null) {

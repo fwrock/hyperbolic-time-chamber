@@ -166,4 +166,8 @@ message ActorInteraction{
   LogicalEventOrder order = 20;
   string sourceEpoch = 21;
   string sourceIncarnation = 22;
+  // Node that sent this message: NodeIdentity rank + 1 (0 = unknown / stamping disabled, which proto3
+  // does not write at all). Only the number is sent; the receiver derives the label from its own
+  // table, so the per-message cost is 3 bytes (2-byte tag + 1-byte varint) on a stamped message.
+  uint32 senderNode = 23;
 }

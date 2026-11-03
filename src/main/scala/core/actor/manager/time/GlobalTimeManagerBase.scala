@@ -5,6 +5,7 @@ import core.entity.event.control.execution.TimeManagerRegisterEvent
 import core.types.Tick
 import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, POOL_TIME_MANAGER_ACTOR_NAME}
 import core.api.SimulatorSettingsRegistry
+import core.metrics.core.{ExecutionTimingMetrics, TimedOperation}
 
 import org.apache.pekko.actor.{ActorRef, Props}
 import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
@@ -36,6 +37,33 @@ abstract class GlobalTimeManagerBase(
       timeManager = null,
       actorId = actorId
     ) {
+
+  private var loopTiming: Option[ExecutionTimingMetrics.timers.Span] = None
+  private var synchronizationTiming: Option[ExecutionTimingMetrics.timers.Span] = None
+  private var rebalanceTiming: Option[ExecutionTimingMetrics.timers.Span] = None
+
+  protected final def beginExecutionTiming(): Unit =
+    if (loopTiming.isEmpty) loopTiming = Some(ExecutionTimingMetrics.timers.start(TimedOperation.SimulationLoop))
+  protected final def finishExecutionTiming(failed: Boolean = false): Unit = {
+    finishSynchronizationTiming(failed)
+    loopTiming.foreach(_.stop(failed)); loopTiming = None
+  }
+  protected final def beginSynchronizationTiming(): Unit =
+    if (synchronizationTiming.isEmpty)
+      synchronizationTiming = Some(ExecutionTimingMetrics.timers.start(TimedOperation.TimeManagerSynchronization))
+  protected final def finishSynchronizationTiming(failed: Boolean = false): Unit = {
+    synchronizationTiming.foreach(_.stop(failed)); synchronizationTiming = None
+  }
+  protected final def beginRebalanceTiming(): Unit =
+    if (rebalanceTiming.isEmpty) rebalanceTiming = Some(ExecutionTimingMetrics.timers.start(TimedOperation.Rebalance))
+  protected final def finishRebalanceTiming(failed: Boolean = false): Unit = {
+    rebalanceTiming.foreach(_.stop(failed)); rebalanceTiming = None
+  }
+  override def postStop(): Unit = {
+    finishExecutionTiming(failed = true)
+    finishRebalanceTiming(failed = true)
+    super.postStop()
+  }
 
   private var selfProxy: ActorRef = null
   protected var timeManagersPool: ActorRef = _

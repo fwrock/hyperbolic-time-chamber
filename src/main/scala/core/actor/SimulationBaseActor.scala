@@ -1162,6 +1162,9 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The spontaneous event
     */
   private def handleSpontaneous(event: SpontaneousEvent): Unit = {
+    currentFromNode = 0
+    currentMessageType = ""
+    currentFromType = ""
     if ((event.order.nonEmpty && event.scheduleRevision < scheduleRevision) ||
       (event.generation > 0L && event.generation <= currentGeneration)) {
       sendTimeManager(event.actorRef, FinishEvent(self, schedulingIdentity(), currentTick, timeManager = event.actorRef,
@@ -1261,6 +1264,12 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
     ActorMetrics.eventsProcessed.labels("interaction").inc()
     updateLamportClock(event.lamportTick)
+    // Distributed-run accounting: which node sent this, and was it this one? Anti-messages are control traffic, not interactions.
+    if (!event.isAntiMessage)
+      core.cluster.NodeIdentity.recordReceive(event.senderNode, event.eventType, event.actorClassType, cachedActorTypeLabel)
+    currentFromNode = event.senderNode
+    currentMessageType = event.eventType
+    currentFromType = core.cluster.NodeIdentity.shortClass(event.actorClassType)
 
     // Time Warp anti-message receipt (docs/TIME_WARP_DESIGN.md §10): not a real interaction to
     // process via actInteractWith at all -- find the original send this retracts and undo back to
@@ -2009,9 +2018,18 @@ abstract class SimulationBaseActor[T <: BaseState](
         tick = currentTick,
         lamportTick = getLamportClock,
         data = data,
-        label = label
+        label = label,
+        fromNode = currentFromNode,
+        messageType = currentMessageType,
+        fromType = currentFromType
       )
     )
+
+  /** Node (NodeIdentity stamp) that sent the message this actor is handling, 0 inside spontaneous events. Carried into reports. */
+  private var currentFromNode: Int = 0
+  /** Event type and sender actor class of the message being handled ("" inside spontaneous events); carried into reports. */
+  private var currentMessageType: String = ""
+  private var currentFromType: String = ""
 
   /** Default report strategy resolved once per actor and cached. Avoids a [[config.getString]] +
     * [[ReportTypeEnum.valueOf]] allocation on every call to [[report]] (which can be invoked
@@ -2020,6 +2038,9 @@ abstract class SimulationBaseActor[T <: BaseState](
   private lazy val cachedDefaultReportType: ReportTypeEnum =
     try ReportTypeEnum.valueOf(config.getString("htc.report-manager.default-strategy"))
     catch { case _: Exception => ReportTypeEnum.valueOf("csv") }
+
+  private lazy val defaultReportsEnabled: Boolean =
+    !config.hasPath("htc.report-manager.default-enabled") || config.getBoolean("htc.report-manager.default-enabled")
 
   /** This actor's own model class type (e.g. "Car"), resolved once and cached for Prometheus
     * labels -- avoids a `getClass.getName` + string-split allocation on every interaction/
@@ -2040,6 +2061,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The report event
     */
   protected def report(event: ReportEvent): Unit = {
+    if (!defaultReportsEnabled) return
     // The surviving event's original report is still buffered; replaying it would emit it twice.
     if (isReplaying) return
     if (reporters.isEmpty) return
@@ -2097,7 +2119,10 @@ abstract class SimulationBaseActor[T <: BaseState](
       entityId = entityId,
       tick = currentTick,
       lamportTick = getLamportClock,
-      data = data
+      data = data,
+      fromNode = currentFromNode,
+      messageType = currentMessageType,
+      fromType = currentFromType
     )
     report(event)
   }
@@ -2117,7 +2142,10 @@ abstract class SimulationBaseActor[T <: BaseState](
           tick = currentTick,
           lamportTick = getLamportClock,
           data = data,
-          label = label
+          label = label,
+          fromNode = currentFromNode,
+          messageType = currentMessageType,
+          fromType = currentFromType
         ), reporter)
     }
 

@@ -2,6 +2,7 @@ package org.interscity.htc.model.hybrid.util
 
 import org.interscity.htc.core.entity.event.control.rollback.EventReadJournal
 import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
+import org.interscity.htc.core.metrics.core.{ExecutionTimingMetrics, TimedOperation}
 import org.interscity.htc.model.hybrid.entity.state.model.{EdgeGraph, NodeGraph}
 
 import scala.collection.mutable
@@ -433,7 +434,9 @@ object GPSUtil {
     maxExpansions: Int = 150_000
   ): Option[(Double, mutable.Queue[(Long, Long)])] =
     observeRoute(s"hybrid.routing.compact:$originId:$destinationId:$useDynamicWeights:$maxExpansions") {
-      calcRouteCompactLive(originId, destinationId, useDynamicWeights, maxExpansions)
+      ExecutionTimingMetrics.timers.measure(TimedOperation.RouteVehicle) {
+        calcRouteCompactLive(originId, destinationId, useDynamicWeights, maxExpansions)
+      }
     }
 
   private[util] def observeRoute(key: String)(live: => Option[(Double, mutable.Queue[(Long, Long)])])
@@ -540,7 +543,9 @@ object GPSUtil {
     maxExpansions: Int = 200_000
   ): Option[(Double, mutable.Queue[(Long, Long)])] =
     observeRoute(s"hybrid.routing.walking:$originId:$destinationId:$maxExpansions") {
-      calcRouteCompactWalkingLive(originId, destinationId, maxExpansions)
+      ExecutionTimingMetrics.timers.measure(TimedOperation.RouteWalking) {
+        calcRouteCompactWalkingLive(originId, destinationId, maxExpansions)
+      }
     }
 
   private def calcRouteCompactWalkingLive(

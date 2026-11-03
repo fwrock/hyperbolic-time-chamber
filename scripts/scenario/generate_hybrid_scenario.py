@@ -386,7 +386,7 @@ PRIVATE_VEHICLE_CLASS_TYPE = {
 }
 
 
-def private_vehicle_actor(vehicle_id: int, node_id: int, mode: str) -> dict:
+def private_vehicle_actor(vehicle_id: int, node_id: int, mode: str, owner_id=None) -> dict:
     """Builds a Car/Bicycle/Motorcycle actor JSON — same `MovableState`-derived shape for all
     three (`origin`/`destination`/`actorType`/`size` are the only fields `CarState`/`BicycleState`/
     `MotorcycleState`'s primary constructors actually declare; `status`/`bestRoute`/`currentNode`
@@ -425,6 +425,8 @@ def private_vehicle_actor(vehicle_id: int, node_id: int, mode: str) -> dict:
         "dependencies": {
             "from_node": {"id": node_id, "classType": "hybrid.actor.Node"},
             "to_node": {"id": node_id, "classType": "hybrid.actor.Node"},
+            # partial-simulation filter: the vehicle is a part of its owner
+            **({"owner": {"id": owner_id, "classType": "hybrid.actor.Person", "relation": "part_of"}} if owner_id is not None else {}),
         },
     }
 
@@ -598,15 +600,15 @@ def build_scenario(
     # `eid(...)` is memoized by key, so re-minting `htcaid:car;grid_{i}` here returns the exact
     # same Long already registered in `owned_vehicles` above -- the Car actor and the Person's
     # ownership reference always agree.
-    cars = [car_actor(eid(f"htcaid:car;grid_{i}"), origins[i]) for i in car_owners] + [
+    cars = [car_actor(eid(f"htcaid:car;grid_{i}"), origins[i], owner_id=eid(f"htcaid:person;grid_{i}")) for i in car_owners] + [
         car_actor(eid(f"htcaid:car;grid_{len(car_owners) + j}"), rng.choice(node_ids))
         for j in range(num_cars - len(car_owners))
     ]
     bicycles = [
-        private_vehicle_actor(eid(f"htcaid:bicycle;grid_{i}"), origins[i], "bicycle") for i in bicycle_owners
+        private_vehicle_actor(eid(f"htcaid:bicycle;grid_{i}"), origins[i], "bicycle", owner_id=eid(f"htcaid:person;grid_{i}")) for i in bicycle_owners
     ]
     motorcycles = [
-        private_vehicle_actor(eid(f"htcaid:motorcycle;grid_{i}"), origins[i], "motorcycle")
+        private_vehicle_actor(eid(f"htcaid:motorcycle;grid_{i}"), origins[i], "motorcycle", owner_id=eid(f"htcaid:person;grid_{i}"))
         for i in motorcycle_owners
     ]
 

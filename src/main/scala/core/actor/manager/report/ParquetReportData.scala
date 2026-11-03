@@ -33,7 +33,7 @@ import scala.collection.mutable
   *
   * Schema (flat, queryable with Spark / DuckDB / AWS Athena): entity_id STRING tick INT64
   * real_time_ms INT64 lamport_tick INT64 event_type STRING (nullable) simulation_id STRING data
-  * STRING (nullable, JSON-encoded event payload)
+  * STRING (nullable, JSON-encoded event payload) node STRING (nullable) from_node STRING (nullable) message_type STRING (nullable) from_type STRING (nullable)
   */
 class ParquetReportData(
   override val reportManager: ActorRef,
@@ -56,7 +56,11 @@ class ParquetReportData(
       |    {"name": "lamport_tick",  "type": "long"},
       |    {"name": "event_type",    "type": ["null", "string"], "default": null},
       |    {"name": "simulation_id", "type": "string"},
-      |    {"name": "data",          "type": ["null", "string"], "default": null}
+      |    {"name": "data",          "type": ["null", "string"], "default": null},
+      |    {"name": "node",          "type": ["null", "string"], "default": null},
+      |    {"name": "from_node",     "type": ["null", "string"], "default": null},
+      |    {"name": "message_type",  "type": ["null", "string"], "default": null},
+      |    {"name": "from_type",     "type": ["null", "string"], "default": null}
       |  ]
       |}""".stripMargin
 
@@ -198,6 +202,11 @@ class ParquetReportData(
           record.put("event_type", event.label)
           record.put("simulation_id", sid)
           record.put("data", JsonUtil.toJson(event.data))
+          // Distributed-run context: reporting node and message-origin node (null when there is none).
+          record.put("node", Option(core.cluster.NodeIdentity.originLabel(event.node)).filter(_.nonEmpty).orNull)
+          record.put("from_node", Option(core.cluster.NodeIdentity.originLabel(event.fromNode)).filter(_.nonEmpty).orNull)
+          record.put("message_type", Option(event.messageType).filter(_.nonEmpty).orNull)
+          record.put("from_type", Option(event.fromType).filter(_.nonEmpty).orNull)
           w.write(record)
       }
       flushCount += 1

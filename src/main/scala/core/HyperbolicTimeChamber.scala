@@ -76,6 +76,10 @@ object HyperbolicTimeChamber {
 
     val cluster = Cluster(system)
 
+    // Who am I in this distributed run (rank + label); stamped on every outgoing message, see NodeIdentity.
+    core.cluster.NodeIdentity.start(system)
+    core.metrics.ExecutionTimingCollector(system)
+
     ClusterSharding(system)
 
     cluster.registerOnMemberUp {

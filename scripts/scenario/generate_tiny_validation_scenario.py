@@ -423,7 +423,13 @@ def person_actor(person_id: int, plan_mode: str, ids: dict[str, int | str]) -> d
     }
 
 
-def car_actor(car_id: str, node_id: str) -> dict:
+def car_actor(car_id: str, node_id: str, owner_id=None) -> dict:
+    dependencies = {
+        "from_node": {"id": node_id, "classType": "hybrid.actor.Node"},
+        "to_node": {"id": node_id, "classType": "hybrid.actor.Node"},
+    }
+    if owner_id is not None:  # partial-simulation filter: the car is a part of its owner
+        dependencies["owner"] = {"id": owner_id, "classType": "hybrid.actor.Person", "relation": "part_of"}
     return {
         "id": car_id,
         "typeActor": "hybrid.actor.Car",
@@ -444,10 +450,7 @@ def car_actor(car_id: str, node_id: str) -> dict:
                 "distance": 0.0,
             },
         },
-        "dependencies": {
-            "from_node": {"id": node_id, "classType": "hybrid.actor.Node"},
-            "to_node": {"id": node_id, "classType": "hybrid.actor.Node"},
-        },
+        "dependencies": dependencies,
     }
 
 
@@ -741,7 +744,7 @@ def build_scenario(output_dir: Path, data_path_prefix: str, plan_mode: str) -> N
         ],
     )
     write_json(data_dir / "persons_0.json", [person_actor(ids["person"], plan_mode, ids)])
-    write_json(data_dir / "cars_0.json", [car_actor(ids["car"], ids["person_node"])])
+    write_json(data_dir / "cars_0.json", [car_actor(ids["car"], ids["person_node"], owner_id=ids["person"])])
     station_terminal = subway_station_actor(
         ids["subway_station_a"],
         ids["subway_node_a"],

@@ -96,6 +96,18 @@ class ProgressiveSourceSafetySpec extends TestKit(ActorSystem("ProgressiveSource
       f.ack(f.creator, later)
       f.manager.expectMsg(TickRangeLoadedEvent("test", 11L, 100L, 1L))
     }
+    it should "account for raw indexed records even when the generic filter excludes every record in the window" in {
+      core.actor.manager.load.ActorLoadFilter.configure(
+        ConfigFactory.parseString("htc.load-filter.exclude-classes=[person]"))
+      try {
+        val f = new Fixture(sqlite)
+        f.indexed()
+        f.loader ! LoadActorsForTickRange(0L, 100L)
+        f.manager.expectMsg(TickRangeLoadedEvent("test", 0L, 100L, 0L))
+        f.creator.expectNoMessage(100.millis)
+        f.pool.expectNoMessage(100.millis)
+      } finally core.actor.manager.load.ActorLoadFilter.clear()
+    }
     it should "report an index error instead of empty successful input" in {
       val f = new Fixture(sqlite, missing = true)
       f.manager.expectMsgType[ProgressiveSourceFailed](10.seconds).reason should include ("index")

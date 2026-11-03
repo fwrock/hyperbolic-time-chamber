@@ -5,7 +5,7 @@
 > [src/main/scala/core/actor/manager/time/](../src/main/scala/core/actor/manager/time/),
 > [src/main/scala/model/hybrid/](../src/main/scala/model/hybrid/),
 > [src/main/resources/application.conf](../src/main/resources/application.conf),
-> `../../tools/sao-paulo/output/sp_1pct/` e `../../tools/toulouse/`.
+> `../../tools/sao-paulo/output/sp_1pct/` e `../../tools/toulouse/input/` e `../../tools/toulouse_raw_unused/`.
 
 > **Natureza do documento:** esta é uma **estimativa de ordem de magnitude** (não uma medição
 > instrumentada). Os números de escala de cenário foram **medidos nos arquivos gerados**; os
@@ -152,7 +152,7 @@ Ordens de magnitude por categoria (mensagens por dia simulado):
 - `model/hybrid/util/VehicleSimulationConfig.scala` — `simulationEndTick` default 86400.
 - `src/main/resources/application.conf` — seção `time-manager` (instâncias, lookahead, window-size).
 - Geradores: `tools/sao-paulo/generate_hybrid_input.py`, `tools/toulouse/generate_hybrid_input.py`;
-  dados medidos em `tools/sao-paulo/output/sp_1pct/data/` e `tools/toulouse/*.csv|*.xml.gz`.
+  dados medidos em `tools/sao-paulo/output/sp_1pct/data/` e `tools/toulouse/input/*.xml.gz` e `tools/toulouse_raw_unused/*.csv`.
 
 
 

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "htc:actor/Car",
+  "title": "Carro",
+  "description": "Veículo privado; parte da pessoa dona (owner).",
+  "x-htc-class": "hybrid.actor.Car",
+  "x-htc-version": 1,
+  "x-htc-filterable": true,
+  "x-htc-dependencies": [
+    {
+      "name": "from_node",
+      "class": "Node",
+      "required": true,
+      "relation": "reference"
+    },
+    {
+      "name": "to_node",
+      "class": "Node",
+      "required": true,
+      "relation": "reference"
+    },
+    {
+      "name": "owner",
+      "class": "Person",
+      "required": false,
+      "relation": "part_of"
+    }
+  ],
+  "type": "object",
+  "required": [
+    "id",
+    "typeActor",
+    "data"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "typeActor": {
+      "const": "hybrid.actor.Car"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "dataType",
+        "content"
+      ],
+      "properties": {
+        "dataType": {
+          "const": "model.hybrid.entity.state.CarState"
+        },
+        "content": {
+          "type": "object",
+          "required": [
+            "startTick",
+            "origin",
+            "actorType",
+            "size"
+          ],
+          "properties": {
+            "startTick": {
+              "type": "integer",
+              "x-htc-label": "Tick inicial",
+              "x-htc-group": "Tempo",
+              "x-htc-unit": "ticks",
+              "minimum": 0,
+              "x-htc-help": "Quando o ator entra na simulação."
+            },
+            "scheduleOnTimeManager": {
+              "type": "boolean",
+              "x-htc-label": "Agendar no gerenciador de tempo",
+              "x-htc-group": "Tempo"
+            },
+            "origin": {
+              "type": "integer",
+              "x-htc-label": "Nó de origem",
+              "x-htc-group": "Viagem",
+              "x-htc-ref": "Node"
+            },
+            "destination": {
+              "type": "integer",
+              "x-htc-label": "Nó de destino",
+              "x-htc-group": "Viagem",
+              "x-htc-ref": "Node"
+            },
+            "actorType": {
+              "type": "string",
+              "x-htc-label": "Tipo",
+              "x-htc-group": "Veículo",
+              "enum": [
+                "Car",
+                "Bicycle",
+                "Motorcycle",
+                "Bus"
+              ]
+            },
+            "size": {
+              "type": "number",
+              "x-htc-label": "Comprimento",
+              "x-htc-group": "Veículo",
+              "x-htc-unit": "m",
+              "exclusiveMinimum": 0
+            },
+            "distance": {
+              "type": "number",
+              "x-htc-label": "Distância percorrida",
+              "x-htc-group": "Viagem",
+              "x-htc-unit": "m",
+              "minimum": 0
+            },
+            "currentSimulationMode": {
+              "type": "string",
+              "x-htc-label": "Modo de simulação",
+              "x-htc-group": "Simulação",
+              "enum": [
+                "MESO",
+                "MICRO"
+              ]
+            },
+            "precomputedRoute": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "x-htc-label": "Rota pré-calculada",
+              "x-htc-group": "Viagem",
+              "x-htc-widget": "json"
+            },
+            "microState": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "x-htc-label": "Estado micro",
+              "x-htc-group": "Registros",
+              "x-htc-widget": "json",
+              "x-htc-editable": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

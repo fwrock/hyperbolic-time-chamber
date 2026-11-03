@@ -1,0 +1,95 @@
+{
+  "status": "passed",
+  "date": "2026-11-02",
+  "jar_sha256": "a815068315bd6bcd35593a5140615937609dce7182d2dbd52c3f7475c8d0a1db",
+  "engine_tests": 832,
+  "engine_assembly": "passed",
+  "editor_tests": 14,
+  "replay_etl_tests": 12,
+  "viewer_tests": 28,
+  "sqlite_converter_tests": 1,
+  "ui_typecheck": "passed",
+  "standalone_build": "passed",
+  "blocked_road_ids": [
+    10,
+    11
+  ],
+  "blocked_direct_distance_m": 200,
+  "expected_detour_distance_m": 600,
+  "expected_departure_tick": 10,
+  "expected_arrival_tick": 439,
+  "walking_reports_equal_across_policies": true,
+  "runs": [
+    {
+      "policy": "discrete-event",
+      "reported_departure_tick": 10,
+      "reported_arrival_tick": 439,
+      "distance_m": 600.0,
+      "engine_acknowledged_stop": true,
+      "walking_reports": [
+        {
+          "label": "person_walking_start",
+          "data": {
+            "walking_speed": 1.4,
+            "person_id": "43",
+            "walking_time_ticks": 429,
+            "tick": 10,
+            "arrival_tick": 439,
+            "destination": 2,
+            "distance": 600.0,
+            "origin": 1,
+            "event_type": "walking_trip_start"
+          }
+        },
+        {
+          "label": "person_walking_completed",
+          "data": {
+            "travel_time": 429,
+            "person_id": "43",
+            "tick": 439,
+            "event_type": "walking_trip_completed",
+            "arrival_tick": 439,
+            "distance": 600.0
+          }
+        }
+      ],
+      "raw_evidence_directory": "/tmp/htc-sidewalk-20261102/run"
+    },
+    {
+      "policy": "time-warp",
+      "reported_departure_tick": 10,
+      "reported_arrival_tick": 439,
+      "distance_m": 600.0,
+      "engine_acknowledged_stop": true,
+      "walking_reports": [
+        {
+          "label": "person_walking_start",
+          "data": {
+            "walking_speed": 1.4,
+            "person_id": "43",
+            "walking_time_ticks": 429,
+            "tick": 10,
+            "arrival_tick": 439,
+            "destination": 2,
+            "distance": 600.0,
+            "origin": 1,
+            "event_type": "walking_trip_start"
+          }
+        },
+        {
+          "label": "person_walking_completed",
+          "data": {
+            "travel_time": 429,
+            "person_id": "43",
+            "tick": 439,
+            "event_type": "walking_trip_completed",
+            "arrival_tick": 439,
+            "distance": 600.0
+          }
+        }
+      ],
+      "raw_evidence_directory": "/tmp/htc-sidewalk-20261102/time-warp"
+    }
+  ],
+  "scope": "Link sidewalk geometry and pedestrian access; mesoscopic walking retained; no pedestrian crowd model"
+}

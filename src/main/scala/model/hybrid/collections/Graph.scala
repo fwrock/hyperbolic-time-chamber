@@ -3,7 +3,7 @@ package org.interscity.htc.model.hybrid.collections
 import com.fasterxml.jackson.databind.{ DeserializationFeature, JavaType, ObjectMapper }
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.interscity.htc.model.hybrid.collections.graph.{ Edge, EdgeInfo }
-import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph }
+import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph, SidewalkConfig }
 
 import java.io.{ BufferedInputStream, File, FileInputStream, InputStream }
 import java.sql.DriverManager
@@ -71,6 +71,11 @@ case class Graph[V, W, L] private (
   def addVertex(vertex: V): Graph[V, W, L] =
     if (adjacencyList.contains(vertex)) this
     else Graph(adjacencyList + (vertex -> Map.empty[V, EdgeInfo[W, L]]))
+
+  def filterEdgeLabels(allowed: L => Boolean): Graph[V, W, L] =
+    Graph(adjacencyList.map { case (node, neighbors) =>
+      node -> neighbors.filter { case (_, edge) => allowed(edge.label) }
+    })
 
   def addEdge(source: V, target: V, weight: W, label: L): Graph[V, W, L] = {
     val graphWithVertices = addVertex(source).addVertex(target)
@@ -859,10 +864,17 @@ object Graph {
         val edgeLabelMapBuilder = Map.newBuilder[Long, EdgeGraph]
         val seenEdgeLabelIds = mutable.Set[Long]()
 
+        val columns = conn.createStatement()
+        val hasSidewalk = try {
+          val rs = columns.executeQuery("PRAGMA table_info(city_map_edge)")
+          try Iterator.continually(rs.next()).takeWhile(identity).exists(_ => rs.getString("name") == "sidewalk")
+          finally rs.close()
+        } finally columns.close()
         val edgeStmt = conn.createStatement()
         try {
+          val sidewalkColumn = if (hasSidewalk) "sidewalk" else "NULL AS sidewalk"
           val edgeRs = edgeStmt.executeQuery(
-            "SELECT id, resource_id, class_type, length, source_id, target_id, weight FROM city_map_edge"
+            s"SELECT id, resource_id, class_type, length, source_id, target_id, weight, $sidewalkColumn FROM city_map_edge"
           )
           try
             while (edgeRs.next()) {
@@ -875,7 +887,10 @@ object Graph {
                     id = edgeRs.getLong("id"),
                     resourceId = edgeRs.getString("resource_id"),
                     classType = edgeRs.getString("class_type"),
-                    length = edgeRs.getDouble("length")
+                    length = edgeRs.getDouble("length"),
+                    sidewalk = Option(edgeRs.getString("sidewalk"))
+                      .flatMap(json => Option(JacksonConfig.mapper.readValue(json, classOf[SidewalkConfig])))
+                      .getOrElse(SidewalkConfig())
                   )
 
                   if (!seenEdgeLabelIds.contains(label.id)) {

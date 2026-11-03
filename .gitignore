@@ -9,6 +9,7 @@ target/
 .idea/compiler.xml
 .idea/libraries/
 .idea/
+*./.idea
 *.iws
 *.iml
 *.ipr
@@ -216,8 +217,10 @@ k8s/generated/
 .github/copilot-instructions.md
 
 # Claude Code agents and project instructions (local-only, not shared via repo)
-.claude/agents/
+.claude/agents/*
 CLAUDE.md
+
+.agents/**
 
 # Terraform
 **/.terraform/

@@ -73,6 +73,11 @@ object SimulationController {
     withSystem {
       sys =>
         val configArg = configFile.filter(_.nonEmpty).orNull
+        // Actors created later (TrafficSignal, ...) call loadSimulationConfig() without a path and would not find the
+        // file this run was started from (REST mode has no HTC_SIMULATION_CONFIG_FILE). Register the chosen file's
+        // configuration, as PUT /config does, so every part of this run sees the same scenario.
+        if (configArg != null)
+          ApiConfigRegistry.set(core.util.SimulationUtil.loadSimulationConfig(configArg))
         // Shard regions for this scenario's actor classTypes are normally registered once at
         // boot (HyperbolicTimeChamber.start -> SimulationUtil.startShards), but in API mode
         // boot happens before any scenario is chosen, so that call is deferred (see
@@ -138,6 +143,19 @@ object SimulationController {
   }
 
   def markFailed(): Unit = _status.set(SimulationStatus.Failed)
+
+  /** The simulation ended on its own (end tick reached) or after a stop. Without this the status stayed
+    * in Loading/Running forever, so a client polling the REST API could not tell that a run was over.
+    * A failed run stays Failed, and a run that never started (Idle) is left alone.
+    */
+  def markCompleted(): Unit = {
+    _status.updateAndGet {
+      current =>
+        if (current == SimulationStatus.Failed || current == SimulationStatus.Idle) current
+        else SimulationStatus.Stopped
+    }
+    ()
+  }
 
   private def withSystem(f: ActorSystem => Unit): Either[String, Unit] =
     _system.get() match {

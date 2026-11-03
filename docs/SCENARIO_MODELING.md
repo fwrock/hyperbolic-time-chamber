@@ -973,6 +973,32 @@ Car  ←── Person (ownedVehicles)
 5. `Car`, `Bicycle`, `Motorcycle` (PROGRESSIVE, `Parked` until Person activates)
 6. `Person` (PROGRESSIVE)
 
+### 7.1 Composition relations (`relation`) — partial simulation
+
+Each `dependencies` entry may carry an optional `relation`:
+
+| value | meaning |
+|---|---|
+| `reference` (default when absent) | plain pointer (`from_node`, `to_node`, ...); never used by the partial-simulation filter |
+| `part_of` | the actor that holds this entry **is a part of** the referenced actor (the whole) |
+| `contains` | the actor that holds this entry **is a whole that contains** the referenced actor |
+
+`part_of` and `contains` are equivalent forms of the same relation; declare it once, on either side. The scenario generators
+(`tools/sao-paulo`, `tools/toulouse`, `tools/interscsimulator_scenario`, `scripts/scenario/generate_*`) write
+`"owner": {"id": <person id>, "classType": "hybrid.actor.Person", "relation": "part_of"}` on every private vehicle
+(Car/Bicycle/Motorcycle); `--no-declare-ownership` turns that off where the generator has the flag.
+
+```json
+"dependencies": {
+  "from_node": { "id": 3,  "classType": "hybrid.actor.Node" },
+  "owner":     { "id": 14, "classType": "hybrid.actor.Person", "relation": "part_of" }
+}
+```
+
+The engine ignores the value outside partial simulation. With `HTC_PARTIAL_SELECTION_FILE` set, the loader uses it to keep a person
+together with their vehicles (and the person of a kept vehicle); see `simedape/docs/PARTIAL_SIMULATION.md` for the closure rules,
+`htc.partial.filterable-classes`, and the report. Buses, stops, stations, subway and signals are not filtered.
+
 ---
 
 ## 8. Loading Strategies and Lifecycle

@@ -82,7 +82,8 @@ class EntityEnvelopeSerializer(
           isAntiMessage = aie.isAntiMessage,
           order = aie.order.map(ActorInteractionCodec.encodeOrder),
           sourceEpoch = aie.sourceEpoch,
-          sourceIncarnation = aie.sourceIncarnation
+          sourceIncarnation = aie.sourceIncarnation,
+          senderNode = aie.senderNode
         ).toByteArray
       case Failure(exception) =>
         throw new IllegalArgumentException(
@@ -138,7 +139,8 @@ class EntityEnvelopeSerializer(
               isAntiMessage = proto.isAntiMessage,
               order = proto.order.map(ActorInteractionCodec.decodeOrder),
               sourceEpoch = proto.sourceEpoch,
-              sourceIncarnation = proto.sourceIncarnation
+              sourceIncarnation = proto.sourceIncarnation,
+              senderNode = proto.senderNode
             )
           )
         case Failure(exception) =>

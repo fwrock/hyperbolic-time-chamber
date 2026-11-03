@@ -90,7 +90,7 @@ class CarMicroHandler(
         "micro_time_step"       -> data.microTimeStep,
         "ticks_per_global_tick" -> data.ticksPerGlobalTick,
         "tick"                  -> tick
-      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
+      ) ++ model.hybrid.support.MicroObservationFields.event(tick) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "enter_micro_link"
     )
 
@@ -137,7 +137,7 @@ class CarMicroHandler(
             "lane"       -> data.currentLane,
             "sub_tick"   -> data.subTick,
             "tick"       -> currentTickFn()
-          ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
+          ) ++ model.hybrid.support.MicroObservationFields.update(data, currentTickFn(), microUpdateReportEvery) ++ JunctionGeometry.reportingFields(data.junctionPosition),
           "micro_update"
         )
       }
@@ -182,7 +182,7 @@ class CarMicroHandler(
         "waiting_time_seconds"   -> data.waitingTimeSeconds,
         "total_distance"         -> state.distance,
         "tick"                   -> currentTickFn()
-      ) ++ JunctionGeometry.reportingFields(data.junctionPosition),
+      ) ++ model.hybrid.support.MicroObservationFields.event(currentTickFn()) ++ JunctionGeometry.reportingFields(data.junctionPosition),
       "leave_micro_link"
     )
 

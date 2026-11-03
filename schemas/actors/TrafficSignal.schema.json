@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "htc:actor/TrafficSignal",
+  "title": "Semáforo",
+  "description": "Controle semafórico de um ou mais nós.",
+  "x-htc-class": "hybrid.actor.TrafficSignal",
+  "x-htc-version": 1,
+  "x-htc-filterable": false,
+  "x-htc-dependencies": [
+    {
+      "name": "*",
+      "class": "Node",
+      "required": false,
+      "relation": "reference",
+      "note": "uma entrada por nó controlado, com a chave igual ao id do nó"
+    }
+  ],
+  "type": "object",
+  "required": [
+    "id",
+    "typeActor",
+    "data"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "typeActor": {
+      "const": "hybrid.actor.TrafficSignal"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "dataType",
+        "content"
+      ],
+      "properties": {
+        "dataType": {
+          "const": "model.hybrid.entity.state.TrafficSignalState"
+        },
+        "content": {
+          "type": "object",
+          "required": [
+            "startTick",
+            "cycleDuration",
+            "offset",
+            "nodes",
+            "phases"
+          ],
+          "properties": {
+            "startTick": {
+              "type": "integer",
+              "x-htc-label": "Tick inicial",
+              "x-htc-group": "Tempo",
+              "x-htc-unit": "ticks",
+              "minimum": 0,
+              "x-htc-help": "Quando o ator entra na simulação."
+            },
+            "scheduleOnTimeManager": {
+              "type": "boolean",
+              "x-htc-label": "Agendar no gerenciador de tempo",
+              "x-htc-group": "Tempo"
+            },
+            "cycleDuration": {
+              "type": "integer",
+              "x-htc-label": "Duração do ciclo",
+              "x-htc-group": "Ciclo",
+              "x-htc-unit": "ticks",
+              "minimum": 1
+            },
+            "offset": {
+              "type": "integer",
+              "x-htc-label": "Defasagem",
+              "x-htc-group": "Ciclo",
+              "x-htc-unit": "ticks",
+              "minimum": 0
+            },
+            "nodes": {
+              "type": "array",
+              "x-htc-label": "Nós controlados",
+              "x-htc-group": "Rede",
+              "items": {
+                "type": "integer",
+                "x-htc-ref": "Node"
+              },
+              "x-htc-widget": "ids",
+              "x-htc-ref": "Node"
+            },
+            "phases": {
+              "type": "array",
+              "x-htc-label": "Fases",
+              "x-htc-group": "Ciclo",
+              "x-htc-widget": "table",
+              "x-htc-help": "Uma linha por aproximação (origin = via de entrada) com o início e a duração do verde dentro do ciclo.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "origin",
+                  "greenStart",
+                  "greenDuration"
+                ],
+                "properties": {
+                  "origin": {
+                    "type": "integer",
+                    "x-htc-label": "Via de entrada",
+                    "x-htc-ref": "Link"
+                  },
+                  "greenStart": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "x-htc-label": "Início do verde",
+                    "x-htc-unit": "ticks"
+                  },
+                  "greenDuration": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "x-htc-label": "Duração do verde",
+                    "x-htc-unit": "ticks"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "Red",
+                      "Yellow",
+                      "Green",
+                      "Off"
+                    ],
+                    "x-htc-label": "Estado inicial"
+                  }
+                }
+              }
+            },
+            "signalStates": {
+              "type": "object",
+              "x-htc-label": "Estados dos sinais",
+              "x-htc-group": "Registros",
+              "x-htc-widget": "json",
+              "x-htc-editable": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

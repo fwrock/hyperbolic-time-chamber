@@ -46,6 +46,15 @@ class ClickHouseClientManager(
        |ORDER BY (simulation_id, link_id, tick)
        |SETTINGS index_granularity = 8192""".stripMargin
 
+  private val createTimingTable =
+    s"""CREATE TABLE IF NOT EXISTS $database.execution_timings (
+       |simulation_id LowCardinality(String), node LowCardinality(String), process_id String,
+       |snapshot_timestamp_ms Int64, operation LowCardinality(String), count UInt64, failed_count UInt64,
+       |total_seconds Float64, mean_seconds Float64, max_seconds Float64, last_seconds Float64,
+       |active_count UInt32, active_seconds Float64, elapsed_seconds Float64,
+       |scope LowCardinality(String), clock LowCardinality(String), unit LowCardinality(String)
+       |) ENGINE = MergeTree() ORDER BY (simulation_id, process_id, operation, snapshot_timestamp_ms)""".stripMargin
+
   private val createAggTable =
     s"""CREATE TABLE IF NOT EXISTS $database.link_vehicle_counts (
        |    simulation_id LowCardinality(String),
@@ -78,6 +87,12 @@ class ClickHouseClientManager(
     try {
       execute(createDatabase)
       execute(createRawTable)
+      execute(createTimingTable)
+      // Distributed-run context columns; ADD COLUMN IF NOT EXISTS upgrades tables created before they existed.
+      execute(s"ALTER TABLE $database.vehicle_link_events ADD COLUMN IF NOT EXISTS node LowCardinality(String) DEFAULT ''")
+      execute(s"ALTER TABLE $database.vehicle_link_events ADD COLUMN IF NOT EXISTS from_node LowCardinality(String) DEFAULT ''")
+      execute(s"ALTER TABLE $database.vehicle_link_events ADD COLUMN IF NOT EXISTS message_type LowCardinality(String) DEFAULT ''")
+      execute(s"ALTER TABLE $database.vehicle_link_events ADD COLUMN IF NOT EXISTS from_type LowCardinality(String) DEFAULT ''")
       execute(createAggTable)
       execute(createMV)
       Right(())
@@ -103,6 +118,15 @@ class ClickHouseClientManager(
       } catch {
         case e: Exception => Left(e.getMessage)
       }
+
+  def insertTimingBatch(jsonLines: Seq[String]): Either[String, Unit] =
+    if (jsonLines.isEmpty) Right(())
+    else try {
+      val query = s"INSERT INTO $database.execution_timings FORMAT JSONEachRow"
+      val url = s"$baseUrl?query=${java.net.URLEncoder.encode(query, StandardCharsets.UTF_8)}"
+      val status = postRaw(url, jsonLines.mkString("\n"))
+      if (status >= 200 && status < 300) Right(()) else Left(s"ClickHouse returned HTTP $status")
+    } catch { case e: Exception => Left(e.getMessage) }
 
   /** Checks whether ClickHouse is reachable (HEAD / with timeout). */
   def isAvailable: Boolean =

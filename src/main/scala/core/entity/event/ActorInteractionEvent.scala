@@ -28,7 +28,10 @@ case class ActorInteractionEvent(
   isAntiMessage: Boolean = false,
   order: Option[core.runtime.EventOrder] = None,
   sourceEpoch: String = "",
-  sourceIncarnation: String = ""
+  sourceIncarnation: String = "",
+  // NodeIdentity.stamp of the JVM that CREATED this event (default evaluated at construction, i.e. on the
+  // sender). Deserialisation passes the value that came over the wire. 0 = unknown.
+  senderNode: Int = core.cluster.NodeIdentity.stamp
 ) {
 
   def toIdentity: Identify = Identify(

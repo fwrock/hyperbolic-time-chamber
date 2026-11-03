@@ -5,7 +5,9 @@ case class EdgeGraph(
   id: Long,
   resourceId: String,
   classType: String,
-  length: Double
+  length: Double,
+  sidewalk: SidewalkConfig = SidewalkConfig.Default
 ) {
+  require(sidewalk != null, "sidewalk configuration cannot be null")
   override def toString: String = f"EdgeLabel($id, len=$length%.2f)"
 }

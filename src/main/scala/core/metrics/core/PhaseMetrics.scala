@@ -29,28 +29,27 @@ object PhaseMetrics {
     .labelNames("phase")
     .register()
 
-  /** Records the start of a simulation phase.
-    *
-    * @param phase
-    *   Phase name: "config_load", "loading", "progressive_loading", or "simulation"
-    */
-  def recordPhaseStart(phase: String): Unit = {
-    val nowSeconds = System.currentTimeMillis().toDouble / 1000.0
-    phaseStartTimestamp.labels(phase).set(nowSeconds)
-    logger.info(s"[Phase] '$phase' started")
+  private val starts = scala.collection.mutable.Map.empty[String, (Long, Option[ExecutionTimingMetrics.timers.Span])]
+
+  def recordPhaseStart(phase: String): Unit = synchronized {
+    if (!starts.contains(phase)) {
+      val operation = phase match {
+        case "config_load" => Some(TimedOperation.ConfigLoad)
+        case "loading" => Some(TimedOperation.SimulationLoad)
+        case _ => None
+      }
+      starts(phase) = (System.nanoTime(), operation.map(ExecutionTimingMetrics.timers.start))
+      phaseStartTimestamp.labels(phase).set(System.currentTimeMillis().toDouble / 1000.0)
+      phaseDurationSeconds.labels(phase).set(0.0)
+      logger.info(s"[Phase] '$phase' started")
+    }
   }
 
-  /** Records the end of a simulation phase and sets its duration gauge.
-    *
-    * @param phase
-    *   Phase name matching a prior [[recordPhaseStart]] call
-    */
-  def recordPhaseEnd(phase: String): Unit = {
-    val nowSeconds = System.currentTimeMillis().toDouble / 1000.0
-    val startSeconds = phaseStartTimestamp.labels(phase).get()
-    if (startSeconds > 0) {
-      val duration = nowSeconds - startSeconds
+  def recordPhaseEnd(phase: String, failed: Boolean = false): Unit = synchronized {
+    starts.remove(phase).foreach { case (started, span) =>
+      val duration = math.max(0L, System.nanoTime() - started) / 1e9
       phaseDurationSeconds.labels(phase).set(duration)
+      span.foreach(_.stop(failed))
       logger.info(f"[Phase] '$phase' completed in $duration%.2f seconds")
     }
   }

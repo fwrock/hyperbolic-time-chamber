@@ -92,12 +92,14 @@ case class LinkState(
   downstreamConnectors: Map[Long, Long] = Map.empty,
   stopLineGapM: Double = 0.0,
   following: model.MicroFollowingState = model.MicroFollowingState(),
-  downstreamSpillback: Boolean = false
+  downstreamSpillback: Boolean = false,
+  sidewalk: model.SidewalkConfig = model.SidewalkConfig.Default
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager
     ) {
+  require(sidewalk != null, "sidewalk configuration cannot be null; use enabled=false to disable walking")
   require(exitSpeedLimitsMps.values.forall(v => v.isFinite && v > 0.0), "exit speed limits must be positive m/s")
   require(stopLineGapM.isFinite && stopLineGapM >= 0 && stopLineGapM < length, "invalid signal stop-line gap")
   require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && lanes == 1 && microTicksPerGlobalTick == 1),
@@ -178,7 +180,8 @@ object LinkState {
     lanes: Int,
     speedLimit: Double,
     capacity: Double,
-    freeSpeed: Double
+    freeSpeed: Double,
+    sidewalk: model.SidewalkConfig = model.SidewalkConfig.Default
   ): LinkState =
     LinkState(
       startTick = startTick,
@@ -189,7 +192,8 @@ object LinkState {
       speedLimit = speedLimit,
       capacity = capacity,
       freeSpeed = freeSpeed,
-      simulationMode = SimulationModeEnum.MESO
+      simulationMode = SimulationModeEnum.MESO,
+      sidewalk = sidewalk
     )
 
   /** Create a hybrid link in MICRO mode with initialized lane structure */
@@ -204,7 +208,8 @@ object LinkState {
     freeSpeed: Double,
     microTimeStep: Double = 0.1,
     microTicksPerGlobalTick: Int = 10,
-    laneConfigs: List[LaneConfig] = List.empty
+    laneConfigs: List[LaneConfig] = List.empty,
+    sidewalk: model.SidewalkConfig = model.SidewalkConfig.Default
   ): LinkState = {
     val state = LinkState(
       startTick = startTick,
@@ -218,7 +223,8 @@ object LinkState {
       simulationMode = SimulationModeEnum.MICRO,
       microTimeStep = microTimeStep,
       microTicksPerGlobalTick = microTicksPerGlobalTick,
-      laneConfigurations = laneConfigs
+      laneConfigurations = laneConfigs,
+      sidewalk = sidewalk
     )
     state.initializeMicroLanes()
   }

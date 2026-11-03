@@ -86,16 +86,24 @@ class ClickHouseReportData(
   // Pre-sized to batchSize to avoid the doubling-resize cycle when filling the buffer.
   private val buffer = new mutable.ArrayBuffer[String](batchSize)
 
+  private val timingBuffer = new mutable.ArrayBuffer[String]()
+
   override def onReport(event: ReportEvent): Unit =
     event.data match {
       case flow: VehicleLinkFlowData =>
         buffer += toJsonLine(event, flow)
         if (buffer.size >= batchSize) flush()
+      case data: scala.collection.Map[?, ?] if event.label == "execution_timing_summary" =>
+        val fields = data.asInstanceOf[scala.collection.Map[String, Any]].toMap ++ Map(
+          "simulation_id" -> simulationId, "node" -> core.cluster.NodeIdentity.originLabel(event.node))
+        timingBuffer += core.util.JsonUtil.toJson(fields)
       case _ =>
     }
 
   override protected def onCommittedReport(event: ReportEvent): Unit = {
-    require(event.data.isInstanceOf[VehicleLinkFlowData], "unsupported ClickHouse report payload")
+    require(event.data.isInstanceOf[VehicleLinkFlowData] ||
+      (event.label == "execution_timing_summary" && event.data.isInstanceOf[scala.collection.Map[?, ?]]),
+      "unsupported ClickHouse report payload")
     strictCommit = true
     onReport(event)
   }
@@ -109,11 +117,17 @@ class ClickHouseReportData(
   override def postStop(): Unit = { flush(); () }
 
   private def flush(): Future[Unit] = {
-    if (buffer.isEmpty) return pendingWrites
+    if (buffer.isEmpty && timingBuffer.isEmpty) return pendingWrites
     val rows = buffer.toVector
     buffer.clear()
+    val timingRows = timingBuffer.toVector
+    timingBuffer.clear()
     val strict = strictCommit
     val write = pendingWrites.flatMap(_ => schemaReady).flatMap { _ => Future {
+      ch.insertTimingBatch(timingRows) match {
+        case Right(_) => ()
+        case Left(error) => throw new IllegalStateException(s"ClickHouse timing write failed: $error")
+      }
       ch.insertBatch(rows) match {
         case Right(_) => ()
         case Left(error) => throw new IllegalStateException(s"ClickHouse write failed: $error")
@@ -134,6 +148,10 @@ class ClickHouseReportData(
     sb.append(",\"actor_type\":\"").append(escape(flow.actorType)).append('"')
     sb.append(",\"actor_creation_type\":\"").append(escape(flow.actorCreationType)).append('"')
     sb.append(",\"vehicle_count_on_link\":").append(flow.vehicleCountOnLink)
+    sb.append(",\"node\":\"").append(escape(core.cluster.NodeIdentity.originLabel(event.node))).append('"')
+    sb.append(",\"from_node\":\"").append(escape(core.cluster.NodeIdentity.originLabel(event.fromNode))).append('"')
+    sb.append(",\"message_type\":\"").append(escape(event.messageType)).append('"')
+    sb.append(",\"from_type\":\"").append(escape(event.fromType)).append('"')
     sb.append('}')
     sb.toString
   }

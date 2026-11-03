@@ -460,7 +460,9 @@ object CompactGraph {
     data: LoadedGraphData[NodeGraph, Long, Double, EdgeGraph]
   ): CompactGraph = {
 
-    val nodeList: Array[NodeGraph] = data.graph.vertices.toArray
+    val walkableGraph = data.graph.filterEdgeLabels(_.sidewalk.enabled)
+
+    val nodeList: Array[NodeGraph] = walkableGraph.vertices.toArray
     val n                         = nodeList.length
 
     val nodeIdxMap = new java.util.HashMap[Long, Int](n * 2)
@@ -479,7 +481,7 @@ object CompactGraph {
     }
 
     // Edge label index (same as directed builder)
-    val m               = data.graph.edges.size
+    val m               = walkableGraph.edges.size
     val edgeLabelIdxMap = new java.util.HashMap[Long, Int](m * 2)
     val edgeLabelIdList = mutable.ArrayBuffer[Long]()
     data.edgeLabelsById.foreachEntry { (id, _) =>
@@ -492,7 +494,7 @@ object CompactGraph {
 
     // Count degree: each directed edge contributes +1 to src and +1 to dst (reverse)
     val degree = new Array[Int](n)
-    data.graph.edges.foreach { e =>
+    walkableGraph.edges.foreach { e =>
       val src = nodeIdxMap.get(e.source.id)
       val dst = nodeIdxMap.get(e.target.id)
       degree(src) += 1
@@ -512,7 +514,7 @@ object CompactGraph {
     val edgeIdxArr = new Array[Int](totalEdges)
     val cursor     = rowPtr.clone()
 
-    data.graph.edges.foreach { e =>
+    walkableGraph.edges.foreach { e =>
       val src  = nodeIdxMap.get(e.source.id)
       val dst  = nodeIdxMap.get(e.target.id)
       val eIdx = edgeLabelIdxMap.get(e.label.id)

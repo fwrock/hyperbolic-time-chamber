@@ -1,0 +1,48 @@
+{
+  "schema": "htc.actor-descriptors.v1",
+  "version": 1,
+  "actors": [
+    {
+      "class": "hybrid.actor.Node",
+      "file": "Node.schema.json",
+      "title": "Nó (cruzamento/ponto)",
+      "filterable": false
+    },
+    {
+      "class": "hybrid.actor.Link",
+      "file": "Link.schema.json",
+      "title": "Via (Link)",
+      "filterable": false
+    },
+    {
+      "class": "hybrid.actor.Car",
+      "file": "Car.schema.json",
+      "title": "Carro",
+      "filterable": true
+    },
+    {
+      "class": "hybrid.actor.Bicycle",
+      "file": "Bicycle.schema.json",
+      "title": "Bicicleta",
+      "filterable": true
+    },
+    {
+      "class": "hybrid.actor.Motorcycle",
+      "file": "Motorcycle.schema.json",
+      "title": "Moto",
+      "filterable": true
+    },
+    {
+      "class": "hybrid.actor.Person",
+      "file": "Person.schema.json",
+      "title": "Pessoa",
+      "filterable": true
+    },
+    {
+      "class": "hybrid.actor.TrafficSignal",
+      "file": "TrafficSignal.schema.json",
+      "title": "Semáforo",
+      "filterable": false
+    }
+  ]
+}
