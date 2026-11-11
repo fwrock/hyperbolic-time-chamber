@@ -33,6 +33,7 @@ class ConservativeProtocolSerializationSpec extends AnyFlatSpec with Matchers wi
         owner, Some(order), 0L, "incarnation")),
       ConservativeTransfer("epoch", 1L, LogicalProcessId("example.Link", 2L), event),
       ConservativeTransferAccepted("epoch", 1L),
+      FenceConservativeRegistration("epoch", owner),
       ConservativeDelivery("epoch", 2L, event),
       ConservativeDelivery("epoch", 3L, SpontaneousEvent(10L, owner, generation = 2L, order = Some(order))),
       ConservativeInputAccepted("epoch", 2L, Some(order)),

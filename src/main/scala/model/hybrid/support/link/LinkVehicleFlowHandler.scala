@@ -67,7 +67,7 @@ class LinkVehicleFlowHandler(
 
   def handleEnterLinkMeso(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
     val state = getLinkStateFn()
-    if (state.registered.exists(_.actorId == event.actorRefId)) {
+    if (state.registered.containsActor(event.actorRefId)) {
       sendMessageFn(
         event.actorRefId, event.shardRefId,
         LinkInfoData(
@@ -133,7 +133,7 @@ class LinkVehicleFlowHandler(
     getOrUpdateVehicleWaitingFn(event.actorRefId)
 
     val state = getLinkStateFn()
-    if (!state.registered.exists(_.actorId == event.actorRefId)) {
+    if (!state.registered.containsActor(event.actorRefId)) {
       state.registered.add(LinkRegister(
         actorId           = event.actorRefId,
         shardId           = event.shardRefId,
@@ -204,7 +204,7 @@ class LinkVehicleFlowHandler(
     wasRegistered: Boolean
   ): Unit = {
     val state = getLinkStateFn()
-    state.registered.filterInPlace(_.actorId != event.actorRefId)
+    state.registered.removeActor(event.actorRefId)
     recomputeAndPublishMesoDynamics()
 
     val entryTick = getVehicleEntryTickFn(event.actorRefId).getOrElse(-1L)

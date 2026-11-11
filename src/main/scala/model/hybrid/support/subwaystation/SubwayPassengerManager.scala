@@ -60,19 +60,20 @@ class SubwayPassengerManager(
     if (peopleToLoad.nonEmpty) {
       SubwayStationMetrics.passengersBoarded.labels(data.line).inc(peopleToLoad.size)
       SubwayStationMetrics.passengersWaiting.labels(data.line).dec(peopleToLoad.size)
-      reportFn(
-        Map(
-          "event_type"         -> "passengers_loaded_to_subway",
-          "station_id"         -> entityIdFn(),
-          "subway_id"          -> event.actorRefId,
-          "line"               -> data.line,
-          "passengers_loaded"  -> peopleToLoad.size,
-          "passengers_waiting" -> state.people.get(data.line).map(_.size).getOrElse(0),
-          "tick"               -> currentTickFn()
-        ),
-        "subway_station_passengers_loaded"
-      )
     }
+    // Publish empty queues too: a vehicle visit is an observation of service and waiting state.
+    reportFn(
+      Map(
+        "event_type"         -> "passengers_loaded_to_subway",
+        "station_id"         -> entityIdFn(),
+        "subway_id"          -> event.actorRefId,
+        "line"               -> data.line,
+        "passengers_loaded"  -> peopleToLoad.size,
+        "passengers_waiting" -> state.people.get(data.line).map(_.size).getOrElse(0),
+        "tick"               -> currentTickFn()
+      ),
+      "subway_station_passengers_loaded"
+    )
     sendMessageFn(
       event.actorRefId,
       event.actorClassType,

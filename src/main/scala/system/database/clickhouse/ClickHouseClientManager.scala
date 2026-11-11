@@ -88,6 +88,8 @@ class ClickHouseClientManager(
       execute(createDatabase)
       execute(createRawTable)
       execute(createTimingTable)
+      execute(s"ALTER TABLE $database.vehicle_link_events ADD COLUMN IF NOT EXISTS scenario_id LowCardinality(String) DEFAULT ''")
+      execute(s"ALTER TABLE $database.execution_timings ADD COLUMN IF NOT EXISTS scenario_id LowCardinality(String) DEFAULT ''")
       // Distributed-run context columns; ADD COLUMN IF NOT EXISTS upgrades tables created before they existed.
       execute(s"ALTER TABLE $database.vehicle_link_events ADD COLUMN IF NOT EXISTS node LowCardinality(String) DEFAULT ''")
       execute(s"ALTER TABLE $database.vehicle_link_events ADD COLUMN IF NOT EXISTS from_node LowCardinality(String) DEFAULT ''")

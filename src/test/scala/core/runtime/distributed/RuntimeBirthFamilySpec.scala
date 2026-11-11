@@ -72,11 +72,16 @@ class RuntimeBirthFamilySpec extends AnyFlatSpec with Matchers with BeforeAndAft
       case StopRuntimeBirthInitializer => context.stop(self)
     }
   }
-  private class OptimisticGTM(manager: ActorRef, sink: ActorRef) extends AccountedOptimisticGlobalTimeManager(100L, manager) {
+  private class OptimisticGTM(manager: ActorRef, sink: ActorRef, holdIdleRounds: Boolean) extends AccountedOptimisticGlobalTimeManager(100L, manager) {
     def ready: Boolean = recoveryFinished
     override def onStart(): Unit = ()
     override protected def expectedWorkers: Int = 2
     override protected lazy val reportManagerRef: ActorRef = sink
+    // The cancellation case deliberately injects a straggler before authorizing its first cut.
+    override def handleEvent: Receive = {
+      val held: Receive = { case _: core.runtime.distributed.OptimisticWorkerActivity if holdIdleRounds => () }
+      held.orElse(super.handleEvent)
+    }
   }
   private class ConservativeGTM(manager: ActorRef, sink: ActorRef) extends ChannelClosedGlobalTimeManager(100L, false, manager) {
     def ready: Boolean = recoveryFinished
@@ -99,16 +104,14 @@ class RuntimeBirthFamilySpec extends AnyFlatSpec with Matchers with BeforeAndAft
   private def run(optimistic: Boolean, cancel: Boolean = false, legacyHandles: Boolean = false): Vector[Map[String, Any]] = {
     val manager = TestProbe(); val effects = TestProbe(); val creator = TestProbe(); val observed = TestProbe()
     val global: ActorRef = if (optimistic) {
-      val ref = TestActorRef(new OptimisticGTM(manager.ref, effects.ref))
-      creator.awaitAssert(ref.underlyingActor.ready shouldBe true, 5.seconds, 10.millis); ref
+      system.actorOf(Props(new OptimisticGTM(manager.ref, effects.ref, cancel)))
     } else {
       val ref = TestActorRef(new ConservativeGTM(manager.ref, effects.ref))
       creator.awaitAssert(ref.underlyingActor.ready shouldBe true, 5.seconds, 10.millis); ref
     }
     val workers = Vector.fill(2) {
       if (optimistic) {
-        val ref = TestActorRef(new OptimisticWorker(manager.ref, global, observed.ref))
-        creator.awaitAssert(ref.underlyingActor.ready shouldBe true, 5.seconds, 10.millis); ref: ActorRef
+        system.actorOf(Props(new OptimisticWorker(manager.ref, global, observed.ref)))
       } else {
         val ref = TestActorRef(new ConservativeWorker(manager.ref, global, observed.ref))
         creator.awaitAssert(ref.underlyingActor.ready shouldBe true, 5.seconds, 10.millis); ref: ActorRef
@@ -133,12 +136,10 @@ class RuntimeBirthFamilySpec extends AnyFlatSpec with Matchers with BeforeAndAft
     val trigger = if (cancel) Some(initialize(99L, FamilyState(5L, trigger = true))) else None
     initialize(1L, FamilyState())
     global ! StartSimulationTimeEvent(startTick = 0L)
-    if (optimistic) {
+    if (optimistic && cancel) {
       observed.receiveN(3, 10.seconds).collect { case e: FamilyExecuted => e.id }.toSet shouldBe Set(1L, 2L, 3L)
-      if (cancel) {
-        trigger.get ! InjectFamilyStraggler
-        observed.fishForMessage(10.seconds) { case FamilyExecuted(1L, false) => true; case _ => false }
-      }
+      trigger.get ! InjectFamilyStraggler
+      observed.fishForMessage(10.seconds) { case FamilyExecuted(1L, false) => true; case _ => false }
     }
     val heartbeat = if (optimistic) Some(system.scheduler.scheduleWithFixedDelay(1.millis, 10.millis,
       global, RequestRuntimeRound())(system.dispatcher)) else None
@@ -155,6 +156,8 @@ class RuntimeBirthFamilySpec extends AnyFlatSpec with Matchers with BeforeAndAft
       }
     }
     manager.expectMsg(StopSimulationEvent())
+    if (optimistic && !cancel)
+      observed.receiveN(3, 10.seconds).collect { case e: FamilyExecuted => e.id }.toSet shouldBe Set(1L, 2L, 3L)
     heartbeat.foreach(_.cancel())
     reports.result()
   }

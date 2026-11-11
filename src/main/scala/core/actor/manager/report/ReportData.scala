@@ -23,6 +23,8 @@ abstract class ReportData(
       )
     ) {
 
+  override protected val config = context.system.settings.config
+
   protected def onCommittedReport(event: ReportEvent): Unit = onReport(event)
   protected def flushCommittedReports(): Future[Unit] =
     Future.failed(new UnsupportedOperationException(s"${getClass.getName} has no acknowledged flush implementation"))

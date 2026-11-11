@@ -24,6 +24,8 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   extends GlobalTimeManagerBase(duration, manager, GLOBAL_TIME_MANAGER_ACTOR_NAME) {
   private val epoch = java.util.UUID.randomUUID().toString
   private val workers = mutable.Set.empty[ActorRef]
+  // Ownership uses one fixed order for the run, including progressive enrollment and births.
+  private var membership = Vector.empty[ActorRef]
   private val known = mutable.Set.empty[LogicalProcessId]
   private val birthReservations = mutable.Map.empty[LogicalProcessId, RuntimeBirthOrigin]
   private val waitingJoins = mutable.ArrayBuffer.empty[JoinRuntime]
@@ -60,7 +62,6 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   override protected def localTimeManagerProps(): Props = ChannelAwareLocalTimeManager.props(duration, manager, self)
   override def onStart(): Unit = createTimeManagersPool()
 
-  private def membership: Vector[ActorRef] = workers.toVector.sortBy(_.path.toString)
   private def join(event: JoinRuntime): Unit = {
     val id = LogicalProcessId(event.identity.classType, event.identity.id)
     require(!known.contains(id), s"duplicate conservative LP $id")
@@ -91,6 +92,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       context.watch(ref)
       require(workers.size <= expectedWorkers, "unexpected conservative worker")
       if (workers.size == expectedWorkers) {
+        membership = workers.toVector.sortBy(_.path.toString)
         val update = ConservativeMembership(epoch, membership)
         workers.foreach(_ ! update)
         waitingJoins.foreach(join)
@@ -243,6 +245,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   private def maybeStart(): Unit = if (!started && pendingStart.nonEmpty && workers.size == expectedWorkers &&
     (inputClosed || loadedThrough >= initialTick)) {
     started = true
+    core.api.SimulationController.markRunning()
     startTime = System.currentTimeMillis()
     simulationMetrics.configuredDuration.set(duration.toDouble)
     simulationMetrics.currentTick.set(initialTick.toDouble)

@@ -5,7 +5,8 @@ import core.types.Tick
 
 import org.interscity.htc.core.entity.state.BaseState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
-import org.interscity.htc.model.hybrid.entity.state.model.LinkRegister
+import com.fasterxml.jackson.databind.annotation.{ JsonDeserialize, JsonSerialize }
+import org.interscity.htc.model.hybrid.entity.state.model.LinkRegistry
 
 import scala.collection.mutable
 
@@ -72,7 +73,9 @@ case class RailLinkState(
   gradient: Double = 0.0,
   curvature: Double = 0.0,
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
-  registered: mutable.Set[LinkRegister] = mutable.Set.empty,
+  @JsonSerialize(converter = classOf[LinkRegistry.ToJson])
+  @JsonDeserialize(converter = classOf[LinkRegistry.FromJson])
+  registered: LinkRegistry = new LinkRegistry,
   scheduleOnTimeManager: Boolean = false
 ) extends BaseState(
       startTick = startTick,

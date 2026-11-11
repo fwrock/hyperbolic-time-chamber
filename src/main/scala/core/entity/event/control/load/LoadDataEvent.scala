@@ -13,5 +13,6 @@ case class LoadDataEvent(
   actorsDataSources: List[ActorDataSource],
   postLoadRegistrationClasses: List[String] = List.empty,
   partial: Option[core.entity.configuration.PartialSimulation] = None,
-  modifications: Option[core.entity.configuration.ModificationsSimulation] = None
+  modifications: Option[core.entity.configuration.ModificationsSimulation] = None,
+  loadFilter: Option[core.entity.configuration.LoadFilterSimulation] = None
 ) extends BaseEvent[DefaultBaseEventData](actorRef = actorRef)

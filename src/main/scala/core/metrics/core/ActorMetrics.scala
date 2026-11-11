@@ -49,6 +49,23 @@ object ActorMetrics {
     .labelNames("event_type")
     .register()
 
+  // `Counter.labels(...)` allocates a varargs array + key list and does a map lookup on every call.
+  // The fixed event types below are counted once per message/dispatch (hundreds of millions of
+  // times in a large run), so their children are resolved once.
+  val interactionEvents: Counter.Child = eventsProcessed.labels("interaction")
+  val finishEvents: Counter.Child = eventsProcessed.labels("finish")
+  val spontaneousEvents: Counter.Child = eventsProcessed.labels("spontaneous")
+  val destructEvents: Counter.Child = eventsProcessed.labels("destruct")
+
+  private val eventsProcessedByLabel = new java.util.concurrent.ConcurrentHashMap[String, Counter.Child]()
+
+  /** Same counter/label as `eventsProcessed.labels(label)`, memoized (report labels are a small fixed set). */
+  def eventsProcessedFor(label: String): Counter.Child = {
+    val hit = eventsProcessedByLabel.get(label)
+    if (hit != null) hit
+    else eventsProcessedByLabel.computeIfAbsent(label, l => eventsProcessed.labels(l))
+  }
+
   /** Messages received by this node, by the node that sent them: the raw material for comparing where
     * actors talk to each other in a distributed run (see core.cluster.NodeIdentity). `locality` is
     * `local` (sender and receiver on the same node), `remote`, or `unknown` (unstamped/legacy sender).
@@ -76,6 +93,16 @@ object ActorMetrics {
     .help("Total inter-actor messages sent, by sender type and event type")
     .labelNames("from_type", "event_type")
     .register()
+
+  private val messagesSentByKey = new java.util.concurrent.ConcurrentHashMap[(String, String), Counter.Child]()
+
+  /** Same as `messagesSent.labels(fromType, eventType)`, memoized per (sender type, event type). */
+  def messagesSentFor(fromType: String, eventType: String): Counter.Child = {
+    val key = (fromType, eventType)
+    val hit = messagesSentByKey.get(key)
+    if (hit != null) hit
+    else messagesSentByKey.computeIfAbsent(key, k => messagesSent.labels(k._1, k._2))
+  }
 
   val eventsWhenStateIsNull: Counter = Counter
     .build()

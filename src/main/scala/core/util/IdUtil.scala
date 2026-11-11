@@ -10,5 +10,8 @@ object IdUtil {
 
   /** Legacy: sanitizes a string id (e.g. a data-source group id like `nodes_0`) for actor paths. */
   def format(id: String): String =
-    if (id != null) id.replace(":", "_").replace(";", "_") else null
+    if (id == null) null
+    // Ids are almost always already path-safe; skip the two `replace` allocations in that case.
+    else if (id.indexOf(':') < 0 && id.indexOf(';') < 0) id
+    else id.replace(":", "_").replace(";", "_")
 }

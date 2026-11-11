@@ -6,6 +6,8 @@ import core.entity.event.{ActorInteractionEvent, FinishEvent}
 import core.entity.event.control.report.ReportEvent
 import core.runtime.EventOrder
 import core.runtime.accounting.*
+import core.metrics.core.{SimulationMetricSet, TimeWarpMetricSet}
+import io.prometheus.client.CollectorRegistry
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.{ActorRef, ActorSystem}
 import org.apache.pekko.testkit.{TestActorRef, TestProbe}
@@ -25,6 +27,11 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
       .withFallback(ConfigFactory.load()))
   override def afterAll(): Unit = { system.terminate(); () }
   private class GTM(manager: ActorRef, sink: ActorRef) extends AccountedOptimisticGlobalTimeManager(100L, manager) {
+    val registry = new CollectorRegistry()
+    val progress = new SimulationMetricSet(registry)
+    val optimistic = new TimeWarpMetricSet(registry)
+    override protected def simulationMetrics: SimulationMetricSet = progress
+    override protected def timeWarpMetrics: TimeWarpMetricSet = optimistic
     override def onStart(): Unit = ()
     override protected def expectedWorkers: Int = 2
     override protected lazy val reportManagerRef: ActorRef = sink
@@ -87,6 +94,11 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     destination.expectMsg(SetRuntimeHorizon(100L))
     destination.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 50L
     destination.expectMsg(ResumeRuntime(0L))
+    source.send(a.owner, OptimisticProcessIdle(a.epoch, 0L))
+    destination.send(b.owner, OptimisticProcessIdle(b.epoch, 0L))
+    // An idle LP cannot bypass the owner's unaccepted transfer ledger.
+    source.expectNoMessage(100.millis)
+    destination.expectNoMessage(100.millis)
     gtm ! RequestRuntimeRound()
     val round = source.expectMsgType[FreezeRuntime].round
     destination.expectMsg(FreezeRuntime(round))
@@ -119,6 +131,8 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     destination.send(b.owner, RuntimeSnapshot(round, Some(10L), 0, 0))
     source.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 60L
     source.expectMsg(CommitRuntime(round, 10L))
+    gtm.underlyingActor.progress.currentTick.get shouldBe 0.0
+    gtm.underlyingActor.optimistic.gvt.get shouldBe 0.0
     destination.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 60L
     destination.expectMsg(CommitRuntime(round, 10L))
     source.send(a.owner, PublishCommittedReport(sink.ref, ReportEvent(first.toString, 9L, 0L, data = "committed")))
@@ -128,6 +142,10 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     source.expectNoMessage(100.millis)
     sink.send(report.ackTo, DeliveryAccepted(report.epoch, report.token))
     source.expectMsg(ResumeRuntime(round))
+    gtm.underlyingActor.progress.currentTick.get shouldBe 10.0
+    gtm.underlyingActor.progress.simulationProgress.get shouldBe 0.1
+    gtm.underlyingActor.optimistic.gvt.get shouldBe 10.0
+    gtm.underlyingActor.optimistic.commits.get shouldBe 1.0
     if (staggeredResume) {
       val resume = gate.expectMsgType[HeldResume]
       source.send(a.owner, RouteInteraction(a.epoch, LogicalProcessId(model, second),
@@ -167,7 +185,15 @@ class DistributedRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     if (failure.contains("sink")) {
       manager.expectMsgType[RuntimeFailure].reason should include ("sink write failed")
       manager.expectNoMessage(100.millis)
-    } else manager.expectMsg(StopSimulationEvent())
+      gtm.underlyingActor.progress.simulationProgress.get shouldBe 0.1
+    } else {
+      manager.expectMsg(StopSimulationEvent())
+      gtm.underlyingActor.progress.currentTick.get shouldBe 100.0
+      gtm.underlyingActor.progress.simulationProgress.get shouldBe 1.0
+      gtm.underlyingActor.progress.configuredDuration.get shouldBe 100.0
+      gtm.underlyingActor.optimistic.gvt.get shouldBe 101.0
+      gtm.underlyingActor.optimistic.commits.get shouldBe 2.0
+    }
   }
 
   "distributed optimistic accounting" should "keep a delayed positive in the source ledger until destination acceptance, then commit the fresh minimum" in {

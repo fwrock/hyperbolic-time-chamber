@@ -67,7 +67,7 @@ class LoadDataManager(
   }
 
   private def loadData(event: LoadDataEvent): Unit = {
-    val filter = scala.util.Try(ActorLoadFilter.configure(context.system.settings.config)) match {
+    val filter = scala.util.Try(ActorLoadFilter.configure(context.system.settings.config, event.loadFilter)) match {
       case Success(settings) => settings
       case Failure(error) =>
         simulationManager ! ScenarioPreflightValidationFailedEvent(ScenarioLoadError(s"Load filter: ${error.getMessage}"))

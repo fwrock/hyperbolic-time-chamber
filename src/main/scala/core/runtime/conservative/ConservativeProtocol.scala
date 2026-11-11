@@ -13,6 +13,7 @@ final case class ConservativeMembership(epoch: String, managers: Vector[ActorRef
 final case class RegisterConservativeProcess(epoch: String, coordinator: ActorRef, process: JoinRuntime) extends ConservativeCommand
 final case class ConservativeTransfer(epoch: String, token: Long, target: LogicalProcessId, event: ActorInteractionEvent) extends ConservativeCommand
 final case class ConservativeTransferAccepted(epoch: String, token: Long) extends ConservativeCommand
+final case class FenceConservativeRegistration(epoch: String, coordinator: ActorRef) extends ConservativeCommand
 final case class ConservativeDelivery(epoch: String, token: Long, event: AnyRef) extends ConservativeCommand
 final case class ConservativeInputAccepted(epoch: String, token: Long, next: Option[EventOrder]) extends ConservativeCommand
 final case class CollectConservativeReady(round: Long) extends ConservativeCommand

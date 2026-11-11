@@ -117,7 +117,7 @@ class OptimisticLocalTimeManager(
     // catch-up rationale as LocalDiscreteEventTimeManager.processTick (see its doc for the full
     // "orphaned actor" scenario this guards against); relevant here too since this LTM instance is
     // still a shared pool routee serving several actors' independent schedules.
-    val effectiveTick = scheduledActors.keys.filter(_ <= tick).minOption.getOrElse(tick)
+    val effectiveTick = earliestScheduledTick.filter(_ <= tick).getOrElse(tick)
     if (effectiveTick < localTickOffset) {
       localTickOffset = effectiveTick
       tickOffset = effectiveTick - initialTick
@@ -144,20 +144,25 @@ class OptimisticLocalTimeManager(
 
   private def dispatchNextAvailable(): Unit = {
     if (runtimeFrozen) return
-    val runningIds = scala.collection.mutable.Set.from(runningEvents.map(_.id))
+    // Ids dispatched during this pass only; everything already in flight is looked up directly in
+    // `runningEvents` (O(1)) instead of copying it into a fresh set on every call.
+    val dispatchedNow = scala.collection.mutable.Set.empty[Long]
+    def inFlight(id: Long): Boolean = runningEvents.containsId(id) || dispatchedNow.contains(id)
     // #timewarp-trace
     core.actor.trace.TimeWarpTrace.trace(
       metricsManagerLabel,
       localTickOffset,
       "dispatch_enter",
-      s"scheduledTicks=${scheduledActors.keys.toSeq.sorted.mkString(",")} runningIds=${runningIds.mkString(",")}"
+      s"scheduledTicks=${scheduledActors.keys.toSeq.sorted.mkString(",")} runningIds=${runningEvents.iterator.map(_.id).mkString(",")}"
     )
     var dispatchedAny = false
-    scheduledActors.keys.toSeq.sorted.filter(_ <= dispatchCeiling).foreach {
+    // Already tick-ordered; take only the dispatchable prefix (a snapshot, since the loop removes buckets).
+    val ceiling = dispatchCeiling
+    scheduledActors.keysIterator.takeWhile(_ <= ceiling).toVector.foreach {
       tick =>
         scheduledActors.get(tick).foreach {
           actorsSet =>
-            val ready = actorsSet.filterNot(a => runningIds.contains(a.id))
+            val ready = actorsSet.filterNot(a => inFlight(a.id))
             if (ready.nonEmpty) {
               if (tick < localTickOffset) {
                 localTickOffset = tick
@@ -172,7 +177,7 @@ class OptimisticLocalTimeManager(
               )
               dispatchedAny = true
               sendSpontaneousEvent(tick, ready)
-              runningIds ++= ready.map(_.id)
+              dispatchedNow ++= ready.iterator.map(_.id)
               actorsSet --= ready
               if (actorsSet.isEmpty) {
                 scheduledActors.remove(tick)
@@ -196,7 +201,7 @@ class OptimisticLocalTimeManager(
     */
   protected def localVirtualTime: Tick =
     if (runningEvents.nonEmpty) {
-      (runningEvents.map(a => inFlightTickOf(a.id)) ++ nextTick).min
+      runningEvents.iterator.map(a => inFlightTickOf(a.id)).foldLeft(nextTick.getOrElse(Long.MaxValue))(math.min)
     } else if (registeredActors.isEmpty) {
       Long.MaxValue
     } else {

@@ -88,7 +88,7 @@ class LocalDiscreteEventTimeManager(
           s"runningEvents=0 | pendingBatch=${pendingTickActors.size} (batch not firing?)"
         )
       } else {
-        val nextScheduled = scheduledActors.keys.toSeq.sorted.headOption
+        val nextScheduled = earliestScheduledTick
         logWarn(
           s"[STALL?] tick=$localTickOffset | elapsed=${elapsed / 1000}s | " +
           s"runningEvents=0 | pendingBatch=0 | nextScheduledTick=$nextScheduled (GTM not advancing?)"
@@ -118,7 +118,7 @@ class LocalDiscreteEventTimeManager(
     */
   protected def processTick(tick: Tick): Unit = {
 
-    val effectiveTick = scheduledActors.keys.filter(_ <= tick).minOption.getOrElse(tick)
+    val effectiveTick = earliestScheduledTick.filter(_ <= tick).getOrElse(tick)
 
     if (effectiveTick < localTickOffset) {
       logInfo(
@@ -130,11 +130,13 @@ class LocalDiscreteEventTimeManager(
 
     scheduledActors.get(effectiveTick).foreach {
       actorsSet =>
-        val actorTypes = actorsSet.groupBy(_.classType).view.mapValues(_.size).toMap
-        val actorSummary = actorTypes.map {
-          case (classType, count) =>
-            s"${classType.split('.').lastOption.getOrElse(classType)}=$count"
-        }.mkString(", ")
+        // Only built when a log line actually uses it: groupBy over the whole bucket on every
+        // tick was a measurable per-tick cost even though almost no tick logs.
+        def actorSummary: String =
+          actorsSet.groupBy(_.classType).view.mapValues(_.size).map {
+            case (classType, count) =>
+              s"${classType.split('.').lastOption.getOrElse(classType)}=$count"
+          }.mkString(", ")
 
         if (effectiveTick != tick) {
           logInfo(

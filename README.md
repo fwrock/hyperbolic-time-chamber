@@ -109,6 +109,10 @@ performance remain outside the validated scope. See the
 [runtime contract](docs/DISTRIBUTED_OPTIMISTIC_RUNTIME.md) and
 [multi-JVM validation](docs/MULTI_JVM_POLICY_VALIDATION_2026_10_24.md).
 
+The [optimistic performance directions](docs/OPTIMISTIC_PERFORMANCE_DIRECTIONS.md)
+record speculation tuning, network-aware ownership and future asynchronous GVT work,
+including the distinction from the implemented idle-triggered safe rounds.
+
 ---
 
 ## Simulation Models
@@ -492,6 +496,24 @@ Idle ──► Loading ──► Running ──► Stopped
 ## Reporting & Output
 
 `ReportManager` collects per-tick metrics and writes them in the configured format:
+
+Every execution receives a fresh report `simulation_id` (normally `<scenario>_<UUID>`),
+shared by all reporters and cluster nodes. Repeating the same scenario, seed or
+modeled start time produces a separate report. The original configuration `id`
+is preserved as `scenario_id` (Kafka: `scenarioId`). CSV, JSON and Parquet files
+live under `<configured directory>/<simulation_id>/`; each worker writes its own
+file. The execution ID is logged when reporting starts.
+
+REST start/status responses expose the execution as `simulationId`; clients must
+use this returned ID instead of assuming the scenario's ID is the report ID.
+Managed HTC View launches pass their already unique job ID via `HTC_REPORT_RUN_ID`
+so live subscriptions and report downloads share the same identity. This explicit
+override is for launchers that allocate a new ID for every execution; never reuse it.
+
+ClickHouse raw events, aggregates and execution timing reports are separated by
+this execution ID. Filter queries by that `simulation_id`; `scenario_id` identifies
+the scenario across repetitions. Existing stored reports are retained. Historical
+executions already mixed under one old ID cannot be separated automatically.
 
 | Format | Class | Notes |
 |---|---|---|

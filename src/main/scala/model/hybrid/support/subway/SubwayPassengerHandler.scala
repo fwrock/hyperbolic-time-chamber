@@ -127,6 +127,7 @@ class SubwayPassengerHandler(
             "line"                 -> state.line,
             "passengers_unloaded"  -> unloadedCount,
             "remaining_passengers" -> state.passengers.size,
+            "capacity"             -> state.capacity,
             "tick"                 -> currentTickFn()
           ),
           "subway_unload_passengers"

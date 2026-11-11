@@ -24,7 +24,9 @@ import scala.concurrent.duration._
   */
 class KafkaReportData(
   override val reportManager: ActorRef,
-  override val startRealTime: LocalDateTime
+  override val startRealTime: LocalDateTime,
+  val simulationId: String,
+  val scenarioId: String
 ) extends ReportData(
       id = "kafka-report-data",
       reportManager = reportManager,
@@ -40,20 +42,8 @@ class KafkaReportData(
   private val buffer = new mutable.ArrayBuffer[SimulationReportEvent](batchSize)
 
   private lazy val publisher = new KafkaPublisher()(context.system)
-
-  private lazy val simulationId: String = {
-    val fromSimConfig =
-      try Some(core.util.SimulationUtil.loadSimulationConfig()).flatMap(_.id)
-      catch { case _: Exception => None }
-    val fromEnv = sys.env.get("HTC_SIMULATION_ID")
-    val fromConf =
-      try Some(config.getString("htc.simulation.id"))
-      catch { case _: Exception => None }
-    fromSimConfig.orElse(fromEnv).orElse(fromConf).getOrElse("sim")
-  }
-
   override def onReport(event: ReportEvent): Unit = {
-    val avroEvent = SimulationReportEventAvro.fromReportEvent(event, simulationId)
+    val avroEvent = SimulationReportEventAvro.fromReportEvent(event, simulationId).copy(scenarioId = scenarioId)
     buffer += avroEvent
     if (buffer.size >= batchSize) flush()
   }

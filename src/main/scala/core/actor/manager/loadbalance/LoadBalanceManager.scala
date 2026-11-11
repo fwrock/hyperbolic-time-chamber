@@ -200,6 +200,9 @@ class LoadBalanceManager(
     // Register the shard allocator so ActorCreatorUtil uses it for future shard creations
     if (!allocationRuntime.enabled) ShardAllocatorRegistry.register(shardAllocator)
 
+    ManagerMetrics.balanceStrategy.clear()
+    ManagerMetrics.balanceStrategy.labels(strategy.map(_.name).getOrElse("disabled")).set(1.0)
+
     // Schedule periodic rebalancing
     if (strategy.isDefined) {
       scheduleRebalancing()
@@ -969,7 +972,7 @@ class LoadBalanceManager(
         RegisteredAllocationRegion(name, sharding.shardRegion(name), cluster.selfAddress.toString)))
     }
     regions.flatMap(rows => Future.sequence(rows.map { row =>
-      (row.region ? ShardRegion.GetShardRegionState).mapTo[ShardRegion.CurrentShardRegionState].map { state =>
+      (row.region ? ShardRegion.GetShardRegionStats).mapTo[ShardRegion.ShardRegionStats].map { state =>
         require(state.failed.isEmpty, s"incomplete shard observation for ${row.typeName}/${row.address}")
         RegionLoadObservation(row.typeName, AddressFromURIString(row.address), state)
       }
@@ -987,15 +990,25 @@ class LoadBalanceManager(
       return
     }
     event.failure match {
-      case Some(reason) => logWarn(s"Discarding incomplete load observation ${event.sequence}: $reason")
+      case Some(reason) =>
+        ManagerMetrics.loadObservations.labels("failed").inc()
+        logWarn(s"Discarding incomplete load observation ${event.sequence}: $reason")
       case None =>
         val snapshot = try ShardLoadObservation.collect(event.rows, event.nodes, System.nanoTime())
         catch { case error: IllegalArgumentException =>
+          ManagerMetrics.loadObservations.labels("failed").inc()
           logWarn(s"Discarding load observation ${event.sequence}: ${error.getMessage}")
           return
         }
         val metrics = snapshot.metrics
         val locations = snapshot.locations
+        ManagerMetrics.loadObservationEntities.clear()
+        event.nodes.foreach { node =>
+          ManagerMetrics.loadObservationEntities.labels(core.cluster.NodeIdentity.labelOfAddress(node))
+            .set(metrics.filter(m => locations(m.shardId) == node).map(_.totalWeight).sum)
+        }
+        ManagerMetrics.loadObservations.labels("accepted").inc()
+        ManagerMetrics.loadObservationTimestamp.set(System.currentTimeMillis().toDouble / 1000.0)
         strategy.foreach(_.replaceLoadSnapshot(metrics, locations, event.nodes))
         val loads = event.nodes.toVector.sortBy(_.toString).map { node =>
           s"$node=${metrics.filter(m => locations(m.shardId) == node).map(_.totalWeight).sum}"
@@ -1159,8 +1172,8 @@ class LoadBalanceManager(
       val round = attempt.round
       val shardId = event.shardId
       implicit val timeout: Timeout = Timeout(5.seconds)
-      def query(region: ActorRef): Future[Option[ShardRegion.CurrentShardRegionState]] =
-        (region ? ShardRegion.GetShardRegionState).mapTo[ShardRegion.CurrentShardRegionState]
+      def query(region: ActorRef): Future[Option[ShardRegion.ShardRegionStats]] =
+        (region ? ShardRegion.GetShardRegionStats).mapTo[ShardRegion.ShardRegionStats]
           .map(state => Option(state)).recover { case scala.util.control.NonFatal(_) => None }
       val observations = attempt.targets.map { target =>
         val needsPhysicalTarget = activeWave.filter(_.liveMembers.nonEmpty).forall { wave =>
@@ -1170,8 +1183,8 @@ class LoadBalanceManager(
         val destination = query(target.region)
         source.zip(destination).map {
           case (Some(from), Some(to)) =>
-            from.failed.isEmpty && to.failed.isEmpty && !from.shards.exists(_.shardId == shardId) &&
-              (!needsPhysicalTarget || to.shards.exists(_.shardId == shardId))
+            from.failed.isEmpty && to.failed.isEmpty && !from.stats.contains(shardId) &&
+              (!needsPhysicalTarget || to.stats.contains(shardId))
           case _ => false
         }.recover { case scala.util.control.NonFatal(_) => false }
       }

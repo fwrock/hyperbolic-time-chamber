@@ -18,6 +18,12 @@ identity to one owner. Passive infrastructure registers too. Private scheduler
 handles isolate numeric IDs belonging to different model classes. Initialization
 acknowledgement follows ownership registration.
 
+When the configured worker cohort is complete, the GTM sorts worker paths once
+and retains the vector it publishes to LTMs. Initial loading, progressive input
+and actor births reuse that vector for the same hash-based owner lookup. Re-sorting
+the cohort on each LP registration made large loads expensive, especially with
+128 workers; the cached order preserves the existing ownership mapping.
+
 There is no additional conservative coordinator actor. Ordinary model delivery is:
 
 ```mermaid

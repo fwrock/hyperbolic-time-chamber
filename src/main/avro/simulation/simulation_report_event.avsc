@@ -13,6 +13,8 @@
     {"name": "label",         "type": ["null","string"], "default": null,
                                "doc": "Report label from report() call — used for topic routing"},
     {"name": "dataJson",      "type": "string",
-                               "doc": "JSON-encoded event data payload"}
+                               "doc": "JSON-encoded event data payload"},
+    {"name": "scenarioId",    "type": "string", "default": "",
+                               "doc": "Stable scenario identity; simulationId identifies one execution"}
   ]
 }

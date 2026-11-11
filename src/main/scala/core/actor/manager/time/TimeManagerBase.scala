@@ -37,9 +37,15 @@ abstract class TimeManagerBase(
   protected var isStopped: Boolean = false
 
   protected val registeredActors = mutable.Set[Long]()
-  protected val scheduledActors = mutable.Map[Tick, mutable.Set[Identify]]()
-  protected val scheduledTicksOnFinish = mutable.Set[Tick]()
-  protected val runningEvents = mutable.Set[Identify]()
+  /** Ordered by tick (red-black tree): the earliest tick is `head` and removing a tick is
+    * O(log n). It used to be a hash map, so every `nextTick` had to scan all keys.
+    */
+  protected val scheduledActors = mutable.TreeMap[Tick, mutable.Set[Identify]]()
+  protected val scheduledTicksOnFinish = mutable.TreeSet[Tick]()
+  protected val runningEvents = new RunningEvents
+
+  /** Earliest tick with a bucket in `scheduledActors` (ignores `scheduledTicksOnFinish`). O(log n). */
+  protected def earliestScheduledTick: Option[Tick] = scheduledActors.headOption.map(_._1)
 
   /** Handles common time manager events */
   override def handleEvent: Receive = {

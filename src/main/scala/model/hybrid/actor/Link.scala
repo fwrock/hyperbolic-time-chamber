@@ -383,7 +383,7 @@ class Link(
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
     metricsReporter.ensureSummaryTick(currentTick)
     logDebug(s"Vehicle ${event.actorRefId} leaving link")
-    val wasRegistered     = state.registered.exists(_.actorId == event.actorRefId)
+    val wasRegistered     = state.registered.containsActor(event.actorRefId)
     val vehiclesRemaining = math.max(0, state.registered.size - (if (wasRegistered) 1 else 0))
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,

@@ -176,15 +176,26 @@ object CityMapUtil {
     else
       synchronized {
         if (_compactAltIndex == null) {
-          _compactAltIndex = CompactLandmarkIndex.fromLandmarkIndex(
-            altIndex,
-            compactGraph.nodeIndex,
-            nodeGraphIdExtractor,
-            compactGraph.n
-          )
+          _compactAltIndex = cachedLandmarks("routing.alt.vehicle", compactGraph) {
+            CompactLandmarkIndex.fromLandmarkIndex(
+              altIndex,
+              compactGraph.nodeIndex,
+              nodeGraphIdExtractor,
+              compactGraph.n
+            )
+          }
         }
         _compactAltIndex
       }
+  }
+
+  private def cachedLandmarks(id: String, graph: CompactGraph)(compute: => CompactLandmarkIndex): CompactLandmarkIndex = {
+    val cache = org.interscity.htc.core.cache.CalculationCache
+    val settings = cache.configured
+    // Avoid hashing when this calculation has not been selected for persistence.
+    if (!settings.exists(_.entries.contains(id))) compute
+    else cache.getOrCompute(settings, id, 1, graph.staticFingerprint(landmarkCount),
+      CompactLandmarkIndex.codec(graph.n, landmarkCount))(compute)
   }
 
   /** Undirected CompactGraph for pedestrian routing.
@@ -255,12 +266,14 @@ object CityMapUtil {
     else
       synchronized {
         if (_compactAltIndexPedestrian == null) {
-          _compactAltIndexPedestrian = CompactLandmarkIndex.fromLandmarkIndex(
-            altIndexPedestrian,
-            compactGraphPedestrian.nodeIndex,
-            nodeGraphIdExtractor,
-            compactGraphPedestrian.n
-          )
+          _compactAltIndexPedestrian = cachedLandmarks("routing.alt.pedestrian", compactGraphPedestrian) {
+            CompactLandmarkIndex.fromLandmarkIndex(
+              altIndexPedestrian,
+              compactGraphPedestrian.nodeIndex,
+              nodeGraphIdExtractor,
+              compactGraphPedestrian.n
+            )
+          }
         }
         _compactAltIndexPedestrian
       }

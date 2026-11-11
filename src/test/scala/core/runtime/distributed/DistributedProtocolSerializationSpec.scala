@@ -33,6 +33,7 @@ class DistributedProtocolSerializationSpec extends AnyFlatSpec with Matchers wit
       JoinRuntime(Identify(id = 1L, classType = id.model), ref, None, order.tick, "child", Some(origin)), RuntimeMembership("epoch", Vector(ref)),
       RegisterLocalProcess("epoch", JoinRuntime(Identify(id = 1L, classType = id.model), ref, Some(order), 0L, "instance")),
       LocalProcessRegistered(id), StartLocalRuntime(0L, 100L, inputThrough = 10L),
+      OptimisticProcessIdle("epoch", 1L, 17L), OptimisticWorkerActivity(1L, true), OptimisticWorkerActivity(1L, false),
       BeginInputEnrollment(1L), InputEnrollmentOpened(1L), CompleteInputEnrollment(1L, 20L), InputEnrollmentCompleted(1L),
       LoadOptimisticInputWindow("epoch", 1L, 0L, 20L), OptimisticInputWindowOpened("epoch", 1L), OptimisticInputWindowReady("epoch", 1L, 20L, false, 5L), OptimisticTransfer("epoch", 1L, id, event),
       OptimisticTransferAccepted("epoch", 1L), LocalRuntimeCommitted(1L, Set(ref)),
@@ -44,6 +45,23 @@ class DistributedProtocolSerializationSpec extends AnyFlatSpec with Matchers wit
       val serializer = codec.findSerializerFor(message)
       serializer.getClass.getName should include ("Kryo")
       codec.deserialize(codec.serialize(message).get, serializer.identifier, "").get shouldBe message
+    }
+  }
+  it should "decode idle hints with independent cold codecs" in {
+    val config = ConfigFactory.parseString("pekko.actor.provider=local\npekko.actor.fail-mixed-versions=off")
+      .withFallback(ConfigFactory.load())
+    val writer = ActorSystem("IdleHintWriter", config)
+    val reader = ActorSystem("IdleHintReader", config)
+    try {
+      val encoding = SerializationExtension(writer)
+      val decoding = SerializationExtension(reader)
+      Vector[AnyRef](OptimisticProcessIdle("run", 42L, 17L), OptimisticWorkerActivity(42L, true)).foreach { message =>
+        val serializer = encoding.findSerializerFor(message)
+        decoding.deserialize(encoding.serialize(message).get, serializer.identifier, "").get shouldBe message
+      }
+    } finally {
+      writer.terminate()
+      reader.terminate()
     }
   }
   it should "preserve inert birth initialization through the sharded envelope codec" in {

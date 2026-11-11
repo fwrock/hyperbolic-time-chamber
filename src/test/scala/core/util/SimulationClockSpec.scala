@@ -35,4 +35,28 @@ class SimulationClockSpec extends AnyFlatSpec with Matchers {
     SimulationClock(0.1).at(start, -1) shouldBe start.minusNanos(100000000)
     SimulationClock(1).at(start, 10000000000L) shouldBe start.plusSeconds(10000000000L)
   }
+
+  it should "accept integer and decimal tick durations after a browser JSON round trip" in {
+    val template = JsonUtil.toJson(scenario)
+    for ((literal, expected) <- Seq("1" -> 1.0, "1.0" -> 1.0, "0.1" -> 0.1)) {
+      val json = template.replace("\"tickDuration\":null", s"\"tickDuration\":$literal")
+      val decoded = JsonUtil.fromJson[Simulation](json)
+      decoded.tickDuration.get shouldBe expected
+      SimulationClock.validateScenario(decoded).secondsPerTick shouldBe expected
+      SimulationUtil.localScenarioSettings(decoded)(SimulationClock.Setting) shouldBe expected.toString
+      val fromBytes = JsonUtil.fromJsonBytes[Simulation](json.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      SimulationClock.validateScenario(fromBytes).secondsPerTick shouldBe expected
+      SimulationClock.validateScenario(JsonUtil.convertValue[Simulation](decoded)).secondsPerTick shouldBe expected
+    }
+  }
+
+  it should "retain defaults and reject invalid numeric durations after JSON decoding" in {
+    val template = JsonUtil.toJson(scenario)
+    JsonUtil.fromJson[Simulation](template).tickDuration shouldBe None
+    SimulationClock.validateScenario(JsonUtil.fromJson[Simulation](template)).secondsPerTick shouldBe 1.0
+    for (literal <- Seq("0", "-1", "2", "0.3")) {
+      val json = template.replace("\"tickDuration\":null", s"\"tickDuration\":$literal")
+      intercept[IllegalArgumentException](SimulationClock.validateScenario(JsonUtil.fromJson[Simulation](json)))
+    }
+  }
 }

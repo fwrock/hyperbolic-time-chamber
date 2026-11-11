@@ -3,6 +3,20 @@
 Banco padrão: `htc` (ou o valor de `database` configurado).  
 Porta HTTP: `8123`. Porta nativa (TCP): `9000`.
 
+Each new execution has a unique `simulation_id` (normally `<scenario>_<UUID>`), shared by
+all nodes and output formats. The configuration ID is retained as `scenario_id`
+in `vehicle_link_events` and `execution_timings`. Repeating a scenario does not
+reuse the report ID. Use an execution ID for every `<SIMULATION_ID>` below.
+Tables created by earlier versions are upgraded automatically without deleting
+historical data; old mixed executions cannot be separated retroactively.
+
+```sql
+SELECT scenario_id, simulation_id, count() AS events
+FROM htc.vehicle_link_events
+GROUP BY scenario_id, simulation_id
+ORDER BY scenario_id, simulation_id;
+```
+
 ---
 
 ## 1. Saúde e conectividade

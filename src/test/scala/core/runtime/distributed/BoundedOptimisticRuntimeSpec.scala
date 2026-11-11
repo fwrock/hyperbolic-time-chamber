@@ -24,14 +24,14 @@ import scala.collection.mutable
 import scala.concurrent.duration.*
 
 private case class BoundedCounterState(startTick: Long = 0L, schedule: Boolean = false,
-  requester: Boolean = false, target: Long = 0L, end: Long = 1000L, count: Long = 0L)
+  requester: Boolean = false, target: Long = 0L, end: Long = 1000L, count: Long = 0L, spacing: Long = 1L)
   extends BaseState(startTick = startTick, scheduleOnTimeManager = schedule)
 private case class CountRequest(replyTo: Long, steps: Long)
 private case class CountReply(value: Long)
 
 class BoundedOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   private implicit val system: ActorSystem = ActorSystem("BoundedOptimisticRuntimeSpec",
-    ConfigFactory.parseString("pekko.actor.provider=local\npekko.actor.fail-mixed-versions=off\nhtc.time-warp.termination-heartbeat-interval-ms=5")
+    ConfigFactory.parseString("pekko.actor.provider=local\npekko.actor.fail-mixed-versions=off\nhtc.time-warp.termination-heartbeat-interval-ms=60000")
       .withFallback(ConfigFactory.load()))
   override def afterAll(): Unit = { system.terminate(); () }
   private class GTM(manager: ActorRef, sink: ActorRef, observed: ActorRef, limits: OptimisticExecutionLimits)
@@ -57,7 +57,7 @@ class BoundedOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with Before
       } else {
         val step = EventReadJournal.read("step")(1L)
         state = state.copy(count = state.count + step)
-        if (currentTick < state.end) onFinishSpontaneous(Some(currentTick + 1L))
+        if (currentTick < state.end) onFinishSpontaneous(Some(currentTick + state.spacing))
         else {
           sendMessageTo(state.target, getClass.getName, CountReply(state.count), actorType = CreationTypeEnum.PoolDistributed)
           selfDestruct()
@@ -67,7 +67,7 @@ class BoundedOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with Before
     override def actInteractWith(event: ActorInteractionEvent): Unit = event.data match {
       case request: CountRequest =>
         state = state.copy(target = request.replyTo, end = request.steps)
-        scheduleEvent(currentTick + 1L)
+        scheduleEvent(currentTick + state.spacing)
       case reply: CountReply =>
         consumeAwaitedReply("count")
         state = state.copy(count = reply.value)
@@ -76,7 +76,8 @@ class BoundedOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with Before
     }
   }
   private var sequence = 0
-  private def run(limits: OptimisticExecutionLimits, steps: Long = 1000L, dropFinish: Boolean = false): Vector[RuntimeRetention] = {
+  private def run(limits: OptimisticExecutionLimits, steps: Long = 1000L, dropFinish: Boolean = false,
+    spacing: Long = 1L): Vector[RuntimeRetention] = {
     sequence += 1
     val manager = TestProbe()
     val flush = TestProbe()
@@ -97,15 +98,15 @@ class BoundedOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with Before
         runtimeCoordinator = Some(global)))
       creator.expectMsgType[InitializeEntityAckEvent]
     }
-    lp(2L, BoundedCounterState(end = steps))
+    lp(2L, BoundedCounterState(end = steps, spacing = spacing))
     lp(1L, BoundedCounterState(schedule = true, requester = true, target = 2L, end = steps))
     global ! StartSimulationTimeEvent(startTick = 0L)
     if (dropFinish) {
       manager.expectMsgType[RuntimeFailure](20.seconds).reason should include ("dispatch has neither queued input nor a reply obligation")
       manager.expectNoMessage(100.millis)
     } else {
-      val delivery = sink.expectMsgType[CommittedReportDelivery](45.seconds)
-      delivery.event.data.asInstanceOf[Map[String, Any]]("count") shouldBe steps
+      val delivery = sink.expectMsgType[CommittedReportDelivery](if (spacing > 1L) 5.seconds else 45.seconds)
+      delivery.event.data.asInstanceOf[Map[String, Any]]("count") shouldBe steps / spacing
       sink.send(delivery.ackTo, DeliveryAccepted(delivery.epoch, delivery.token))
       val drain = flush.expectMsgType[DrainRuntimeReports](5.seconds)
       flush.send(global, RuntimeReportsFlushed(drain.round))
@@ -126,5 +127,12 @@ class BoundedOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with Before
   }
   it should "fail an orphaned dispatch when its reply handler forgets completion" in {
     run(OptimisticExecutionLimits(1L, 4, 2, true), steps = 10L, dropFinish = true)
+  }
+  it should "jump a sparse gap and drain reports without waiting for the sixty-second heartbeat" in {
+    val cuts = run(OptimisticExecutionLimits(50L, 256, 64, true), spacing = 1000L)
+    cuts.size should be <= 4
+  }
+  it should "release an exhausted per-LP event budget without waiting for the heartbeat" in {
+    run(OptimisticExecutionLimits(2000L, 2, 1, true), steps = 20L).size should be > 2
   }
 }

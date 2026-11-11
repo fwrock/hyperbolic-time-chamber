@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager.load
 
 import core.entity.actor.ActorSimulation
-import core.entity.configuration.ActorDataSource
+import core.entity.configuration.{ActorDataSource, LoadFilterSimulation}
 import com.typesafe.config.Config
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
@@ -21,23 +21,24 @@ object ActorLoadFilter {
   }
   @volatile private var current = Settings()
 
-  def settings(config: Config): Settings = {
+  def settings(config: Config, block: Option[LoadFilterSimulation] = None): Settings = {
     def list(path: String): List[String] = Try(config.getStringList(path).asScala.toList)
       .getOrElse(Try(config.getString(path).split(',').toList).getOrElse(Nil))
       .map(_.trim).filter(_.nonEmpty)
-    val transforms = list("htc.load-filter.transforms").map { name =>
+    def clean(values: List[String]): List[String] = values.map(_.trim).filter(_.nonEmpty)
+    val transforms = block.map(b => clean(b.transforms)).getOrElse(list("htc.load-filter.transforms")).map { name =>
       try Class.forName(name).asSubclass(classOf[ActorLoadTransform])
         .getConstructor(classOf[Config]).newInstance(config)
       catch { case error: ReflectiveOperationException =>
         throw new IllegalArgumentException(s"cannot initialize load transform $name", error)
       }
     }
-    Settings(list("htc.load-filter.include-classes").toSet,
-      list("htc.load-filter.exclude-classes").toSet, transforms)
+    Settings(block.map(b => clean(b.includeClasses)).getOrElse(list("htc.load-filter.include-classes")).toSet,
+      block.map(b => clean(b.excludeClasses)).getOrElse(list("htc.load-filter.exclude-classes")).toSet, transforms)
   }
 
-  def configure(config: Config): Settings = {
-    val next = settings(config)
+  def configure(config: Config, block: Option[LoadFilterSimulation] = None): Settings = {
+    val next = settings(config, block)
     current = next
     next
   }

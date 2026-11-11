@@ -24,6 +24,27 @@ startup. Queued events beyond the ceiling remain pending and constrain the next
 fresh GVT cut. LTMs do not dispatch self-events beyond it, and LPs do not execute
 queued positive interactions beyond it.
 
+When an LP finishes draining its runnable inputs (including stopping at an execution
+limit), it sends an idle hint tagged with its round and latest delivery token to its
+owner. A queued execution continuation does not count as idle. Owners invalidate
+the hint on delivery and report activity
+changes only after accounting for local schedules and outstanding transport. Once all
+owners report idle for the current round, the GTM immediately starts the normal
+freeze, channel-drain, snapshot and commit protocol. Hints never authorize commitment
+or completion. Empty workers participate, and stale-round or superseded-delivery
+hints are ignored.
+
+The heartbeat remains a fallback for work that does not produce an idle hint. To
+avoid repeatedly collecting an unchanged cut, only one idle-triggered round is
+allowed per pair of GVT and accepted input coverage. An advancing frontier or a new
+input window permits another immediate round. This removes heartbeat waits across
+sparse event gaps and exhausted speculation budgets without increasing the default
+50-tick speculation window.
+
+The default window is not a measured optimum. See
+[optimistic performance directions](OPTIMISTIC_PERFORMANCE_DIRECTIONS.md) for the
+proposed tuning experiments and the separate asynchronous GVT design requirements.
+
 An LP also pauses execution **above** GVT when its uncommitted-event budget is
 exhausted. Work at GVT remains executable even if the budget is exceeded: otherwise
 a same-tick causal chain could prevent the very frontier advance needed to release

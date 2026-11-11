@@ -19,7 +19,7 @@ import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
 import org.interscity.htc.core.util.StringUtil
 
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext.Implicits.global
+import core.runtime.accounting.RuntimeFailure
 import scala.concurrent.duration.*
 
 /** Dedicated manager for post-load registration orchestration.
@@ -28,8 +28,8 @@ import scala.concurrent.duration.*
   *   1. '''Accumulation phase''' (during EAGER loading): receives NeedsPostLoadRegistrationEvent
   *      from creators for each actor that opts in.
   *   2. '''Execution phase''' (triggered by SimulationManager via StartPostLoadRegistrationPhaseEvent):
-  *      fans out PostLoadRegistrationEvent to all accumulated actors and waits for ACKs.
-  *   3. '''Completion''': once all ACKs received (or max retries exhausted), sends
+  *      sends a bounded window of registration requests and waits for delivery ACKs.
+  *   3. '''Completion''': once all ACKs are received, sends
   *      PostLoadRegistrationDoneEvent to SimulationManager.
   */
 class PostLoadRegistrationManager(
@@ -42,8 +42,28 @@ class PostLoadRegistrationManager(
   private val pendingRegistrations: mutable.Map[String, String] = mutable.Map.empty
   private val pendingAcks: mutable.Set[String] = mutable.Set.empty
   private var triggered: Boolean = false
+  private var failed = false
   private var retryTask: Cancellable = _
   private var retryCount: Int = 0
+  private var totalRegistrations = 0
+  private var queued = Iterator.empty[String]
+  private val maxInFlight = scala.util.Try(
+    context.system.settings.config.getInt("htc.post-load-registration.max-in-flight")
+  ).getOrElse(256)
+  require(maxInFlight > 0, "post-load registration max-in-flight must be positive")
+  private implicit def executionContext: scala.concurrent.ExecutionContext = context.dispatcher
+
+  protected def dispatchRegistration(entityId: String, classType: String): Unit = {
+    val shardRef = ClusterSharding(context.system).shardRegion(StringUtil.getModelClassName(classType))
+    shardRef ! EntityEnvelopeEvent(entityId, PostLoadRegistrationEvent(coordinatorRef = self))
+  }
+
+  private def fail(reason: String): Unit = if (!failed) {
+    failed = true
+    logError(reason)
+    simulationManager ! RuntimeFailure(reason)
+    selfDestruct()
+  }
 
   private val RETRY_INTERVAL: FiniteDuration = {
     val secs = scala.util.Try(
@@ -60,10 +80,12 @@ class PostLoadRegistrationManager(
   private case object RetryPostLoadRegistration
 
   override def handleEvent: Receive = {
+    case _ if failed                          => ()
     case event: NeedsPostLoadRegistrationEvent => handleNeedsRegistration(event)
     case StartPostLoadRegistrationPhaseEvent   => handleTrigger()
     case event: PostLoadRegistrationAckEvent   => handleAck(event)
     case RetryPostLoadRegistration             => handleRetry()
+    case RuntimeFailure(reason)               => fail(reason)
     case _: StopSimulationEvent                => selfDestruct()
   }
 
@@ -85,14 +107,15 @@ class PostLoadRegistrationManager(
       return
     }
     triggered = true
+    totalRegistrations = pendingRegistrations.size
     logInfo(
       s"Post-load registration phase triggered. ${pendingRegistrations.size} entities to register."
     )
     if (pendingRegistrations.isEmpty) {
       finish()
     } else {
-      pendingAcks ++= pendingRegistrations.keys
-      sendRegistrationEvents()
+      queued = pendingRegistrations.keysIterator.toVector.iterator
+      fillWindow()
       retryTask = context.system.scheduler.scheduleWithFixedDelay(
         RETRY_INTERVAL,
         RETRY_INTERVAL,
@@ -102,37 +125,29 @@ class PostLoadRegistrationManager(
     }
   }
 
-  private def sendRegistrationEvents(): Unit = {
-    val toRemove = mutable.Buffer[String]()
-    pendingAcks.foreach { entityId =>
-      pendingRegistrations.get(entityId) match {
-        case Some(classType) =>
-          try {
-            val shardRef =
-              ClusterSharding(context.system).shardRegion(StringUtil.getModelClassName(classType))
-            shardRef ! EntityEnvelopeEvent(
-              entityId = entityId,
-              event = PostLoadRegistrationEvent(coordinatorRef = self)
-            )
-          } catch {
-            case e: Exception =>
-              logWarn(
-                s"Failed to send PostLoadRegistrationEvent to $entityId ($classType): ${e.getMessage}. Skipping."
-              )
-              toRemove += entityId
-          }
-        case None =>
-          logWarn(s"No classType found for $entityId — removing from pending.")
-          toRemove += entityId
-      }
+  private def sendRegistration(entityId: String): Unit = {
+    try dispatchRegistration(entityId, pendingRegistrations(entityId))
+    catch {
+      case scala.util.control.NonFatal(error) =>
+        fail(s"Cannot register $entityId: ${error.getMessage}")
     }
-    toRemove.foreach(pendingAcks.remove)
-    if (pendingAcks.isEmpty) finish()
+  }
+
+  private def fillWindow(): Unit = {
+    while (!failed && pendingAcks.size < maxInFlight && queued.hasNext) {
+      val entityId = queued.next()
+      pendingAcks.add(entityId)
+      sendRegistration(entityId)
+    }
+    if (!failed && pendingRegistrations.isEmpty) finish()
   }
 
   private def handleAck(event: PostLoadRegistrationAckEvent): Unit = {
-    pendingAcks.remove(event.entityId)
-    if (pendingAcks.isEmpty) finish()
+    if (pendingAcks.remove(event.entityId)) {
+      pendingRegistrations.remove(event.entityId)
+      retryCount = 0
+      fillWindow()
+    }
   }
 
   private def handleRetry(): Unit = {
@@ -150,28 +165,33 @@ class PostLoadRegistrationManager(
         s"Max retries ($MAX_RETRIES) reached after ${elapsedSec}s. " +
           s"${pendingAcks.size} actors did not ACK. By class: [$byClass]. " +
           s"Sample: [${pendingAcks.take(20).mkString(", ")}${if (pendingAcks.size > 20) "..." else ""}]. " +
-          s"Proceeding to avoid simulation deadlock."
+          s"Startup failed; the registration barrier remains closed."
       )
-      finish()
+      fail("Post-load registration retry limit exceeded with unacknowledged actors")
     } else {
       logWarn(
         s"Retry $retryCount/$MAX_RETRIES (${elapsedSec}s elapsed). " +
           s"${pendingAcks.size} actors still pending. By class: [$byClass]. " +
           s"Sample: [$sample$more]"
       )
-      sendRegistrationEvents()
+      pendingAcks.toVector.foreach(sendRegistration)
     }
   }
 
   private def finish(): Unit = {
+    require(pendingRegistrations.isEmpty && pendingAcks.isEmpty, "registration barrier is not closed")
     if (retryTask != null) retryTask.cancel()
     logInfo(
       s"Post-load registration complete " +
-        s"(${pendingRegistrations.size} total, ${pendingAcks.size} still pending). " +
+        s"(${totalRegistrations} total, ${pendingRegistrations.size} still pending). " +
         s"Notifying SimulationManager."
     )
     simulationManager ! PostLoadRegistrationDoneEvent(actorRef = self)
     selfDestruct()
+  }
+  override def postStop(): Unit = {
+    if (retryTask != null) retryTask.cancel()
+    super.postStop()
   }
 }
 

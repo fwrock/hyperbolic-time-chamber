@@ -31,7 +31,14 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private val terminalProcesses = mutable.Set.empty[ActorRef]
   private val outgoing = mutable.LongMap.empty[ActorRef]
   private val accepting = mutable.LongMap.empty[Acceptance]
+  private val pendingDeliveries = mutable.Queue.empty[(Long, AnyRef)]
+  private val delivering = mutable.Set.empty[Long]
+  private val pendingExecution = mutable.Queue.empty[ActorRef]
+  private var sendingDeliveries = false
+  private var sendingGrants = false
+  protected def maxInFlight: Int = 32
   private val reports = mutable.Set.empty[Long]
+  private val registrationFences = mutable.Map.empty[ActorRef, ActorRef]
   private val sinks = mutable.Set.empty[ActorRef]
   private var members = Vector.empty[ActorRef]
   private var epoch = ""
@@ -46,6 +53,11 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private var executing = Set.empty[ActorRef]
   private var stopping: Option[StopConservativeRuntime] = None
   private var retirements = Set.empty[ActorRef]
+  private val pendingRetirements = mutable.Queue.empty[(ActorRef, RetireConservativeProcess)]
+  private val retiringInFlight = mutable.Set.empty[ActorRef]
+  private var sendingRetirements = false
+  private val retirementReceipts = mutable.Map.empty[ActorRef, Long]
+  private val retiredRefs = mutable.Set.empty[ActorRef]
   private val retiring = mutable.Map.empty[ActorRef, Long]
   private var failed = false
   private var readyRequest: Option[(Long, ActorRef)] = None
@@ -73,7 +85,33 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private def input(process: Process, event: AnyRef, source: Option[(ActorRef, Long)]): Unit = {
     val id = nextToken()
     accepting(id) = Acceptance(process, source)
-    process.ref ! ConservativeDelivery(epoch, id, event)
+    pendingDeliveries.enqueue(id -> event)
+    deliverInputs()
+  }
+  private def deliverInputs(): Unit = if (!sendingDeliveries) {
+    require(maxInFlight > 0, "conservative dispatch limit must be positive")
+    sendingDeliveries = true
+    try while (pendingDeliveries.nonEmpty && delivering.size < maxInFlight) {
+      val (id, event) = pendingDeliveries.dequeue()
+      delivering.add(id)
+      accepting(id).process.ref ! ConservativeDelivery(epoch, id, event)
+    } finally sendingDeliveries = false
+  }
+  private def grantExecution(): Unit = if (!sendingGrants && !preparing && batch.nonEmpty) {
+    sendingGrants = true
+    try while (pendingExecution.nonEmpty && executing.size < maxInFlight) {
+      val ref = pendingExecution.dequeue()
+      executing += ref
+      ref ! batch.get
+    } finally sendingGrants = false
+  }
+  private def retireProcesses(): Unit = if (!sendingRetirements) {
+    sendingRetirements = true
+    try while (pendingRetirements.nonEmpty && retiringInFlight.size < maxInFlight) {
+      val (ref, request) = pendingRetirements.dequeue()
+      retiringInFlight.add(ref)
+      ref ! request
+    } finally sendingRetirements = false
   }
   protected def transferTo(destination: ActorRef, event: ConservativeTransfer): Unit = destination ! event
   private def fail(error: Throwable): Unit = if (!failed) {
@@ -139,6 +177,12 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       if (destination != self) crossOwnerTransfers += 1L
       transferTo(destination, ConservativeTransfer(epoch, id, target, event))
     }
+    case FenceConservativeRegistration(run, target) => protect {
+      checkEpoch(run)
+      require(byRef.contains(sender()), "registration fence from unregistered LP")
+      registrationFences(sender()) = target
+      completeRegistrationFences()
+    }
     case event: ConservativeTransfer => protect {
       checkEpoch(event.epoch)
       require(members.contains(sender()) && owner(event.target) == self, "unowned channel delivery")
@@ -164,10 +208,12 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     }
     case ConservativeInputAccepted(run, id, next) => protect {
       checkEpoch(run)
+      require(delivering.remove(id), "acceptance for an input not in flight")
       val accepted = accepting.remove(id).getOrElse(throw new IllegalArgumentException("unknown input acceptance"))
       require(sender() == accepted.process.ref, "input acceptance from wrong LP")
       updateInput(accepted.process, next)
       accepted.source.foreach { case (source, token) => source ! ConservativeTransferAccepted(epoch, token) }
+      deliverInputs()
       executePreparedBatch()
       completeBatch()
     }
@@ -223,6 +269,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       if (blocked > 0) blockedProcesses.add(sender()) else blockedProcesses.remove(sender())
       if (terminal) terminalProcesses.add(sender()) else terminalProcesses.remove(sender())
       executing -= sender()
+      grantExecution()
       completeBatch()
     }
     case PublishConservativeReport(target, report) => protect {
@@ -247,27 +294,17 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       stopping = Some(event)
       retirements = byRef.keySet.toSet
       require(event.finalHorizon.isEmpty || event.truncated, "horizon finalization without truncation")
-      retirements.foreach(_ ! RetireConservativeProcess(event.round, event.truncated, event.finalHorizon))
+      pendingRetirements ++= retirements.iterator.map(_ -> RetireConservativeProcess(event.round, event.truncated, event.finalHorizon))
+      retireProcesses()
       completeStop()
     }
     case ConservativeProcessRetired(round) => protect {
-      if (retiring.get(sender()).contains(round)) {
-        retiring.remove(sender())
-        val process = byRef.remove(sender()).get
-        processes.remove(process.id)
-        byHandle.remove(process.handle)
-        readyInputs.remove(sender())
-        blockedProcesses.remove(sender())
-        terminalProcesses.remove(sender())
-        forgetOwnedProcess(process.handle)
-        context.unwatch(sender())
-        completeMigrationFreeze()
-        completeBatch()
-      } else {
-        require(stopping.exists(_.round == round) && retirements.contains(sender()), "unexpected retirement")
-        retirements -= sender()
-        completeStop()
-      }
+      require(retiringInFlight.contains(sender()) && !retirementReceipts.contains(sender()),
+        "retirement receipt for a process not in flight")
+      require(retiring.get(sender()).contains(round) ||
+        (stopping.exists(_.round == round) && retirements.contains(sender())), "unexpected retirement")
+      retirementReceipts(sender()) = round
+      finishRetirement(sender())
     }
     case e: FreezeConservativeMigration => protect {
       checkEpoch(e.epoch)
@@ -326,6 +363,10 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       migrationStarted = false
       sender() ! ConservativeMigrationResumed(epoch, e.requestId)
     }
+    case Terminated(ref) if retiringInFlight.contains(ref) => protect {
+      retiredRefs.add(ref)
+      finishRetirement(ref)
+    }
     case Terminated(ref) if frozenProcesses.values.exists(f => f.original == ref && f.stopAuthorized) => ()
     case Terminated(ref) if byRef.contains(ref) && stopping.isEmpty && !retiring.contains(ref) =>
       fail(new IllegalStateException(s"LP lost: $ref"))
@@ -361,18 +402,27 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private def executePreparedBatch(): Unit = if (preparing && !dispatching && !accepting.valuesIterator.exists(_.source.isEmpty)) {
     val stage = batch.get
     preparing = false
-    executing = readyInputs.iterator.collect {
-      case (ref, order) if order.tick == stage.tick && order.microstep == stage.microstep => ref
-    }.toSet
-    executing.foreach(_ ! stage)
+    pendingExecution ++= readyInputs.iterator.collect {
+      case (ref, order) if order.tick == stage.tick && order.microstep == stage.microstep => order -> ref
+    }.toVector.sortBy(_._1).map(_._2)
+    grantExecution()
     completeBatch()
   }
-  private def completeBatch(): Unit = if (batch.nonEmpty && !preparing && executing.isEmpty &&
-    outgoing.isEmpty && accepting.isEmpty && reports.isEmpty && retiring.isEmpty && births.isEmpty) {
-    val round = batch.get.round
-    batch = None
-    coordinator ! ConservativeBatchComplete(round)
-  } else reportReady()
+  private def completeRegistrationFences(): Unit = if (outgoing.isEmpty && accepting.isEmpty && reports.isEmpty) {
+    registrationFences.foreach { case (source, target) =>
+      target ! core.entity.event.control.load.PostLoadRegistrationAckEvent(byRef(source).id.id.toString)
+    }
+    registrationFences.clear()
+  }
+  private def completeBatch(): Unit = {
+    completeRegistrationFences()
+    if (batch.nonEmpty && !preparing && !sendingGrants && pendingExecution.isEmpty && executing.isEmpty &&
+      outgoing.isEmpty && accepting.isEmpty && reports.isEmpty && retiring.isEmpty && births.isEmpty) {
+      val round = batch.get.round
+      batch = None
+      coordinator ! ConservativeBatchComplete(round)
+    } else reportReady()
+  }
   private def reportReady(): Unit = if (readyRequest.nonEmpty && batch.isEmpty && outgoing.isEmpty &&
     accepting.isEmpty && reports.isEmpty && births.isEmpty) {
     val (round, target) = readyRequest.get
@@ -385,6 +435,31 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     coordinator ! ConservativeRuntimeStopped(stopping.get.round, sinks.toSet)
   }
 
+  private def finishRetirement(ref: ActorRef): Unit = if (retiredRefs.contains(ref) && retirementReceipts.contains(ref)) {
+    val round = retirementReceipts.remove(ref).get
+    retiredRefs.remove(ref)
+    retiringInFlight.remove(ref)
+    // The model receipt precedes physical stop. DeathWatch closes the transport flush as well.
+    if (retiring.get(ref).contains(round)) {
+      retiring.remove(ref)
+      val process = byRef.remove(ref).get
+      processes.remove(process.id)
+      byHandle.remove(process.handle)
+      readyInputs.remove(ref)
+      blockedProcesses.remove(ref)
+      terminalProcesses.remove(ref)
+      forgetOwnedProcess(process.handle)
+      context.unwatch(ref)
+      retireProcesses()
+      completeMigrationFreeze()
+      completeBatch()
+    } else {
+      retirements -= ref
+      retireProcesses()
+      completeStop()
+    }
+  }
+
   private def retireCommittedTerminals(round: Long): Unit = {
     val running = runningEvents.iterator.map(_.id).toSet
     val terminal = terminalProcesses.iterator.map(byRef).filter(p => p.terminal && p.next.isEmpty && p.blocked == 0 &&
@@ -392,7 +467,8 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     // A new GTM grant proves every worker drained the previous batch, including messages
     // sent by other LTMs. Local completion alone cannot authorize physical retirement.
     terminal.foreach(p => retiring(p.ref) = round)
-    terminal.foreach(_.ref ! RetireConservativeProcess(round, false))
+    pendingRetirements ++= terminal.iterator.map(_.ref -> RetireConservativeProcess(round, false))
+    retireProcesses()
   }
 
   override protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =

@@ -16,7 +16,8 @@ case class SimulationReportEvent(
   lamportTick: Long,
   realTimeMs: Long,
   label: Option[String] = None,
-  dataJson: String
+  dataJson: String,
+  scenarioId: String = ""
 )
 
 object SimulationReportEventAvro {
@@ -29,7 +30,8 @@ object SimulationReportEventAvro {
     lamportTick: Long,
     realTimeMs: Long,
     label: String,
-    dataJson: String
+    dataJson: String,
+    scenarioId: String = ""
   )
 
   def serialize(event: SimulationReportEvent): Try[Array[Byte]] =
@@ -42,7 +44,8 @@ object SimulationReportEventAvro {
         lamportTick  = event.lamportTick,
         realTimeMs   = event.realTimeMs,
         label        = event.label.getOrElse(""),
-        dataJson     = event.dataJson
+        dataJson     = event.dataJson,
+        scenarioId   = event.scenarioId
       )
       JsonUtil.toJson(wire).getBytes("UTF-8")
     }
@@ -59,7 +62,8 @@ object SimulationReportEventAvro {
         lamportTick  = wire.lamportTick,
         realTimeMs   = wire.realTimeMs,
         label        = if (wire.label.isEmpty) None else Some(wire.label),
-        dataJson     = wire.dataJson
+        dataJson     = wire.dataJson,
+        scenarioId   = Option(wire.scenarioId).getOrElse("")
       )
     }
 

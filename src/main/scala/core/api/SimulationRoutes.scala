@@ -95,12 +95,18 @@ object SimulationRoutes {
                 val s = SimulationController.status
                 val currentTick = SimulationMetrics.currentTick.get().toLong
                 val progress = SimulationMetrics.simulationProgress.get()
+                val policy = ApiConfigRegistry.get.map(_.timeManagerType).getOrElse("")
+                val gvt = if (policy == core.enumeration.TimeManagerTypeEnum.TIME_WARP)
+                  core.metrics.core.TimeWarpMetrics.gvt.get().toLong.toString else "null"
                 complete(
                   ok(
                     s"""|{
                       |  "status": "$s",
+                      |  "simulationId": ${SimulationController.reportSimulationId.map(jsonString).getOrElse("null")},
                       |  "currentTick": $currentTick,
                       |  "progressRatio": $progress,
+                      |  "timeManagerType": ${jsonString(policy)},
+                      |  "gvt": $gvt,
                       |  "apiConfigLoaded": ${ApiConfigRegistry.hasConfig},
                       |  "settingOverrides": ${SimulatorSettingsRegistry.getAll.size}
                       |}""".stripMargin
@@ -115,7 +121,7 @@ object SimulationRoutes {
                     val (configFile, settings) = parseStartBody(body)
                     SimulationController.start(configFile, settings) match {
                       case Right(_) =>
-                        complete(ok("""{"status":"ok","message":"Simulation start triggered"}"""))
+                        complete(ok(s"""{"status":"ok","message":"Simulation start triggered","simulationId":${SimulationController.reportSimulationId.map(jsonString).getOrElse("null")}}"""))
                       case Left(err) =>
                         complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
                     }

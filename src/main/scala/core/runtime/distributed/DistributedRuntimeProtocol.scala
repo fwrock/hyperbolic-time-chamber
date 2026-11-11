@@ -9,6 +9,8 @@ sealed trait DistributedRuntimeCommand
 final case class RuntimeMembership(epoch: String, managers: Vector[ActorRef]) extends DistributedRuntimeCommand
 final case class RegisterLocalProcess(epoch: String, process: JoinRuntime) extends DistributedRuntimeCommand
 final case class LocalProcessRegistered(id: LogicalProcessId) extends DistributedRuntimeCommand
+final case class OptimisticProcessIdle(epoch: String, round: Long, delivery: Long = 0L) extends DistributedRuntimeCommand
+final case class OptimisticWorkerActivity(round: Long, idle: Boolean) extends DistributedRuntimeCommand
 final case class StartLocalRuntime(startTick: Long, horizon: Long,
   limits: core.runtime.OptimisticExecutionLimits = core.runtime.OptimisticExecutionLimits(),
   inputThrough: Long = Long.MaxValue) extends DistributedRuntimeCommand

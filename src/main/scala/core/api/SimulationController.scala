@@ -26,6 +26,8 @@ object SimulationController {
   private val _system = new AtomicReference[Option[ActorSystem]](None)
   private val _status = new AtomicReference[SimulationStatus](SimulationStatus.Idle)
   private var _apiWaitEnabled = false
+  private val _reportSimulationId = new AtomicReference[Option[String]](None)
+  def reportSimulationId: Option[String] = _reportSimulationId.get()
 
   /** Called once from [[ConfigApiServer]] right after the ActorSystem is created.
     *
@@ -36,11 +38,15 @@ object SimulationController {
     */
   def initialize(system: ActorSystem, apiEnabled: Boolean): Unit = {
     _system.set(Some(system))
+    _reportSimulationId.set(None)
     _apiWaitEnabled = apiEnabled
-    if (!apiEnabled) _status.set(SimulationStatus.Running)
+    _status.set(if (apiEnabled) SimulationStatus.Idle else SimulationStatus.Running)
   }
 
   def isApiWaitEnabled: Boolean = _apiWaitEnabled
+
+  private[htc] def markLoading(): Unit = _status.set(SimulationStatus.Loading)
+  def markRunning(): Unit = { _status.compareAndSet(SimulationStatus.Loading, SimulationStatus.Running); () }
 
   /** Current simulation status. When in Loading state, transitions to Running automatically once
     * the first tick is recorded in Prometheus (avoids needing to modify SimulationManager).
@@ -85,8 +91,10 @@ object SimulationController {
         // being started, before PrepareSimulationEvent reaches SimulationManager.
         core.util.SimulationUtil.startShards(sys, configArg)
         val proxy = DistributedUtil.createSingletonProxy(sys, SIMULATION_MANAGER_ACTOR_NAME)
-        proxy ! PrepareSimulationEvent(configuration = configArg)
-        _status.set(SimulationStatus.Loading)
+        markLoading()
+        val reportId = java.util.UUID.randomUUID().toString
+        _reportSimulationId.set(Some(reportId))
+        proxy ! PrepareSimulationEvent(configuration = configArg, reportSimulationId = reportId)
         logger.info(
           s"Simulation start triggered via API" +
             configFile
@@ -162,6 +170,10 @@ object SimulationController {
       case None => Left("Actor system not yet initialized")
       case Some(sys) =>
         try { f(sys); Right(()) }
-        catch { case e: Exception => Left(s"Internal error: ${e.getMessage}") }
+        catch {
+          case e: Exception =>
+            logger.error("Simulation API operation failed", e)
+            Left(s"Internal error: ${e.getMessage}")
+        }
     }
 }

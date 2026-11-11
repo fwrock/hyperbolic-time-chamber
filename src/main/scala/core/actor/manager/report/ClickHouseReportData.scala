@@ -22,7 +22,9 @@ import scala.concurrent.{ ExecutionContext, Future }
   */
 class ClickHouseReportData(
   override val reportManager: ActorRef,
-  override val startRealTime: LocalDateTime
+  override val startRealTime: LocalDateTime,
+  val simulationId: String,
+  val scenarioId: String
 ) extends ReportData(
       id = "clickhouse-report-data",
       reportManager = reportManager,
@@ -58,19 +60,7 @@ class ClickHouseReportData(
   )
   private val batchSize =
     try config.getInt("htc.report-manager.clickhouse.batch-size")
-    catch { case _: Exception => 50000 }
-
-  private lazy val simulationId: String = {
-    val fromConfig =
-      try Some(core.util.SimulationUtil.loadSimulationConfig().id).flatten
-      catch { case _: Exception => None }
-    val fromEnv = sys.env.get("HTC_SIMULATION_ID")
-    val fromConf =
-      try Some(config.getString("htc.simulation.id"))
-      catch { case _: Exception => None }
-    fromConfig.orElse(fromEnv).orElse(fromConf).getOrElse("sim")
-  }
-
+    catch { case _: Exception => 10000 }
   private val ch = new ClickHouseClientManager(host, port, database, username, password)
 
   private implicit val io: ExecutionContext = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
@@ -95,7 +85,7 @@ class ClickHouseReportData(
         if (buffer.size >= batchSize) flush()
       case data: scala.collection.Map[?, ?] if event.label == "execution_timing_summary" =>
         val fields = data.asInstanceOf[scala.collection.Map[String, Any]].toMap ++ Map(
-          "simulation_id" -> simulationId, "node" -> core.cluster.NodeIdentity.originLabel(event.node))
+          "simulation_id" -> simulationId, "scenario_id" -> scenarioId, "node" -> core.cluster.NodeIdentity.originLabel(event.node))
         timingBuffer += core.util.JsonUtil.toJson(fields)
       case _ =>
     }
@@ -140,6 +130,7 @@ class ClickHouseReportData(
   private def toJsonLine(event: ReportEvent, flow: VehicleLinkFlowData): String = {
     val sb = new java.lang.StringBuilder(256)
     sb.append("{\"simulation_id\":\"").append(escape(simulationId)).append('"')
+    sb.append(",\"scenario_id\":\"").append(escape(scenarioId)).append('"')
     sb.append(",\"tick\":").append(event.tick)
     sb.append(",\"real_time_ms\":").append(System.currentTimeMillis())
     sb.append(",\"link_id\":\"").append(escape(flow.linkId)).append('"')

@@ -37,7 +37,9 @@ import scala.collection.mutable
   */
 class ParquetReportData(
   override val reportManager: ActorRef,
-  override val startRealTime: LocalDateTime
+  override val startRealTime: LocalDateTime,
+  val simulationId: String,
+  val scenarioId: String
 ) extends ReportData(
       id = "parquet-report-data",
       reportManager = reportManager,
@@ -56,6 +58,7 @@ class ParquetReportData(
       |    {"name": "lamport_tick",  "type": "long"},
       |    {"name": "event_type",    "type": ["null", "string"], "default": null},
       |    {"name": "simulation_id", "type": "string"},
+      |    {"name": "scenario_id", "type": "string"},
       |    {"name": "data",          "type": ["null", "string"], "default": null},
       |    {"name": "node",          "type": ["null", "string"], "default": null},
       |    {"name": "from_node",     "type": ["null", "string"], "default": null},
@@ -110,26 +113,6 @@ class ParquetReportData(
     case "gzip"   => ".gz.parquet"
     case _        => ".parquet"
   }
-
-  private lazy val simulationId: String = {
-    val fromSimConfig =
-      try Some(core.util.SimulationUtil.loadSimulationConfig()).flatMap(_.id)
-      catch { case _: Exception => None }
-    val fromEnv = sys.env.get("HTC_SIMULATION_ID")
-    val fromConf =
-      try Some(config.getString("htc.simulation.id"))
-      catch { case _: Exception => None }
-
-    fromSimConfig.orElse(fromEnv).orElse(fromConf).getOrElse {
-      val name =
-        try
-          core.util.SimulationUtil.loadSimulationConfig().name.replaceAll("[^a-zA-Z0-9_-]", "_")
-        catch { case _: Exception => "sim" }
-      try core.actor.manager.RandomSeedManager.deterministicSimulationId(name)
-      catch { case _: Exception => s"${name}_${timeBasedId}" }
-    }
-  }
-
   private lazy val directory = s"$baseDirectory/$simulationId"
 
   private def newFilePath(): String = {
@@ -201,6 +184,7 @@ class ParquetReportData(
           record.put("lamport_tick", event.lamportTick)
           record.put("event_type", event.label)
           record.put("simulation_id", sid)
+          record.put("scenario_id", scenarioId)
           record.put("data", JsonUtil.toJson(event.data))
           // Distributed-run context: reporting node and message-origin node (null when there is none).
           record.put("node", Option(core.cluster.NodeIdentity.originLabel(event.node)).filter(_.nonEmpty).orNull)
@@ -224,10 +208,12 @@ class ParquetReportData(
   override protected def flushCommittedReports(): scala.concurrent.Future[Unit] = {
     flushBuffer()
     if (writer != null) { writer.close(); writer = null }
-    val path = Paths.get(currentFilePath)
-    if (Files.exists(path)) {
-      val channel = java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.WRITE)
-      try channel.force(true) finally channel.close()
+    Option(currentFilePath).foreach { filePath =>
+      val path = Paths.get(filePath)
+      if (Files.exists(path)) {
+        val channel = java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.WRITE)
+        try channel.force(true) finally channel.close()
+      }
     }
     scala.concurrent.Future.successful(())
   }
