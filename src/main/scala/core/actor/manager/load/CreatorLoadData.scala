@@ -45,7 +45,8 @@ class CreatorLoadData(
     creatorProperties.reporters
 
   private[load] val initializeData = mutable.Map[String, mutable.Map[String, Initialization]]()
-  private[load] val initializedAcknowledges = mutable.Map[String, mutable.Seq[String]]()
+  // Set, not Seq: `:+` copied and `filter(_ != id)` rebuilt the whole batch per entity (O(n^2) per batch).
+  private[load] val initializedAcknowledges = mutable.Map[String, mutable.Set[String]]()
 
   /** entityId -> FIFO queue of (batchId, classType) awaiting this entity's InitializeEntityAckEvent,
     * one entry per StartEntityAck this actor has already forwarded as an InitializeEvent. A queue
@@ -368,19 +369,12 @@ class CreatorLoadData(
     }
 
   private[load] def addToInitializedAcknowledges(batchId: String, entityId: String): Unit = {
-    initializedAcknowledges.get(batchId) match {
-      case Some(acknowledge) => initializedAcknowledges.put(batchId, acknowledge :+ entityId)
-      case None              => initializedAcknowledges.put(batchId, mutable.Seq(entityId))
-    }
+    initializedAcknowledges.getOrElseUpdate(batchId, mutable.Set.empty) += entityId
     actorsBatches.getOrElseUpdate(entityId, mutable.Queue.empty) += batchId
   }
 
   private def removeOfInitializedAcknowledges(batchId: String, entityId: String): Unit =
-    initializedAcknowledges.get(batchId) match {
-      case Some(acknowledge) =>
-        initializedAcknowledges.put(batchId, acknowledge.filter(_ != entityId))
-      case None =>
-    }
+    initializedAcknowledges.get(batchId).foreach(_ -= entityId)
 
   private[load] def handleInitialize(event: ShardRegion.StartEntityAck): Unit = {
     val classTypeForLog = {

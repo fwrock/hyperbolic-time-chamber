@@ -56,8 +56,10 @@ object SimulationUtil {
       configuration.transitMapFile.map("htc.mobility.transit-map-file" -> _) ++
       configuration.transitRoutesFile.map("htc.mobility.transit-routes-file" -> _)
 
-  def installLocalScenarioSettings(configuration: Simulation): Unit =
+  def installLocalScenarioSettings(configuration: Simulation): Unit = {
     SimulatorSettingsRegistry.setAll(localScenarioSettings(configuration))
+    core.cache.CalculationCache.configure(configuration.calculationCache)
+  }
 
   def loadSimulationConfig(configuration: String = null): Simulation = {
     val path = if (configuration == null || configuration.isEmpty) null else configuration

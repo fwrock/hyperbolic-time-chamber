@@ -42,21 +42,31 @@ class TrafficSignalPhaseHandler(
 
     state.phases.foreach { phase =>
       val newState = calcNewState(currentCycleTick, phase)
+      val phaseNextTick = currentTick + Seq(phase.greenStart, phase.greenStart + phase.greenDuration).map { point =>
+        val delta = point - currentCycleTick
+        if (delta > 0) delta else delta + state.cycleDuration
+      }.min
 
       state.signalStates.get(phase.origin).foreach { signalState =>
-        signalState.remainingTime = nextTickTime - currentTick
-        signalState.nextTick      = nextTickTime
-        if (signalState.state != newState) {
+        val changed = signalState.state != newState
+        val unpublished = signalState.nextTick <= currentTick
+        signalState.remainingTime = phaseNextTick - currentTick
+        signalState.nextTick      = phaseNextTick
+        if (changed) {
           TrafficSignalMetrics.phaseChanges.labels(newState.toString).inc()
+        }
+        // A cached red deadline must name this phase's next change, not another
+        // approach's earlier transition. Publish initial red states as well.
+        if (changed || unpublished) {
           notifyNodes(
             SignalState(
               state         = newState,
               remainingTime = signalState.remainingTime,
-              nextTick      = nextTickTime
+              nextTick      = phaseNextTick
             ),
             state.nodes,
             phase.origin,
-            nextTickTime
+            phaseNextTick
           )
         }
         signalState.state = newState

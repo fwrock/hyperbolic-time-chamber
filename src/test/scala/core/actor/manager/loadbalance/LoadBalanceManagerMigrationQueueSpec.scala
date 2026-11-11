@@ -60,8 +60,8 @@ class LoadBalanceManagerMigrationQueueSpec extends AnyFlatSpec with Matchers wit
     private var shards = Set.empty[String]
     override def receive: Receive = {
       case AddObservedShard(id) => if (destination) shards += id
-      case ShardRegion.GetShardRegionState => sender() ! ShardRegion.CurrentShardRegionState(
-        shards.map(id => ShardRegion.ShardState(id, Set.empty)))
+      case ShardRegion.GetShardRegionStats => sender() ! ShardRegion.ShardRegionStats(
+        shards.map(id => id -> 0).toMap)
     }
   }
 
@@ -238,10 +238,10 @@ class LoadBalanceManagerMigrationQueueSpec extends AnyFlatSpec with Matchers wit
   }
 
   private def confirmPlacement(source: TestProbe, target: TestProbe, shardId: String): Unit = {
-    source.expectMsg(ShardRegion.GetShardRegionState)
-    target.expectMsg(ShardRegion.GetShardRegionState)
-    source.reply(ShardRegion.CurrentShardRegionState(Set.empty))
-    target.reply(ShardRegion.CurrentShardRegionState(Set(ShardRegion.ShardState(shardId, Set.empty))))
+    source.expectMsg(ShardRegion.GetShardRegionStats)
+    target.expectMsg(ShardRegion.GetShardRegionStats)
+    source.reply(ShardRegion.ShardRegionStats(Map.empty))
+    target.reply(ShardRegion.ShardRegionStats(Map(shardId -> 0)))
   }
 
   private class PlacementRig(extra: Seq[LoadBalanceManager.ResolvedMigrationTarget] = Seq.empty) {
@@ -287,21 +287,21 @@ class LoadBalanceManagerMigrationQueueSpec extends AnyFlatSpec with Matchers wit
       val (batch, attempt) = rig.begin(shard, "601")
       rig.restore(batch)
       rig.control.send(rig.manager, MigrationCompleteEvent(shard, batchId = batch.batchId, attemptId = attempt.attemptId))
-      rig.source.expectMsg(ShardRegion.GetShardRegionState)
-      rig.target.expectMsg(ShardRegion.GetShardRegionState)
-      rig.source.reply(ShardRegion.CurrentShardRegionState(Set.empty, Set(shard)))
-      rig.target.reply(ShardRegion.CurrentShardRegionState(Set(ShardRegion.ShardState(shard, Set.empty))))
+      rig.source.expectMsg(ShardRegion.GetShardRegionStats)
+      rig.target.expectMsg(ShardRegion.GetShardRegionStats)
+      rig.source.reply(ShardRegion.ShardRegionStats(Map.empty, Set(shard)))
+      rig.target.reply(ShardRegion.ShardRegionStats(Map(shard -> 0)))
       rig.windows.expectNoMessage(100.millis)
-      rig.source.expectMsg(ShardRegion.GetShardRegionState)
-      rig.target.expectMsg(ShardRegion.GetShardRegionState)
-      rig.source.reply(ShardRegion.CurrentShardRegionState(Set(ShardRegion.ShardState(shard, Set.empty))))
-      rig.target.reply(ShardRegion.CurrentShardRegionState(Set(ShardRegion.ShardState(shard, Set.empty))))
+      rig.source.expectMsg(ShardRegion.GetShardRegionStats)
+      rig.target.expectMsg(ShardRegion.GetShardRegionStats)
+      rig.source.reply(ShardRegion.ShardRegionStats(Map(shard -> 0)))
+      rig.target.reply(ShardRegion.ShardRegionStats(Map(shard -> 0)))
       rig.windows.expectNoMessage(100.millis)
-      rig.source.expectMsg(ShardRegion.GetShardRegionState)
-      rig.target.expectMsg(ShardRegion.GetShardRegionState)
+      rig.source.expectMsg(ShardRegion.GetShardRegionStats)
+      rig.target.expectMsg(ShardRegion.GetShardRegionStats)
       rig.source.reply(org.apache.pekko.actor.Status.Failure(new IllegalStateException("unavailable observation")))
       rig.source.expectNoMessage(600.millis)
-      rig.target.reply(ShardRegion.CurrentShardRegionState(Set.empty))
+      rig.target.reply(ShardRegion.ShardRegionStats(Map.empty))
       rig.windows.expectNoMessage(100.millis)
       rig.tm.expectNoMessage(100.millis)
       confirmPlacement(rig.source, rig.target, shard)
@@ -340,18 +340,18 @@ class LoadBalanceManagerMigrationQueueSpec extends AnyFlatSpec with Matchers wit
     val otherSource = TestProbe(); val otherTarget = TestProbe()
     val rig = new PlacementRig(Seq(LoadBalanceManager.ResolvedMigrationTarget("other", otherTarget.ref, otherSource.ref)))
     val shard = "multi-type-evidence"
-    val present = ShardRegion.CurrentShardRegionState(Set(ShardRegion.ShardState(shard, Set.empty)))
-    val absent = ShardRegion.CurrentShardRegionState(Set.empty)
+    val present = ShardRegion.ShardRegionStats(Map(shard -> 0))
+    val absent = ShardRegion.ShardRegionStats(Map.empty)
     try {
       val (batch, _) = rig.begin(shard, "603")
       rig.restore(batch)
       confirmPlacement(rig.source, rig.target, shard)
-      otherSource.expectMsg(ShardRegion.GetShardRegionState); otherTarget.expectMsg(ShardRegion.GetShardRegionState)
+      otherSource.expectMsg(ShardRegion.GetShardRegionStats); otherTarget.expectMsg(ShardRegion.GetShardRegionStats)
       otherSource.reply(absent); otherTarget.reply(absent)
       rig.windows.expectNoMessage(100.millis)
-      rig.source.expectMsg(ShardRegion.GetShardRegionState); rig.target.expectMsg(ShardRegion.GetShardRegionState)
+      rig.source.expectMsg(ShardRegion.GetShardRegionStats); rig.target.expectMsg(ShardRegion.GetShardRegionStats)
       rig.source.reply(absent); rig.target.reply(absent)
-      otherSource.expectMsg(ShardRegion.GetShardRegionState); otherTarget.expectMsg(ShardRegion.GetShardRegionState)
+      otherSource.expectMsg(ShardRegion.GetShardRegionStats); otherTarget.expectMsg(ShardRegion.GetShardRegionStats)
       otherSource.reply(absent); otherTarget.reply(present)
       rig.windows.expectNoMessage(100.millis)
       confirmPlacement(rig.source, rig.target, shard)
@@ -365,13 +365,13 @@ class LoadBalanceManagerMigrationQueueSpec extends AnyFlatSpec with Matchers wit
     val shard = "failed-evidence"
     try {
       val (batch, _) = rig.begin(shard, "604")
-      rig.source.expectMsg(ShardRegion.GetShardRegionState)
-      rig.target.expectMsg(ShardRegion.GetShardRegionState)
+      rig.source.expectMsg(ShardRegion.GetShardRegionStats)
+      rig.target.expectMsg(ShardRegion.GetShardRegionStats)
       rig.snapshots.send(rig.manager, MigrationPreparationFailedEvent(batch.batchId, "604", "restore failed"))
       rig.tm.expectMsg(StopSimulationEvent())
       rig.simulation.expectMsg(StopSimulationEvent())
-      rig.source.reply(ShardRegion.CurrentShardRegionState(Set.empty))
-      rig.target.reply(ShardRegion.CurrentShardRegionState(Set(ShardRegion.ShardState(shard, Set.empty))))
+      rig.source.reply(ShardRegion.ShardRegionStats(Map.empty))
+      rig.target.reply(ShardRegion.ShardRegionStats(Map(shard -> 0)))
       rig.control.send(rig.manager, MigrationRestoreAcceptedEvent("604", batch.batchId))
       rig.tm.expectNoMessage(200.millis)
       rig.windows.expectNoMessage(100.millis)
@@ -382,8 +382,8 @@ class LoadBalanceManagerMigrationQueueSpec extends AnyFlatSpec with Matchers wit
     val rig = new PlacementRig()
     try {
       rig.begin("stopped-evidence", "605")
-      rig.source.expectMsg(ShardRegion.GetShardRegionState)
-      rig.target.expectMsg(ShardRegion.GetShardRegionState)
+      rig.source.expectMsg(ShardRegion.GetShardRegionStats)
+      rig.target.expectMsg(ShardRegion.GetShardRegionStats)
       rig.control.send(rig.manager, StopSimulationEvent())
       rig.control.expectTerminated(rig.manager)
       rig.tm.expectNoMessage(100.millis)

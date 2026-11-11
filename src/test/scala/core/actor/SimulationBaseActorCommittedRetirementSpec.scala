@@ -298,6 +298,7 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   "a bounded distributed LP" should "apply tick/event budgets, accept cancellation at GVT and reclaim only strictly committed identities" in {
     val global = TestProbe()
     val owner = TestProbe()
+    owner.ignoreMsg { case _: core.runtime.distributed.OptimisticProcessIdle => true; case _ => false }
     val creator = TestProbe()
     val sink = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "108", actorType = CreationTypeEnum.PoolDistributed,
@@ -357,6 +358,7 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   "a distributed LP" should "retain pre-start input beyond its finite horizon without executing or publishing it" in {
     val global = TestProbe()
     val owner = TestProbe()
+    owner.ignoreMsg { case _: core.runtime.distributed.OptimisticProcessIdle => true; case _ => false }
     val creator = TestProbe()
     val sink = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "107", actorType = CreationTypeEnum.PoolDistributed,

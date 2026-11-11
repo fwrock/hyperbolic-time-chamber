@@ -11,6 +11,7 @@ import core.entity.event.{ActorInteractionEvent, FinishEvent, SpontaneousEvent}
 import core.entity.event.control.migration.{MigrationContextEvent, MigrationPreparationFailedEvent, MigrationRestoredAckEvent, MigrationRestoreAlreadyAcceptedEvent, MigrationRestoreFailedEvent, NoPendingMigrationEvent, QueryMigrationEvent}
 import core.runtime.{EventOrder, OrderedInputQueue}
 import core.runtime.accounting.*
+import core.runtime.distributed.OptimisticProcessIdle
 import core.runtime.conservative.*
 import core.entity.event.control.execution.ReplaceScheduleEvent
 import core.types.Tick
@@ -166,6 +167,9 @@ abstract class SimulationBaseActor[T <: BaseState](
     drainInputs()
   }
 
+  private var optimisticExecutionRound = 0L
+  private var optimisticLastDelivery = 0L
+
   private def drainInputs(): Unit = {
     if (drainingInputs || runtimeFrozen || runtimeFailed || (usesAccountedRuntime && runtimeEpoch.isEmpty)) return
     drainingInputs = true
@@ -225,6 +229,9 @@ abstract class SimulationBaseActor[T <: BaseState](
       continuationQueued = true
       self ! ContinueOptimisticExecution
     }
+    // This is a scheduling hint only; the owner still drains transport and takes a frozen cut.
+    if (distributedRuntime && !runtimeFailed && !continuationQueued)
+      runtimeAuthority.foreach(_ ! OptimisticProcessIdle(runtimeEpoch.get, optimisticExecutionRound, optimisticLastDelivery))
   }
 
 
@@ -982,30 +989,26 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected def requiresPostLoadRegistration: Boolean = false
 
-  /** Override this (together with requiresPostLoadRegistration = true) to perform any cross-actor
-    * registration needed before the simulation starts (e.g. BusStop → Node). The
-    * PostLoadRegistrationAckEvent is sent back to the coordinator automatically after this method
-    * returns.
-    */
+  /** Registration outputs must be accepted before the conservative startup barrier opens. */
   protected def handlePostLoadRegistration(): Unit = {}
 
-  /** Dispatched by BaseActor when PostLoadRegistrationEvent arrives. Calls
-    * handlePostLoadRegistration() then sends the ACK back to the coordinator. Subclasses should NOT
-    * override this — override handlePostLoadRegistration() instead. ACK is always sent even if
-    * handlePostLoadRegistration() throws, so the coordinator never deadlocks waiting for a missing
-    * reply.
-    */
+  private var postLoadRegistrationHandled = false
+
   override protected final def onPostLoadRegistration(event: PostLoadRegistrationEvent): Unit = {
-    try
-      handlePostLoadRegistration()
-    catch {
-      case e: Exception =>
-        logError(
-          s"$entityId: handlePostLoadRegistration() threw ${e.getClass.getSimpleName}: ${e.getMessage} — sending ACK anyway",
-          e
-        )
+    try {
+      if (!postLoadRegistrationHandled) {
+        handlePostLoadRegistration()
+        postLoadRegistrationHandled = true
+      }
+      if (usesConservativeRuntime) {
+        // The same sender orders the fence after every RouteInteraction emitted by the hook.
+        currentTimeManager ! FenceConservativeRegistration(runtimeEpoch.get, event.coordinatorRef)
+      } else event.coordinatorRef ! PostLoadRegistrationAckEvent(entityId = entityId)
+    } catch {
+      case scala.util.control.NonFatal(error) =>
+        event.coordinatorRef ! RuntimeFailure(s"Post-load registration failed for $entityId: ${error.getMessage}")
+        if (usesAccountedRuntime) failRuntime(error)
     }
-    event.coordinatorRef ! PostLoadRegistrationAckEvent(entityId = entityId)
   }
 
   /** Sends a message to another simulation actor.
@@ -1037,7 +1040,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       return
     }
     lamportClock.increment()
-    ActorMetrics.messagesSent.labels(getClass.getSimpleName, eventType).inc()
+    ActorMetrics.messagesSentFor(cachedSimpleName, eventType).inc()
     // Time Warp (docs/TIME_WARP_DESIGN.md §10): a fresh per-actor send identity, generated and
     // written to the wire ONLY under Time Warp. Deliberately not unconditional: proto3 encodes a
     // zero field as zero bytes, so an always-incrementing seq would grow every conservative-mode
@@ -1098,7 +1101,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         lamportTick = getLamportClock,
         actorRefId = getEntityId.toLong,
         shardRefId = IdUtil.format(getShardId),
-        actorClassType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
+        actorClassType = cachedActorTypeLabel,
         actorPathRef = self.path.name,
         data = data,
         eventType = eventType,
@@ -1131,7 +1134,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       lamportTick = getLamportClock,
       actorRefId = getEntityId.toLong,
       shardRefId = IdUtil.format(getShardId),
-      actorClassType = StringUtil.getModelClassNameWithoutPackage(getClass.getName),
+      actorClassType = cachedActorTypeLabel,
       actorPathRef = self.path.name,
       data = data,
       eventType = eventType,
@@ -1262,7 +1265,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     *   The interaction event
     */
   private def handleInteractWith(event: ActorInteractionEvent): Unit = {
-    ActorMetrics.eventsProcessed.labels("interaction").inc()
+    ActorMetrics.interactionEvents.inc()
     updateLamportClock(event.lamportTick)
     // Distributed-run accounting: which node sent this, and was it this one? Anti-messages are control traffic, not interactions.
     if (!event.isAntiMessage)
@@ -1595,6 +1598,7 @@ abstract class SimulationBaseActor[T <: BaseState](
           state != null,
           s"runtime delivered ${event.getClass.getSimpleName} to uninitialized LP $getEntityId"
         )
+        optimisticLastDelivery = token
         acceptRuntimeInput(event)
         sender() ! DeliveryAccepted(epoch, token)
         drainInputs()
@@ -1649,10 +1653,11 @@ abstract class SimulationBaseActor[T <: BaseState](
         committedRetirement = Some(round -> eligible)
         sender() ! RuntimeCommitted(round, eligible)
       } catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
-    case ResumeRuntime(_) =>
+    case ResumeRuntime(round) =>
       if (!runtimeAuthority.contains(sender()) || finalizedHorizon.nonEmpty)
         failRuntime(new IllegalStateException("resume from non-owner or after horizon finalization"))
       else {
+        optimisticExecutionRound = round
         runtimeFrozen = false
         try drainInputs() catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
       }
@@ -2046,6 +2051,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     * labels -- avoids a `getClass.getName` + string-split allocation on every interaction/
     * anti-message under Time Warp's rollback-metrics instrumentation.
     */
+  private lazy val cachedSimpleName: String = getClass.getSimpleName
+
   private lazy val cachedActorTypeLabel: String = StringUtil.getModelClassNameWithoutPackage(getClass.getName)
 
   /** Reports an event to the reporting system.
@@ -2066,7 +2073,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (isReplaying) return
     if (reporters.isEmpty) return
     if (event.label != null) {
-      ActorMetrics.eventsProcessed.labels(event.label).inc()
+      ActorMetrics.eventsProcessedFor(event.label).inc()
     }
     val stateReporter = state.getReporterType
     val reportType = if (stateReporter != null) stateReporter else cachedDefaultReportType

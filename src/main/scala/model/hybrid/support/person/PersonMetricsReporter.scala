@@ -50,10 +50,37 @@ class PersonMetricsReporter(
       .labels(requested, resolved, metricSource)
       .inc()
 
-    if (requested != resolved)
+    // A pending decision has no original concrete mode to compare with.
+    if (requested != "auto" && requested != "unknown" && requested != resolved)
       PersonMetrics.personModeChoiceChanged
         .labels(requested, resolved, metricSource)
         .inc()
+  }
+
+  def reportModeChoiceDecision(
+    originNodeId: Long,
+    destinationNodeId: Long,
+    requestedMode: String,
+    resolvedMode: String,
+    source: String,
+    strategyId: String,
+    currentTick: Tick
+  ): Unit = {
+    recordModeChoiceMetrics(requestedMode, resolvedMode, source)
+    reportFn(
+      Map(
+        "event_type" -> "mode_choice_resolved",
+        "person_id" -> personId,
+        "origin_node_id" -> originNodeId,
+        "destination_node_id" -> destinationNodeId,
+        "requested_mode" -> normalizeMode(requestedMode),
+        "resolved_mode" -> normalizeMode(resolvedMode),
+        "source" -> source,
+        "strategy_id" -> strategyId,
+        "tick" -> currentTick
+      ),
+      "person_mode_choice_resolved"
+    )
   }
 
   /** Log mode choice decision (sampled).

@@ -54,8 +54,9 @@ class ProgressiveOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with Be
     first.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 10L
     first.expectMsg(ResumeRuntime(0L))
 
-    def reachInputBoundary(minimum: Option[Long] = Some(20L)): LoadOptimisticInputWindow = {
-      gtm ! RequestRuntimeRound()
+    def reachInputBoundary(minimum: Option[Long] = Some(20L), automatic: Boolean = false): LoadOptimisticInputWindow = {
+      if (automatic) first.send(joined.owner, OptimisticProcessIdle(joined.epoch, 0L))
+      else gtm ! RequestRuntimeRound()
       val round = first.expectMsgType[FreezeRuntime].round
       first.send(joined.owner, RuntimeFrozen(round))
       first.expectMsg(CollectRuntimeSnapshot(round))
@@ -102,6 +103,11 @@ class ProgressiveOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with Be
     second.expectMsgType[SetOptimisticExecutionLimits]
     second.expectMsg(CommitRuntime(round, 11L))
     f.manager.expectNoMessage(100.millis)
+  }
+
+  it should "request the next input window from idle hints without waiting for the heartbeat" in {
+    val f = new Fixture
+    f.reachInputBoundary(None, automatic = true)
   }
 
   it should "keep empty model queues alive until the producer closes and the final drain completes" in {

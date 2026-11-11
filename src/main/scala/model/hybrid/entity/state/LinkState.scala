@@ -3,10 +3,10 @@ package model.hybrid.entity.state
 
 import core.types.Tick
 import core.entity.state.BaseState
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+import com.fasterxml.jackson.databind.annotation.{ JsonDeserialize, JsonSerialize }
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.hybrid.entity.state.model.{LinkRegister, LinkMetricsState}
+import org.interscity.htc.model.hybrid.entity.state.model.{LinkRegistry, LinkMetricsState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{ LaneConfig, VehicleInLane }
 
@@ -75,7 +75,9 @@ case class LinkState(
   freeSpeed: Double,
   currentSpeed: Double = 0.0,
   congestionFactor: Double = 1.0,
-  registered: mutable.Set[LinkRegister] = mutable.Set(),
+  @JsonSerialize(converter = classOf[LinkRegistry.ToJson])
+  @JsonDeserialize(converter = classOf[LinkRegistry.FromJson])
+  registered: LinkRegistry = new LinkRegistry,
   simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
   microTimeStep: Double = 0.1,
   microTicksPerGlobalTick: Int = 10,

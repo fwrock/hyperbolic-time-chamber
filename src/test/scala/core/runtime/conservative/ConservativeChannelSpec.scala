@@ -50,6 +50,7 @@ class ConservativeChannelSpec extends AnyFlatSpec with Matchers with BeforeAndAf
       core.entity.event.control.report.ReportEvent("42", 1000L, 0L, data = "censored", label = "horizon")))
     val delivery = sink.expectMsgType[CommittedReportDelivery]
     lp.send(worker, ConservativeProcessRetired(1L))
+    system.stop(lp.ref)
     gtm.expectNoMessage(100.millis)
     sink.send(worker, DeliveryAccepted("final", delivery.token))
     gtm.expectMsg(ConservativeRuntimeStopped(1L, Set(sink.ref)))
@@ -94,6 +95,47 @@ class ConservativeChannelSpec extends AnyFlatSpec with Matchers with BeforeAndAf
       report(Map("value" -> state.value), "state")
       observer ! ("receiver-input", currentTick, state.value)
     }
+  }
+
+  private class RegistrationLP(props: Properties) extends SimulationBaseActor[ChannelState](props) {
+    def ready: Boolean = recoveryFinished
+    override protected def handlePostLoadRegistration(): Unit =
+      sendMessageTo(42L, "example.Node", "register", actorType = CreationTypeEnum.PoolDistributed)
+    override protected def actSpontaneous(event: SpontaneousEvent): Unit = onFinishSpontaneous(None)
+    override def actInteractWith(event: ActorInteractionEvent): Unit = ()
+  }
+
+  "conservative startup registration" should "wait for destination acceptance and never repeat hook outputs on retry" in {
+    val gtm = TestProbe(); val manager = TestProbe(); val gate = TestProbe()
+    val creator = TestProbe(); val destination = TestProbe(); val registration = TestProbe()
+    val worker = TestActorRef(new Worker(gtm.ref, manager.ref, gate.ref))
+    creator.awaitAssert(worker.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
+    gtm.send(worker, ConservativeMembership("registration", Vector(worker)))
+    gtm.send(worker, RegisterConservativeProcess("registration", gtm.ref,
+      JoinRuntime(org.htc.protobuf.core.entity.actor.Identify(id = 42L, classType = core.util.StringUtil.getModelClassName("example.Node")), destination.ref, None)))
+    destination.expectMsgType[RuntimeJoined]
+    val source = TestActorRef(new RegistrationLP(Properties(entityId = "41", resourceId = "registration",
+      actorType = CreationTypeEnum.PoolDistributed, runtimeCoordinator = Some(gtm.ref),
+      timeManagers = mutable.Map(TimeManagerTypeEnum.DISCRETE_EVENT -> worker))))
+    creator.awaitAssert(source.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
+    source ! InitializeEvent("41", creator.ref, InitializeData(ChannelState(), "registration", creator.ref,
+      mutable.Map.empty, timeManagers = mutable.Map(TimeManagerTypeEnum.DISCRETE_EVENT -> worker),
+      runtimeCoordinator = Some(gtm.ref)))
+    val join = gtm.fishForMessage(3.seconds) { case _: JoinRuntime => true; case _ => false }.asInstanceOf[JoinRuntime]
+    gtm.send(worker, RegisterConservativeProcess("registration", gtm.ref, join))
+    creator.expectMsgType[InitializeEntityAckEvent]
+    source ! core.entity.event.control.load.PostLoadRegistrationEvent(registration.ref)
+    val held = gate.expectMsgType[HeldChannel]
+    registration.expectNoMessage(100.millis)
+    source ! core.entity.event.control.load.PostLoadRegistrationEvent(registration.ref)
+    gate.expectNoMessage(100.millis)
+    held.target.tell(held.transfer, held.source)
+    val delivery = destination.expectMsgType[ConservativeDelivery]
+    registration.expectNoMessage(100.millis)
+    destination.send(worker, ConservativeInputAccepted("registration", delivery.token, None))
+    registration.expectMsgType[core.entity.event.control.load.PostLoadRegistrationAckEvent].entityId shouldBe "41"
+    registration.expectNoMessage(100.millis)
+    system.stop(source); system.stop(worker)
   }
 
   private var sequence = 0

@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.actor.manager.load
 
-import core.entity.configuration.{ ActorDataSource, DataSource }
+import core.entity.configuration.{ ActorDataSource, DataSource, LoadFilterSimulation }
 import core.entity.event.control.load.{ EagerLoadDataReadyEvent, LoadDataEvent, ScenarioPreflightValidationFailedEvent }
 import core.enumeration.{ CreationTypeEnum, DataSourceTypeEnum, LoadingStrategyEnum, ReportTypeEnum }
 import core.util.JsonUtil
@@ -115,6 +115,17 @@ class LoadDataManagerScenarioPreflightSpec
     loadDataManager ! failure
     simulationManager.expectMsg(failure)
     simulationManager.expectNoMessage(100.millis)
+  }
+
+  it should "apply the scenario class filter before scanning excluded Person data" in {
+    val simulationManager = TestProbe()
+    val loadDataManager = newLoadDataManager(simulationManager)
+    val source = writePersonSourceFile(strategyId = "no-such-strategy")
+    loadDataManager ! LoadDataEvent(actorRef = simulationManager.ref, actorsDataSources = List(source),
+      loadFilter = Some(LoadFilterSimulation(excludeClasses = List("Person"))))
+    val failure = simulationManager.expectMsgType[ScenarioPreflightValidationFailedEvent](10.seconds)
+    failure.error.message should include("Load filter excluded every actor source")
+    failure.error.message should not include "no-such-strategy"
   }
 
   it should "abort scenario load when a Person source references 'raptor' with no transit route data configured" in {

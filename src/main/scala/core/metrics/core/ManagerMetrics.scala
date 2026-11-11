@@ -42,6 +42,25 @@ object ManagerMetrics {
 
   // --- load balancing (LoadBalanceManager) ---
 
+  val loadObservationEntities: Gauge = Gauge.build()
+    .name("htc_loadbalance_node_entities")
+    .help("Live entities per observed node in the last complete load observation")
+    .labelNames("observed_node").register()
+
+  val loadObservations: Counter = Counter.build()
+    .name("htc_loadbalance_observations_total")
+    .help("Complete accepted and failed load observations")
+    .labelNames("outcome").register()
+
+  val loadObservationTimestamp: Gauge = Gauge.build()
+    .name("htc_loadbalance_observation_timestamp_seconds")
+    .help("Wall-clock timestamp of the last complete load observation").register()
+
+  val balanceStrategy: Gauge = Gauge.build()
+    .name("htc_loadbalance_strategy_info")
+    .help("Configured custom load balancing strategy")
+    .labelNames("strategy").register()
+
   val rebalanceEvaluations: Counter = Counter
     .build()
     .name("htc_loadbalance_rebalances_total")

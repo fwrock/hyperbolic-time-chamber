@@ -280,7 +280,8 @@ class SimulationManager(
         actorsDataSources = configuration.actorsDataSources,
         postLoadRegistrationClasses = configuration.postLoadRegistrationClasses,
         partial = configuration.partial,
-        modifications = configuration.modifications
+        modifications = configuration.modifications,
+        loadFilter = configuration.loadFilter
       )
     } else {
       logWarn(
@@ -288,9 +289,12 @@ class SimulationManager(
       )
     }
 
+  private var requestedReportExecutionId: Option[String] = None
+
   private def prepareSimulation(event: PrepareSimulationEvent): Unit = {
     PhaseMetrics.recordPhaseStart("config_load")
     if (configuration == null && !configLoadInProgress) {
+      requestedReportExecutionId = Option(event.reportSimulationId).filter(_.nonEmpty)
       configLoadInProgress = true
       val ioDispatcher = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
       Future(loadSimulationConfig(event.configuration))(ioDispatcher).onComplete {
@@ -407,7 +411,12 @@ class SimulationManager(
       manager = ReportManager.props(
         simulationManager = getSelfProxy,
         timeManager = createSingletonProxy(LOAD_MANAGER_ACTOR_NAME),
-        startRealTime = configuration.startRealTime
+        startRealTime = configuration.startRealTime,
+        scenarioId = configuration.id.filter(_.nonEmpty)
+          .orElse(sys.env.get("HTC_SIMULATION_ID").filter(_.nonEmpty))
+          .orElse(scala.util.Try(config.getString("htc.simulation.id")).toOption.filter(_.nonEmpty))
+          .getOrElse(configuration.name),
+        executionId = requestedReportExecutionId.orElse(sys.env.get("HTC_REPORT_RUN_ID"))
       ),
       name = REPORT_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()

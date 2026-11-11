@@ -88,6 +88,7 @@ class BusStopHandler(
           "bus_id"            -> entityId,
           "passengers_loaded" -> data.people.size,
           "total_passengers"  -> state.people.size,
+          "capacity"          -> state.capacity,
           "occupancy"         -> state.occupancyPercentage,
           "tick"              -> tick
         ),
@@ -139,6 +140,8 @@ class BusStopHandler(
             "bus_id"               -> entityId,
             "passengers_unloaded"  -> unloadedCount,
             "remaining_passengers" -> state.people.size,
+            "capacity"             -> state.capacity,
+            "occupancy"            -> state.occupancyPercentage,
             "tick"                 -> tick
           ),
           "bus_unload_passengers"

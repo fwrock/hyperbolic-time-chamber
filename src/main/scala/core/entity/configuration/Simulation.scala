@@ -3,6 +3,7 @@ package core.entity.configuration
 
 import core.enumeration.TimeManagerTypeEnum
 import core.types.Tick
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 
 import java.time.LocalDateTime
 
@@ -15,6 +16,8 @@ case class Simulation(
   startRealTime: LocalDateTime,
   timeUnit: String,
   timeStep: Long,
+  // Scala 3 erases this Option's numeric content type; browser JSON sends 1.0 as integer 1.
+  @JsonDeserialize(contentAs = classOf[java.lang.Double])
   tickDuration: Option[Double] = None,
   duration: Tick,
   /** Which synchronization strategy every simulation entity's LTM pool uses for this run — one of
@@ -56,6 +59,7 @@ case class Simulation(
     * Example: "org.interscity.htc.model.hybrid.util.CityMapUtil#warmUp"
     */
   warmupTargets: List[String] = List.empty,
+  calculationCache: Option[CalculationCacheConfig] = None,
   /** Plugin configuration map — keys are model names (e.g. "emission", "carFollowing"),
     * values are free-form string params consumed by each model's factory.
     * Example: {"emission": {"model": "vt_micro", "co2_per_ml": "2.35"}}
@@ -64,5 +68,6 @@ case class Simulation(
   /** Optional partial simulation: load only a selection of the units. Absent = full simulation. */
   partial: Option[PartialSimulation] = None,
   /** Optional what-if modifications applied while loading (before the partial filter). */
-  modifications: Option[ModificationsSimulation] = None
+  modifications: Option[ModificationsSimulation] = None,
+  loadFilter: Option[LoadFilterSimulation] = None
 )

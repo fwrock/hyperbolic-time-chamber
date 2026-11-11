@@ -63,6 +63,28 @@ final class CompactLandmarkIndex private (
 
 object CompactLandmarkIndex {
 
+  def codec(nodes: Int, maxLandmarks: Int): org.interscity.htc.core.cache.CalculationCodec[CompactLandmarkIndex] =
+    new org.interscity.htc.core.cache.CalculationCodec[CompactLandmarkIndex] {
+      def read(in: java.io.DataInputStream): CompactLandmarkIndex = {
+        val k = in.readInt()
+        require(k >= 0 && k <= math.max(0, maxLandmarks) && in.readInt() == nodes, "invalid landmark dimensions")
+        def matrix(): Array[Array[Double]] = Array.fill(k) {
+          Array.fill(nodes) {
+            val value = in.readDouble()
+            require(!value.isNaN && value >= 0, "invalid landmark distance")
+            value
+          }
+        }
+        new CompactLandmarkIndex(matrix(), matrix())
+      }
+      def write(index: CompactLandmarkIndex, out: java.io.DataOutputStream): Unit = {
+        out.writeInt(index.k); out.writeInt(nodes)
+        index.distFrom.foreach(_.foreach(out.writeDouble))
+        index.distTo.foreach(_.foreach(out.writeDouble))
+      }
+    }
+
+
   /** Build a [[CompactLandmarkIndex]] from an existing [[LandmarkIndex]].
     *
     * Translates `Map[NodeGraph, Double]` distance maps to flat `Array[Array[Double]]` using

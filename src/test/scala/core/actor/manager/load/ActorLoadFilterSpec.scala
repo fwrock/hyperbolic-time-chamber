@@ -2,7 +2,8 @@ package org.interscity.htc
 package core.actor.manager.load
 
 import core.entity.actor.{ActorDataSimulation, ActorSimulation, ShardActorId}
-import core.entity.configuration.{ActorDataSource, DataSource}
+import core.entity.configuration.{ActorDataSource, DataSource, LoadFilterSimulation, Simulation}
+import core.util.JsonUtil
 import core.enumeration.{CreationTypeEnum, DataSourceTypeEnum}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterEach
@@ -76,5 +77,21 @@ class ActorLoadFilterSpec extends AnyFlatSpec with Matchers with BeforeAndAfterE
     ActorLoadFilter(List(actor("factory.Worker"))) shouldBe empty
     ActorLoadFilter.configure(ConfigFactory.empty())
     ActorLoadFilter(List(actor("factory.Worker"))) should have size 1
+  }
+
+  it should "read scenario filters from simulation.json and override application defaults" in {
+    val scenario = JsonUtil.fromJson[Simulation]("""{
+      "name":"filtered", "description":"test", "startTick":0, "duration":10,
+      "startRealTime":"2025-01-01T00:00:00", "timeUnit":"seconds", "timeStep":1,
+      "loadFilter":{"includeClasses":[" Worker ","Sensor"],"excludeClasses":["Sensor"]}
+    }""")
+    val config = ConfigFactory.parseString("htc.load-filter.exclude-classes=[Worker]")
+    ActorLoadFilter.configure(config, scenario.loadFilter)
+    ActorLoadFilter(List(actor("factory.Worker"), actor("factory.Machine"), actor("factory.Sensor")))
+      .map(_.typeActor) shouldBe List("factory.Worker")
+    ActorLoadFilter.configure(config, Some(LoadFilterSimulation()))
+    ActorLoadFilter(List(actor("factory.Worker"))) should have size 1
+    ActorLoadFilter.configure(config)
+    ActorLoadFilter(List(actor("factory.Worker"))) shouldBe empty
   }
 }

@@ -8,6 +8,7 @@ import core.entity.event.control.load.*
 import core.runtime.accounting.*
 import core.runtime.distributed.*
 import core.types.Tick
+import core.metrics.core.{SimulationMetricSet, SimulationMetrics, TimeWarpMetricSet, TimeWarpMetrics}
 import core.runtime.OptimisticExecutionLimits
 import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME}
 import org.apache.pekko.actor.{ActorRef, Cancellable, Props, Terminated}
@@ -26,6 +27,8 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
   private var phase = Loading
   private val epoch = java.util.UUID.randomUUID().toString
   private val workers = mutable.Set.empty[ActorRef]
+  // Reuse the order published to LTMs instead of sorting it for every actor enrollment.
+  private var members = Vector.empty[ActorRef]
   private val ownership = mutable.Map.empty[LogicalProcessId, ActorRef]
   private val waitingJoins = mutable.ArrayBuffer.empty[JoinRuntime]
   private val registrations = mutable.Set.empty[LogicalProcessId]
@@ -56,15 +59,26 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
   private var snapshotNanos = 0L
   private var commitNanos = 0L
   private var retentionReports = Map.empty[ActorRef, RuntimeRetention]
+  private var lastProgressTick = Long.MinValue
+  private var lastProgressNanos = 0L
+  private val idleWorkers = mutable.Set.empty[ActorRef]
+  private var acceleratedAt: Option[(Long, Long)] = None
+  protected def simulationMetrics: SimulationMetricSet = SimulationMetrics
+  protected def timeWarpMetrics: TimeWarpMetricSet = TimeWarpMetrics
   protected lazy val executionLimits: OptimisticExecutionLimits = OptimisticExecutionLimits.fromConfig(context.system.settings.config)
-  protected def recordRetention(round: Long, retained: RuntimeRetention): Unit =
+  protected def recordRetention(round: Long, retained: RuntimeRetention): Unit = {
+    timeWarpMetrics.checkpoints.set(retained.checkpoints.toDouble)
+    timeWarpMetrics.events.set(retained.events.toDouble)
+    timeWarpMetrics.reports.set(retained.reports.toDouble)
+    timeWarpMetrics.speculativeEvents.set(retained.speculativeEvents.toDouble)
     logInfo(s"[ACCOUNTED-RETENTION] round=$round checkpoints=${retained.checkpoints} events=${retained.events} reads=${retained.reads} processedIds=${retained.processedIds} cancellations=${retained.cancellations} reports=${retained.reports} speculativeEvents=${retained.speculativeEvents}")
+  }
 
   protected def expectedWorkers: Int = SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
   protected lazy val reportManagerRef: ActorRef = createSingletonProxy(REPORT_MANAGER_ACTOR_NAME)
   override protected def runtimeCoordinatorForActors: Option[ActorRef] = Some(self)
   override protected def localTimeManagerProps(): Props = AccountedOptimisticLocalTimeManager.props(duration, manager, self)
-  override def onStart(): Unit = createTimeManagersPool()
+  override def onStart(): Unit = { timeWarpMetrics.enabled.set(1.0); createTimeManagersPool() }
   override def postStop(): Unit = { heartbeat.foreach(_.cancel()); super.postStop() }
   private def key(ref: ActorRef): String = ref.path.toStringWithAddress(self.path.address)
   private def fail(error: Throwable): Unit = if (phase != Failed && phase != Finished) {
@@ -89,7 +103,6 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
         event.startTick >= gvt && event.initialWake.forall(_.tick >= gvt), "new LP outside input window/below GVT")
     }
     require(!ownership.contains(id), s"duplicate LP $id")
-    val members = workers.toVector.sortBy(_.path.toString)
     val owner = members(Math.floorMod(id.hashCode(), members.size))
     ownership(id) = owner
     registrations.add(id)
@@ -104,7 +117,9 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
       context.watch(ref)
       require(workers.size <= expectedWorkers, "unexpected LTM")
       if (workers.size == expectedWorkers) {
-        val membership = RuntimeMembership(epoch, workers.toVector.sortBy(_.path.toString))
+        members = workers.toVector.sortBy(_.path.toString)
+        timeWarpMetrics.workers.set(members.size.toDouble)
+        val membership = RuntimeMembership(epoch, members)
         workers.foreach(_ ! membership)
         waitingJoins.foreach(join)
         waitingJoins.clear()
@@ -117,7 +132,6 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     }
     case RequestRuntimeBirth(run, target, origin) => protect {
       require(run == epoch && (phase == Running || phase == Freezing), "birth outside execution/draining")
-      val members = workers.toVector.sortBy(_.path.toString)
       require(members(Math.floorMod(target.hashCode(), members.size)) == sender() &&
         ownership.contains(origin.parent) && origin.tick >= gvt, "invalid birth authority/frontier")
       require(!ownership.contains(target) && !birthReservations.contains(target), "duplicate birth reservation")
@@ -171,6 +185,18 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     }
     case event: StartSimulationTimeEvent => startSimulation(event)
     case RequestRuntimeRound() if phase == Running => beginRound()
+    case OptimisticWorkerActivity(id, idle) => protect {
+      require(workers.contains(sender()) && id <= roundId, "invalid worker activity notice")
+      if (phase == Running && id == roundId) {
+        if (idle) idleWorkers += sender() else idleWorkers -= sender()
+        // An unchanged frontier must not spin through empty cuts; the heartbeat retries it.
+        val frontier = gvt -> loadedThrough
+        if (idleWorkers.size == workers.size && !acceleratedAt.contains(frontier)) {
+          acceleratedAt = Some(frontier)
+          beginRound()
+        }
+      }
+    }
     case RuntimeFrozen(id) => protect {
       require(workers.contains(sender()), "freeze acknowledgement from non-worker")
       if (phase == Freezing && id == roundId) {
@@ -242,6 +268,14 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     require(horizon < Long.MaxValue, "finite horizon required")
     started = true
     phase = Running
+    core.api.SimulationController.markRunning()
+    timeWarpMetrics.enabled.set(1.0)
+    timeWarpMetrics.gvt.set(initialTick.toDouble)
+    simulationMetrics.configuredDuration.set(duration.toDouble)
+    simulationMetrics.currentTick.set(initialTick.toDouble)
+    simulationMetrics.simulationProgress.set(0.0)
+    lastProgressTick = initialTick
+    lastProgressNanos = System.nanoTime()
     startTime = System.currentTimeMillis()
     beginExecutionTiming()
     pendingStart = None
@@ -276,6 +310,7 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     }
   }
   private def beginRound(): Unit = {
+    idleWorkers.clear()
     beginSynchronizationTiming()
     roundId = Math.addExact(roundId, 1L)
     rounds += 1L
@@ -304,6 +339,21 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     workers.foreach(_ ! CommitRuntime(roundId, gvt, Option.when(truncated)(horizon)))
   }
   private def afterRetire(): Unit = if (phase == Retiring && pending.isEmpty && flushed) {
+    // Report progress only after every owner committed and retired, and the final sinks drained.
+    val frontier = if (gvt == Long.MaxValue) Math.addExact(horizon, 1L) else gvt
+    val tick = math.max(initialTick, math.min(horizon, frontier))
+    timeWarpMetrics.gvt.set(frontier.toDouble)
+    timeWarpMetrics.commits.inc()
+    simulationMetrics.currentTick.set(tick.toDouble)
+    simulationMetrics.simulationProgress.set(if (finalCut) 1.0 else if (duration > 0L)
+      math.max(0.0, math.min(1.0, (tick - initialTick).toDouble / duration.toDouble)) else 0.0)
+    if (tick > lastProgressTick) {
+      val now = System.nanoTime()
+      simulationMetrics.simulationTicks.inc()
+      if (lastProgressNanos > 0L) simulationMetrics.tickDuration.observe((now - lastProgressNanos) / 1e9)
+      lastProgressTick = tick
+      lastProgressNanos = now
+    }
     finishSynchronizationTiming()
     val retireNanos = System.nanoTime() - phaseStartedAt
     logInfo(s"[ACCOUNTED-ROUND] round=$roundId freezeNanos=$freezeNanos snapshotNanos=$snapshotNanos commitNanos=$commitNanos retireNanos=$retireNanos")

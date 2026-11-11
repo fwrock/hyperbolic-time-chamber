@@ -56,6 +56,17 @@ final class CompactGraph private (
   val nodeGraphs: Array[NodeGraph]
 ) {
 
+  /** Includes exact array ordering because cached distances use node indices. */
+  def staticFingerprint(landmarks: Int): String =
+    org.interscity.htc.core.cache.CalculationCache.fingerprint { out =>
+      out.writeInt(landmarks)
+      out.writeInt(n)
+      nodeIds.foreach(out.writeLong)
+      rowPtr.foreach(out.writeInt)
+      colIdx.foreach(out.writeInt)
+      edgeWeight.foreach(out.writeDouble)
+    }
+
   // ── Internal thread-local scratch buffers ────────────────────────────────
 
   private val buffers: ThreadLocal[CompactGraph.SearchBuffers] =

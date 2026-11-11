@@ -13,7 +13,9 @@ import scala.collection.mutable
 
 class CsvReportData(
   override val reportManager: ActorRef,
-  override val startRealTime: LocalDateTime
+  override val startRealTime: LocalDateTime,
+  val simulationId: String,
+  val scenarioId: String
 ) extends ReportData(
       id = "csv-report-manager",
       reportManager = reportManager,
@@ -29,52 +31,13 @@ class CsvReportData(
   private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
   private val simulationClock = core.util.SimulationClock.current
   private val timeBasedId = effectiveStartTime.format(dateFormatter)
-
-  private lazy val simulationId: String = {
-    val simulationConfigId =
-      try {
-        val simulationConfig = core.util.SimulationUtil.loadSimulationConfig()
-        simulationConfig.id
-      } catch {
-        case _: Exception => None
-      }
-
-    val envSimId = sys.env.get("HTC_SIMULATION_ID")
-
-    val configSimId =
-      try
-        Some(config.getString("htc.simulation.id"))
-      catch {
-        case _: Exception => None
-      }
-
-    simulationConfigId
-      .orElse(envSimId)
-      .orElse(configSimId)
-      .getOrElse {
-        val simulationName =
-          try
-            core.util.SimulationUtil.loadSimulationConfig().name.replaceAll("[^a-zA-Z0-9_-]", "_")
-          catch {
-            case _: Exception => "sim"
-          }
-
-        try
-          core.actor.manager.RandomSeedManager.deterministicSimulationId(simulationName)
-        catch {
-          case _: Exception =>
-            s"${simulationName}_${timeBasedId}"
-        }
-      }
-  }
-
   private val directory = s"$baseDirectory/$simulationId"
 
   private val batchSize = Some(config.getInt("htc.report-manager.csv.batch-size")).getOrElse(100)
 
   private val buffer = mutable.ListBuffer[ReportEvent]()
 
-  private val fileName = s"${prefix}${timeBasedId}_events.csv"
+  private val fileName = s"${prefix}${timeBasedId}_${java.util.UUID.randomUUID()}_events.csv"
   private val filePath = s"$directory/$fileName"
 
   override def onReport(event: ReportEvent): Unit = {
@@ -94,14 +57,14 @@ class CsvReportData(
       val writer = new FileWriter(filePath, true)
 
       if (!fileExists || Files.size(Paths.get(filePath)) == 0) {
-        writer.write("entity_id,tick,real_time,lamport_tick,event_type,simulation_id,data,node,from_node,message_type,from_type\n")
+        writer.write("entity_id,tick,real_time,lamport_tick,event_type,simulation_id,data,node,from_node,message_type,from_type,scenario_id\n")
       }
 
       for (report <- buffer) {
         val cleanData =
           report.data.toString.replace("\"", "\"\"").replace("\n", " ").replace("\r", " ")
         writer.write(
-          s"${report.entityId},${report.tick},${simulationClock.at(effectiveStartTime, report.tick)},${report.lamportTick},${report.label},${simulationId},\"$cleanData\",${core.cluster.NodeIdentity.originLabel(report.node)},${core.cluster.NodeIdentity.originLabel(report.fromNode)},${report.messageType},${report.fromType}\n"
+          s"${report.entityId},${report.tick},${simulationClock.at(effectiveStartTime, report.tick)},${report.lamportTick},${report.label},${simulationId},\"$cleanData\",${core.cluster.NodeIdentity.originLabel(report.node)},${core.cluster.NodeIdentity.originLabel(report.fromNode)},${report.messageType},${report.fromType},\"${scenarioId.replace("\"", "\"\"")}\"\n"
         )
       }
       writer.close()

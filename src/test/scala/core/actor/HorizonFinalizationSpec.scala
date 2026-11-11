@@ -10,6 +10,7 @@ import core.entity.state.BaseState
 import core.enumeration.{ CreationTypeEnum, ReportTypeEnum, TimeManagerTypeEnum }
 import core.runtime.EventOrder
 import core.runtime.accounting.*
+import core.runtime.distributed.OptimisticProcessIdle
 import core.runtime.conservative.*
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.testkit.{ TestActorRef, TestProbe }
@@ -62,10 +63,12 @@ class HorizonFinalizationSpec extends AnyFlatSpec with Matchers with BeforeAndAf
       owner.send(lp, SetRuntimeHorizon(10L))
       owner.send(lp, SetOptimisticExecutionLimits(0L, 10L, core.runtime.OptimisticExecutionLimits()))
       owner.send(lp, ResumeRuntime(0L))
+      owner.expectMsg(OptimisticProcessIdle("epoch", 0L))
       owner.send(lp, RuntimeDelivery("epoch", 1L, event))
       owner.expectMsg(DeliveryAccepted("epoch", 1L))
       if (waiting) owner.expectMsgType[RouteInteraction]
       owner.expectMsgType[RouteControl]
+      owner.expectMsg(OptimisticProcessIdle("epoch", 0L, 1L))
       owner.send(lp, FreezeRuntime(1L))
       owner.expectMsg(RuntimeFrozen(1L))
     } else {

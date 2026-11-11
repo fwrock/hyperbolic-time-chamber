@@ -28,11 +28,15 @@ import scala.collection.mutable
 class ReportManager(
   timeManager: ActorRef,
   simulationManager: ActorRef,
-  startRealTime: LocalDateTime
+  startRealTime: LocalDateTime,
+  scenarioId: String = "sim",
+  simulationId: String = java.util.UUID.randomUUID().toString
 ) extends BaseManager[DefaultState](
       timeManager = timeManager,
       actorId = "report-manager"
     ) {
+
+  private val reportRun = ReportRunIdentity(scenarioId, simulationId)
 
   private var selfProxy: ActorRef = null
   private var drain: Option[(Long, ActorRef, Set[ActorRef], Vector[String])] = None
@@ -118,6 +122,7 @@ class ReportManager(
       if (!shutdown.isCompleted) self ! StopSimulationEvent()
       shutdown.future
     }
+    logInfo(s"Report execution id=${reportRun.simulationId}, scenario=${reportRun.scenarioId}")
     createReporters()
     simulationManager ! RegisterReportersEvent(
       reporters = reporters
@@ -151,7 +156,7 @@ class ReportManager(
     val maxInstancesPerNode = Some(
       config.getInt(s"htc.report-manager.$reportType.number-of-instances-per-node")
     ).getOrElse(8)
-    val reporterProps = Props(reportType.clazz, getSelfProxy, startRealTime)
+    val reporterProps = Props(reportType.clazz, getSelfProxy, startRealTime, reportRun.simulationId, reportRun.scenarioId)
       .withDispatcher("pekko.actor.io-dispatcher")
 
     context.actorOf(
@@ -261,7 +266,12 @@ object ReportManager {
   def props(
     simulationManager: ActorRef,
     timeManager: ActorRef,
-    startRealTime: LocalDateTime
-  ): Props =
-    Props(classOf[ReportManager], timeManager, simulationManager, startRealTime)
+    startRealTime: LocalDateTime,
+    scenarioId: String = "sim",
+    executionId: Option[String] = None
+  ): Props = {
+    // Keep the identity in Props so actor restarts retain the same execution.
+    val run = ReportRunIdentity.create(scenarioId, executionId)
+    Props(classOf[ReportManager], timeManager, simulationManager, startRealTime, run.scenarioId, run.simulationId)
+  }
 }

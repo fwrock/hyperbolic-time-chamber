@@ -103,4 +103,19 @@ class SubwayPassengerManagerSpec extends AnyFlatSpec with Matchers {
     state.people("line-a").map(_.id) shouldBe Seq(1L)
     state.people("line-b").map(_.id) shouldBe Seq(2L)
   }
+
+  "handleSubwayRequestPassenger" should "report an empty queue and still reply once to the train" in {
+    val state = newState()
+    val reports = mutable.Buffer.empty[Map[String, Any]]
+    val replies = mutable.Buffer.empty[AnyRef]
+    val manager = new SubwayPassengerManager(() => state, () => "station-1", () => 300L,
+      (data, _) => reports += data, (_, _, data) => replies += data)
+    val request = model.hybrid.entity.event.data.subway.SubwayRequestPassengerData("L1", 100)
+    manager.handleSubwayRequestPassenger(registerEvent(9L).copy(actorClassType = "hybrid.actor.Subway"), request)
+    reports should have size 1
+    reports.head("passengers_waiting") shouldBe 0
+    reports.head("passengers_loaded") shouldBe 0
+    reports.head("subway_id") shouldBe 9L
+    replies should have size 1
+  }
 }

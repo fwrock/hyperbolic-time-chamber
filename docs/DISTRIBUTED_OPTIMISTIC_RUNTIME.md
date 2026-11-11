@@ -31,6 +31,20 @@ for registration acknowledgements. Numeric IDs belonging to different models use
 different private scheduler handles. Each owner watches its actual LP actors; the
 GTM watches workers. Uncoordinated participant loss fails the run.
 
+The GTM publishes simulation tick/progress only after a committed GVT round has
+finished retirement. The final update waits for report draining, clamps the tick
+to the configured horizon, and represents exhausted GVT as `horizon + 1` rather
+than exporting `Long.MaxValue`. It marks the API runtime Running at startup even
+when its committed tick is still zero. `htc_time_warp_*` gauges expose runtime
+selection, GVT, worker count and retained state; the commit counter advances once
+per completed round. These host metrics remain outside rollback state.
+
+The GTM sorts worker paths once when the configured cohort is complete and
+retains the published membership vector. Initial enrollment, progressive input
+and birth authorization reuse that order for owner lookup instead of sorting
+all workers for every LP. Worker loss still fails the run; this cache does not
+enable membership changes during execution.
+
 An LP receives `RuntimeJoined(..., distributed=true)` and sends model interactions,
 anti-messages, schedule controls and committed reports to its owning LTM. The GTM
 rejects per-message routing commands rather than silently forwarding them.
@@ -104,6 +118,11 @@ live producers and ownership migration remain unsupported. Model-caused birth no
 has a separate [cancellable lifecycle adapter](RUNTIME_ACTOR_BIRTH.md): membership
 may grow during freezing only under its source-ledger/newborn-freeze ordering proof;
 collection, commitment and retirement retain fixed membership.
+
+See [optimistic performance directions](OPTIMISTIC_PERFORMANCE_DIRECTIONS.md) for
+the implemented idle-triggered round optimization, the Mobiliti/Devastator comparison,
+and proposed benchmarks, network-aware ownership and asynchronous GVT requirements.
+Background GVT is future protocol work; idle hints only trigger the existing safe cut.
 
 ## Model reporting and costs
 

@@ -128,10 +128,7 @@ class RailLink(
   /** Handle vehicle leaving rail link.
     */
   private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
-    state.registered.find(_.actorId == event.actorRefId).foreach {
-      reg =>
-        state.registered.remove(reg)
-    }
+    state.registered.removeActor(event.actorRefId)
 
     val linkInfo = LinkInfoData(
       linkLength = state.length,

@@ -36,7 +36,8 @@ class CreatorPoolLoadData(
 
   private val actorsBuffer: mutable.ListBuffer[ActorSimulationCreation] = mutable.ListBuffer()
   private val initializeData = mutable.Map[String, Initialization]()
-  private val startedAcknowledges = mutable.Map[String, mutable.Seq[String]]()
+  // Set, not Seq: `:+` copied and `filter(_ != id)` rebuilt the whole batch per entity (O(n^2) per batch).
+  private val startedAcknowledges = mutable.Map[String, mutable.Set[String]]()
   private var amountActors = 0
   private var finishEventSent: Boolean = false
 
@@ -130,21 +131,12 @@ class CreatorPoolLoadData(
   }
 
   private def addToInitializedAcknowledges(batchId: String, entityId: String): Unit = {
-    startedAcknowledges.get(batchId) match {
-      case Some(acknowledge) =>
-        startedAcknowledges.put(batchId, acknowledge :+ entityId)
-      case None =>
-        startedAcknowledges.put(batchId, mutable.Seq(entityId))
-    }
+    startedAcknowledges.getOrElseUpdate(batchId, mutable.Set.empty) += entityId
     actorsBatches.put(entityId, batchId)
   }
 
   private def removeOfStartedAcknowledges(batchId: String, entityId: String): Unit =
-    startedAcknowledges.get(batchId) match {
-      case Some(acknowledge) =>
-        startedAcknowledges.put(batchId, acknowledge.filter(_ != entityId))
-      case None =>
-    }
+    startedAcknowledges.get(batchId).foreach(_ -= entityId)
 
   private def handleFinishStart(event: StartEntityAckEvent): Unit = {
     val batchId = actorsBatches.getOrElse(event.entityId, "")

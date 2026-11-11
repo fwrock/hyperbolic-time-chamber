@@ -77,6 +77,21 @@ class PersonPlanManager(
 
   private def modeLabel(mode: ConcreteMode): String = mode.toString.toLowerCase
 
+  private def reportResolvedChoice(
+    origin: Long,
+    destination: Long,
+    legs: List[AtomicLeg],
+    requestedMode: String,
+    source: String,
+    strategyId: String,
+    currentTick: Tick
+  ): Unit =
+    // Access/transfer/egress walks must not turn a transit choice into a walking choice.
+    legs.find(_.mode != ConcreteMode.Walk).orElse(legs.headOption).foreach { mainLeg =>
+      metricsReporter.reportModeChoiceDecision(origin, destination, requestedMode,
+        modeLabel(mainLeg.mode), source, strategyId, currentTick)
+    }
+
   /** Advance the plan by exactly one element, dispatching Activities/AtomicLegs/PendingDecisions
     * as appropriate. `pendingHint`, when present, carries the `strategyId`/`allowedModes` of the
     * [[PendingDecision]] whose resolution produced the leg now being started — used only when the
@@ -232,6 +247,7 @@ class PersonPlanManager(
             PersonDecisionKind.PendingPlan)
         else resolved.getOrElse(engine.decide(originNodeId, destinationNodeId, request, ctx)) match {
           case Right(legs) =>
+            reportResolvedChoice(originNodeId, destinationNodeId, legs, "auto", "dynamic", request.strategyId, currentTick)
             val expanded = PlanCursor.expandPending(pr, legs)
             step(state.copy(cursor = expanded), currentTick, pendingHint = Some((request.strategyId, request.allowedModes)))
           case Left(NoViableJourney(reason)) =>
@@ -303,6 +319,11 @@ class PersonPlanManager(
                 PersonDecisionKind.PTTimeoutReplan)
             else resolved.getOrElse(engine.decide(physicalNodeId, destinationNodeId, request, ctx)) match {
               case Right(legs) =>
+                val previousMode = state.cursor.executed.lastOption.collect {
+                  case leg: AtomicLeg => modeLabel(leg.mode)
+                }.getOrElse("unknown")
+                reportResolvedChoice(physicalNodeId, destinationNodeId, legs, previousMode,
+                  "pt_timeout_replan", replanStrategyId, currentTick)
                 reportFn(
                   Map(
                     "event_type" -> "pt_timeout_replanned",

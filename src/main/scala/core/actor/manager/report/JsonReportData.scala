@@ -14,7 +14,9 @@ import scala.collection.mutable
 
 class JsonReportData(
   override val reportManager: ActorRef,
-  override val startRealTime: LocalDateTime
+  override val startRealTime: LocalDateTime,
+  val simulationId: String,
+  val scenarioId: String
 ) extends ReportData(
       id = "json-report-manager",
       reportManager = reportManager,
@@ -29,45 +31,6 @@ class JsonReportData(
   private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
   private val effectiveStartTime = Option(startRealTime).getOrElse(LocalDateTime.now())
   private val timeBasedId = effectiveStartTime.format(dateFormatter)
-
-  private lazy val simulationId: String = {
-    val simulationConfigId =
-      try {
-        val simulationConfig = core.util.SimulationUtil.loadSimulationConfig()
-        simulationConfig.id
-      } catch {
-        case _: Exception => None
-      }
-
-    val envSimId = sys.env.get("HTC_SIMULATION_ID")
-
-    val configSimId =
-      try
-        Some(config.getString("htc.simulation.id"))
-      catch {
-        case _: Exception => None
-      }
-
-    simulationConfigId
-      .orElse(envSimId)
-      .orElse(configSimId)
-      .getOrElse {
-        val simulationName =
-          try
-            core.util.SimulationUtil.loadSimulationConfig().name.replaceAll("[^a-zA-Z0-9_-]", "_")
-          catch {
-            case _: Exception => "sim"
-          }
-
-        try
-          core.actor.manager.RandomSeedManager.deterministicSimulationId(simulationName)
-        catch {
-          case _: Exception =>
-            s"${simulationName}_$timeBasedId"
-        }
-      }
-  }
-
   private val directory = s"$baseDirectory/$simulationId"
 
   private val batchSize = Some(config.getInt("htc.report-manager.json.batch-size")).getOrElse(100)
@@ -113,6 +76,7 @@ class JsonReportData(
             "tick" -> report.tick,
             "real_time" -> System.currentTimeMillis(),
             "simulation_id" -> simulationId,
+            "scenario_id" -> scenarioId,
             "event_type" -> report.label,
             "data" -> report.data,
             // Distributed-run context: node that reported, and node that sent the message being handled ("" = none).

@@ -75,7 +75,7 @@ object ConfigApiServer {
     ScenarioRegistry.configure(scenariosDir)
 
     val allRoutes = CorsSupport.cors(allowedOrigins)(
-      concat(SimulationRoutes.routes, SettingsRoutes.routes, ScenarioRoutes.routes)
+      concat(SimulationRoutes.routes, SettingsRoutes.routes, ScenarioRoutes.routes, DispatcherRoutes.routes(system.settings.config))
     )
 
     Http(system)

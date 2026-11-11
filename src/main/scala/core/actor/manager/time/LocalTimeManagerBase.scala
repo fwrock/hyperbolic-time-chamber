@@ -62,6 +62,8 @@ abstract class LocalTimeManagerBase(
     * without it, all pool routees' writes to the same unlabeled gauge last-writer-win each other.
     */
   protected lazy val metricsManagerLabel: String = self.path.name
+  private lazy val runningEventsGauge = TimeManagerMetrics.tmRunningEvents.labels(metricsManagerLabel)
+  private lazy val scheduledActorsGauge = TimeManagerMetrics.tmScheduledActors.labels(metricsManagerLabel)
 
   /** True once this LTM's own `startSimulation` has actually run. Registration/scheduling can (and,
     * for EAGER-loaded actors, routinely does) arrive well before that -- during the load/warm-up/
@@ -104,7 +106,7 @@ abstract class LocalTimeManagerBase(
     * always processed after an earlier one's, and the actor (single-threaded) can never be
     * mid-dispatch and mid-rollback-resync at the same time.
     */
-  private val highestProcessedTick: mutable.Map[Long, Tick] = mutable.Map().withDefaultValue(-1L)
+  private val highestProcessedTick = new WatermarkIndex
 
   /** Actors registered via [[RegisterPassiveActorEvent]] instead of [[RegisterActorEvent]] — see
     * that event's doc for the full rationale. Never enters `scheduledActors`/`runningEvents`, so
@@ -155,7 +157,7 @@ abstract class LocalTimeManagerBase(
     * [[OptimisticLocalTimeManager.localVirtualTime]]'s doc for why that gap matters.
     */
   protected def minHighestProcessedTick: Option[Tick] =
-    if (highestProcessedTick.isEmpty) None else Some(highestProcessedTick.values.min)
+    highestProcessedTick.min
 
   override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
     accountedRuntime.foreach(_ ! RuntimeFailure(s"time-manager restart requires coordinated recovery: ${self.path}"))
@@ -214,12 +216,12 @@ abstract class LocalTimeManagerBase(
   }
 
   protected def readyOrderedSchedules: Vector[(Tick, Identify, EventOrder)] = {
-    val runningIds = runningEvents.iterator.map(_.id).toSet
-    val earliest = scheduledActors.keysIterator.toVector.sorted.find { tick =>
-      scheduledActors(tick).exists(a => !runningIds.contains(a.id))
+    // scheduledActors is tick-ordered, so stop at the first tick that has a non-running actor.
+    val earliest = scheduledActors.iterator.collectFirst {
+      case (tick, actors) if actors.exists(a => !runningEvents.containsId(a.id)) => tick
     }
     earliest.toVector.flatMap { tick =>
-      scheduledActors(tick).iterator.filterNot(a => runningIds.contains(a.id)).map { identity =>
+      scheduledActors(tick).iterator.filterNot(a => runningEvents.containsId(a.id)).map { identity =>
         val logical = runtimeIdentities.getOrElse(identity.id, identity)
         (tick, identity, logicalSchedules.get(identity.id).filter(_.tick == tick)
           .getOrElse(EventOrder.root(tick, logical.classType, logical.id)))
@@ -321,10 +323,9 @@ abstract class LocalTimeManagerBase(
 
   private def releaseDispatch(actorId: Long, generation: Long): Boolean = {
     if (generation != dispatchGeneration(actorId)) return false
-    val removed = runningEvents.exists(_.id == actorId)
-    runningEvents.filterInPlace(_.id != actorId)
+    val removed = runningEvents.removeId(actorId)
     if (removed) inFlightTicks.remove(actorId)
-    TimeManagerMetrics.tmRunningEvents.labels(metricsManagerLabel).set(runningEvents.size.toDouble)
+    runningEventsGauge.set(runningEvents.size.toDouble)
     removed
   }
 
@@ -400,7 +401,7 @@ abstract class LocalTimeManagerBase(
 
   protected def finishEvent(finish: FinishEvent): Unit =
     if (finish.timeManager == self) {
-      ActorMetrics.eventsProcessed.labels("finish").inc()
+      ActorMetrics.finishEvents.inc()
       if (finish.discardedDispatch) {
         if (releaseDispatch(finish.identify.id, finish.generation)) advanceToNextTick()
         return
@@ -453,10 +454,9 @@ abstract class LocalTimeManagerBase(
           addScheduledActor(effectiveTick, finish.identify)
       }
 
-      val wasProcessingSpontaneousEvent = runningEvents.exists(_.id == finish.identify.id)
-      runningEvents.filterInPlace(_.id != finish.identify.id)
+      val wasProcessingSpontaneousEvent = runningEvents.removeId(finish.identify.id)
       inFlightTicks.remove(finish.identify.id)
-      TimeManagerMetrics.tmRunningEvents.labels(metricsManagerLabel).set(runningEvents.size.toDouble)
+      runningEventsGauge.set(runningEvents.size.toDouble)
 
       if (finish.scheduleTick.isEmpty) {
         clearScheduledActor(finish.identify.id)
@@ -497,7 +497,7 @@ abstract class LocalTimeManagerBase(
     * `ActorRef` one) so this also can't leave a stale `ActorRef` behind.
     */
   protected def completeDestruct(identity: Identify): Unit = {
-    ActorMetrics.eventsProcessed.labels("destruct").inc()
+    ActorMetrics.destructEvents.inc()
     forgetOwnedProcess(identity.id)
     sendDestructEvent(identity)
   }
@@ -549,15 +549,14 @@ abstract class LocalTimeManagerBase(
     */
   protected def processTick(tick: Tick): Unit
 
-  protected def nextTick: Option[Tick] = {
-    val allTicks = scheduledActors.keys ++ scheduledTicksOnFinish
-
-    if (allTicks.nonEmpty) {
-      Some(allTicks.min)
-    } else {
-      None
+  /** Earliest tick with work, from either ordered structure: O(log n), no allocation. (It used to
+    * concatenate both key sets and take `.min`, O(n) per call and called on every message.)
+    */
+  protected def nextTick: Option[Tick] =
+    (earliestScheduledTick, scheduledTicksOnFinish.headOption) match {
+      case (Some(a), Some(b)) => Some(Math.min(a, b))
+      case (a, b)             => a.orElse(b)
     }
-  }
 
   protected def processNextEventTick(tick: Tick): Unit = {
     localTickOffset = tick
@@ -573,8 +572,8 @@ abstract class LocalTimeManagerBase(
   }
 
   protected def sendSpontaneousEvent(tick: Tick, actorsRef: mutable.Set[Identify]): Unit = {
-    TimeManagerMetrics.tmScheduledActors.labels(metricsManagerLabel).set(actorsRef.size.toDouble)
-    ActorMetrics.eventsProcessed.labels("spontaneous").inc(actorsRef.size.toDouble)
+    scheduledActorsGauge.set(actorsRef.size.toDouble)
+    ActorMetrics.spontaneousEvents.inc(actorsRef.size.toDouble)
     actorsRef.foreach {
       identity =>
         runningEvents.add(identity)
@@ -592,7 +591,7 @@ abstract class LocalTimeManagerBase(
     }
     if (identity.actorType.isEmpty) {
       logWarn(s"Actor identity has empty actorType, removing from runningEvents to prevent stall: $identity")
-      runningEvents.filterInPlace(_.id != identity.id)
+      runningEvents.removeId(identity.id)
       return
     }
 
@@ -610,7 +609,7 @@ abstract class LocalTimeManagerBase(
         sendSpontaneousEventPool(tick, identity, generation)
       case _ =>
         logWarn(s"Unknown creation type '${identity.actorType}' for actor ${identity.id}, removing from runningEvents to prevent stall")
-        runningEvents.filterInPlace(_.id != identity.id)
+        runningEvents.removeId(identity.id)
     }
   }
 

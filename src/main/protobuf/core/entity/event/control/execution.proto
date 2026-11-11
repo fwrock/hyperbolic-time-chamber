@@ -37,6 +37,7 @@ message PauseSimulationEvent {
 
 message PrepareSimulationEvent {
   string configuration = 1;
+  string reportSimulationId = 2;
 }
 
 message RegisterActorEvent {

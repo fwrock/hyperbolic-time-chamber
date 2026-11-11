@@ -110,6 +110,19 @@ class BusStop(
 
         sendLoadPeopleToBus(peopleToLoad, event)
       case None =>
+        report(
+          data = Map(
+            "event_type" -> "passengers_loaded",
+            "bus_stop_id" -> getEntityId,
+            "bus_id" -> event.actorRefId,
+            "route_label" -> data.label,
+            "passengers_loaded" -> 0,
+            "available_space" -> data.availableSpace,
+            "passengers_waiting" -> 0,
+            "tick" -> currentTick
+          ),
+          label = "bus_stop_passengers_loaded"
+        )
         sendLoadPeopleToBus(mutable.Seq(), event)
     }
 
@@ -160,25 +173,21 @@ class BusStop(
     state.people.get(data.label) match {
       case Some(people) =>
         state.people.put(data.label, people :+ person)
-
-        BusStopMetrics.passengersArrived.labels(data.label).inc()
-        BusStopMetrics.passengersWaiting.inc()
-
-        report(
-          data = Map(
-            "event_type" -> "passenger_arrived_at_stop",
-            "bus_stop_id" -> getEntityId,
-            "person_id" -> person.id,
-            "route_label" -> data.label,
-            "passengers_waiting" -> state.people.get(data.label).map(_.size).getOrElse(0),
-            "tick" -> currentTick
-          ),
-          label = "bus_stop_passenger_arrived"
-        )
       case None =>
         state.people.put(data.label, mutable.Seq(person))
-        BusStopMetrics.passengersArrived.labels(data.label).inc()
-        BusStopMetrics.passengersWaiting.inc()
     }
+    BusStopMetrics.passengersArrived.labels(data.label).inc()
+    BusStopMetrics.passengersWaiting.inc()
+    report(
+      data = Map(
+        "event_type" -> "passenger_arrived_at_stop",
+        "bus_stop_id" -> getEntityId,
+        "person_id" -> person.id,
+        "route_label" -> data.label,
+        "passengers_waiting" -> state.people.get(data.label).map(_.size).getOrElse(0),
+        "tick" -> currentTick
+      ),
+      label = "bus_stop_passenger_arrived"
+    )
   }
 }

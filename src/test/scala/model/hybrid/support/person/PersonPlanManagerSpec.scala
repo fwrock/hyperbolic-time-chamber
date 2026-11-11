@@ -2,6 +2,7 @@ package org.interscity.htc
 package model.hybrid.support.person
 
 import core.types.Tick
+import core.metrics.model.hybrid.PersonMetrics
 import model.hybrid.decision.{ DecisionContext, ModeDecisionEngine, ModeDecisionEngineRegistry, NoViableJourney, ScenarioValidationContext }
 import model.hybrid.entity.event.data.person.TripCompletedData
 import model.hybrid.entity.state.plan._
@@ -260,6 +261,10 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
       case WalkLeg(2L, 3L, _) => true
       case _                      => false
     } shouldBe true
+    val choices = reports.collect { case (data, "person_mode_choice_resolved") => data }
+    choices.map(_("resolved_mode")) shouldBe Seq("walk")
+    choices.head("source") shouldBe "dynamic"
+    choices.head("strategy_id") shouldBe testEngineId
 
     // Walk arrival advances to the final activity.
     val PlanStepResult.Awaiting(state5, wake5) = manager.continueAfterWalkArrival(state4, currentTick = 500): @unchecked
@@ -323,7 +328,14 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
 
     // The bus never arrives: timeout fires, triggers a replan to a walk leg reaching the same
     // destination — proving the rest of the trip survives rather than being silently skipped.
+    val changes = PersonMetrics.personModeChoiceChanged.labels("bus", "walk", "pt_timeout_replan")
+    val changesBefore = changes.get()
     val PlanStepResult.LegStarted(state3, nextTick3) = manager.replanAfterPTTimeout(state2, currentTick = 60): @unchecked
+    changes.get() shouldBe changesBefore + 1.0
+    val choices = reports.collect { case (data, "person_mode_choice_resolved") => data }
+    choices.map(_("resolved_mode")) shouldBe Seq("bus", "walk")
+    choices.last("requested_mode") shouldBe "bus"
+    choices.last("source") shouldBe "pt_timeout_replan"
     nextTick3 shouldBe Some(60L)
     decideCallCount shouldBe 2
     state3.cursor.executed.exists {
@@ -387,6 +399,7 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     awaiting.state.cursor.executed.last shouldBe Activity("work", 2L, AtTick(500))
     awaiting.state.tripExecution shouldBe TripExecutionState.Idle
     reports.exists { case (_, label) => label == "person_trip_aborted" } shouldBe true
+    reports.exists { case (_, label) => label == "person_mode_choice_resolved" } shouldBe false
   }
 
   it should "defer a pending decision to the routing LP and apply exactly the supplied reply" in {
@@ -414,6 +427,7 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     requested.query.destinationNodeId shouldBe 2L
     requested.kind shouldBe PersonDecisionKind.PendingPlan
     localCalls shouldBe 0
+    reports.exists { case (_, label) => label == "person_mode_choice_resolved" } shouldBe false
 
     val completed = manager.completeRoutingDecision(
       requested.state,
@@ -423,5 +437,38 @@ class PersonPlanManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
     )
     completed shouldBe a[PlanStepResult.LegStarted]
     localCalls shouldBe 0
+    reports.count(_._2 == "person_mode_choice_resolved") shouldBe 1
+  }
+
+  it should "publish one bus choice for a deferred walk-bus-walk itinerary, without inventing a mode change" in {
+    val plan: List[PlanElement] = List(
+      Activity("home", 1L, AtTick(10)),
+      PendingDecision(ModeDecisionRequest(Set(ConcreteMode.Walk, ConcreteMode.Bus), "travel-time")),
+      Activity("work", 4L, AtTick(100))
+    )
+    val manager = newManager(deferDecisions = true)
+    val atHome = manager.step(stateWithPlan(plan), 0L).asInstanceOf[PlanStepResult.Awaiting].state
+    val requested = manager.step(atHome, 10L).asInstanceOf[PlanStepResult.DecisionRequested]
+    val busChoices = PersonMetrics.personModeChoiceResolved.labels("auto", "bus", "dynamic")
+    val walkChoices = PersonMetrics.personModeChoiceResolved.labels("auto", "walk", "dynamic")
+    val changes = PersonMetrics.personModeChoiceChanged.labels("auto", "bus", "dynamic")
+    val before = (busChoices.get(), walkChoices.get(), changes.get())
+    val legs = List(
+      WalkLeg(1L, 2L, Some(Nil)),
+      TransitLeg(ConcreteMode.Bus, "L1", StopRef(801L, "bus", 2L), StopRef(802L, "bus", 3L)),
+      WalkLeg(3L, 4L, Some(Nil))
+    )
+    val access = manager.completeRoutingDecision(requested.state, 10L, requested.kind, Right(legs))
+      .asInstanceOf[PlanStepResult.LegStarted]
+    manager.continueAfterWalkArrival(access.state, 10L)
+
+    busChoices.get() shouldBe before._1 + 1.0
+    walkChoices.get() shouldBe before._2
+    changes.get() shouldBe before._3
+    val choices = reports.collect { case (data, "person_mode_choice_resolved") => data }
+    choices.size shouldBe 1
+    choices.head("resolved_mode") shouldBe "bus"
+    choices.head("origin_node_id") shouldBe 1L
+    choices.head("destination_node_id") shouldBe 4L
   }
 }

@@ -34,10 +34,11 @@ class TrafficSignalPhaseHandlerSpec extends AnyFlatSpec with Matchers {
   private class Harness(endTick: Long = 10000L) {
     val scheduledTicks: mutable.ListBuffer[Tick] = mutable.ListBuffer.empty
     val notifiedStates: mutable.ListBuffer[(Tick, TrafficSignalPhaseStateEnum)] = mutable.ListBuffer.empty
+    val notifications: mutable.ListBuffer[model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData] = mutable.ListBuffer.empty
     var finished = false
     var currentTick: Tick = 0L
 
-    val state: TrafficSignalState = TrafficSignalState(
+    var state: TrafficSignalState = TrafficSignalState(
       startTick = 0L,
       cycleDuration = cycleDuration,
       offset = 0L,
@@ -55,6 +56,7 @@ class TrafficSignalPhaseHandlerSpec extends AnyFlatSpec with Matchers {
       sendMessageFn = (_, _, data, _) =>
         data match {
           case d: model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData =>
+            notifications += d
             notifiedStates += (d.nextTick -> d.signalState.state)
           case _ => ()
         },
@@ -114,6 +116,34 @@ class TrafficSignalPhaseHandlerSpec extends AnyFlatSpec with Matchers {
     h.fireAt(0)
 
     h.finished shouldBe false
+  }
+
+  it should "publish each approach's own deadline through other phases and all-red clearances" in {
+    val h = new Harness
+    val second = phaseOrigin + 2L
+    h.state = h.state.copy(
+      cycleDuration = 20L,
+      phases = List(
+        Phase(origin = phaseOrigin, greenStart = 0L, greenDuration = 5L, state = PhaseDefStateEnum.Red),
+        Phase(origin = second, greenStart = 10L, greenDuration = 5L, state = PhaseDefStateEnum.Red)
+      ),
+      signalStates = mutable.Map(
+        phaseOrigin -> SignalState(state = Red, remainingTime = 0L, nextTick = 0L),
+        second -> SignalState(state = Red, remainingTime = 0L, nextTick = 0L)
+      )
+    )
+    h.fireAt(0L)
+    h.notifications.find(_.phaseOrigin == second).get.signalState.state shouldBe Red
+    h.notifications.find(_.phaseOrigin == second).get.nextTick shouldBe 10L
+    h.fireAt(5L)
+    h.notifications.filter(_.phaseOrigin == phaseOrigin).last.nextTick shouldBe 20L
+    h.notifications.filter(_.phaseOrigin == phaseOrigin).last.signalState.nextTick shouldBe 20L
+    h.fireAt(10L)
+    h.notifications.filter(_.phaseOrigin == phaseOrigin).last.nextTick shouldBe 20L
+    h.notifications.filter(_.phaseOrigin == second).last.nextTick shouldBe 15L
+    h.fireAt(15L)
+    h.notifications.filter(_.phaseOrigin == second).last.nextTick shouldBe 30L
+    h.scheduledTicks.toList shouldBe List(5L, 10L, 15L, 20L)
   }
 
   it should "execute a phase transition exactly at the inclusive horizon" in {

@@ -48,6 +48,7 @@ class SimulationBaseActorBirthSpec extends AnyFlatSpec with Matchers with Before
   private class Fixture {
     val global = TestProbe()
     val owner = TestProbe()
+    owner.ignoreMsg { case _: core.runtime.distributed.OptimisticProcessIdle => true; case _ => false }
     val creator = TestProbe()
     val sink = TestProbe()
     val origin = RuntimeBirthOrigin(LogicalProcessId("example.Parent", 1L), "birth", 10L, 1L)

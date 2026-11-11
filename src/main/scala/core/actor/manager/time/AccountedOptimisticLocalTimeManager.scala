@@ -49,6 +49,9 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
   private var limits = OptimisticExecutionLimits()
   private var executionFrontier = 0L
   private var inputThrough = Long.MaxValue
+  private val idleProcesses = mutable.Set.empty[ActorRef]
+  private val lastDeliveries = mutable.Map.empty[ActorRef, Long]
+  private var reportedIdle: Option[Boolean] = None
   private val unborn = mutable.Map.empty[LogicalProcessId, mutable.ArrayBuffer[(core.entity.event.ActorInteractionEvent, Option[(ActorRef, Long)])]]
   private val births = mutable.Map.empty[LogicalProcessId, (RuntimeBirthOrigin, RuntimeBirthData, Option[ActorRef])]
   runtimeFrozen = true
@@ -72,7 +75,9 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
   }
   private def protect(body: => Unit): Unit = try body catch { case NonFatal(e) => fail(e) }
   private def input(process: Process, event: AnyRef, source: Option[(ActorRef, Long)]): Unit = {
+    idleProcesses -= process.ref
     val id = nextToken()
+    lastDeliveries(process.ref) = id
     accepting(id) = Acceptance(process, source)
     process.ref ! RuntimeDelivery(epoch, id, event)
   }
@@ -102,6 +107,7 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         handle = Math.addExact(handle, 1L)
         val process = Process(id, join.ref, handle, join.incarnation)
         processes(id) = process
+        idleProcesses -= join.ref
         byRef(join.ref) = process
         byHandle(handle) = process
         context.watch(join.ref)
@@ -143,6 +149,8 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         require(inputThrough >= start, "initial input window excludes the start tick")
         phase = Running
         runtimeFrozen = false
+        idleProcesses.clear()
+        reportedIdle = None
         byRef.keys.foreach { ref =>
           ref ! SetRuntimeHorizon(horizon)
           ref ! SetOptimisticExecutionLimits(executionFrontier, dispatchCeiling, limits)
@@ -228,6 +236,13 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
           accepted.source.foreach { case (ref, original) => ref ! OptimisticTransferAccepted(epoch, original) }
           maybeFrozen()
         }
+      }
+      case OptimisticProcessIdle(run, id, delivery) => protect {
+        checkEpoch(run)
+        source()
+        require(id <= round, "idle notice from a future round")
+        if (phase == Running && id == round && lastDeliveries.getOrElse(sender(), 0L) == delivery)
+          idleProcesses += sender()
       }
       case RouteControl(run, target, event, tick) => protect {
         checkEpoch(run)
@@ -321,6 +336,8 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         pending -= sender()
         val process = byRef.remove(sender()).get
         processes.remove(process.id)
+        idleProcesses -= sender()
+        lastDeliveries -= sender()
         byHandle.remove(process.handle)
         forgetOwnedProcess(process.handle)
         context.unwatch(sender())
@@ -330,6 +347,8 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         require(sender() == global && phase == Paused && id == round, "invalid resume round")
         phase = Running
         runtimeFrozen = false
+        idleProcesses.clear()
+        reportedIdle = None
         byRef.keys.foreach(_ ! ResumeRuntime(round))
         advanceToNextTick()
       }
@@ -339,7 +358,16 @@ class AccountedOptimisticLocalTimeManager(duration: Tick, manager: ActorRef, glo
         fail(new IllegalStateException(s"birth initializer lost: $ref"))
       case RuntimeFailure(reason) => fail(new IllegalStateException(reason))
     }
-    distributed.orElse(super.handleEvent)
+    distributed.orElse(super.handleEvent).andThen(_ => reportActivity())
+  }
+
+  private def reportActivity(): Unit = if (phase == Running) {
+    val idle = channelsDrained && idleProcesses.size == byRef.size &&
+      !scheduledActors.iterator.takeWhile(_._1 <= dispatchCeiling).exists(_._2.nonEmpty)
+    if (!reportedIdle.contains(idle)) {
+      reportedIdle = Some(idle)
+      global ! OptimisticWorkerActivity(round, idle)
+    }
   }
 
   private def maybeFrozen(): Unit = if (phase == Freezing && pending.isEmpty && channelsDrained) {
