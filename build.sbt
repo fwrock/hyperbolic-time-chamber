@@ -5,6 +5,11 @@ ThisBuild / version := "3.2.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 
+// Pekko 2.0 upgrade (experimental): companion modules (management, http, connectors-kafka) are only
+// published as 2.0.0 milestones and the Kryo serializer targets Pekko 1.x, so sbt flags them as
+// "possibly binary incompatible". Downgraded to a warning while we validate at runtime.
+ThisBuild / evictionErrorLevel := Level.Warn
+
 ThisBuild / scalacOptions ++= Seq("-Wconf:msg=match may not be exhaustive:error")
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
@@ -15,10 +20,10 @@ val scalaTestVersion = "3.2.20"
 val scalapbVersion = "0.11.11"
 
 // Apache Pekko
-val pekkoVersion = "1.7.1"
-val pekkoManagementVersion = "1.2.1"
+val pekkoVersion = "2.0.0"
+val pekkoManagementVersion = "2.0.0-M1"
 val jacksonVersion = "2.22.4"
-val pekkoHttpVersion = "1.4.2"
+val pekkoHttpVersion = "2.0.0-M2"
 val pekkoCassandraPersistenceVersion="1.1.0"
 
 // Logs
@@ -42,7 +47,7 @@ val zstdVersion = "1.5.7-24"
 val hadoopVersion = "3.5.0"
 
 // Connectors
-val kafkaConnectorsVersion = "1.2.0"
+val kafkaConnectorsVersion = "2.0.0-M1"
 val jedisVersion = "8.0.2"
 val levelDBVersion = "1.8"
 val sqliteJdbcVersion = "3.53.4.0"
@@ -58,6 +63,12 @@ lazy val root = (project in file("."))
   .settings(
     name := "hyperbolic-time-chamber",
     idePackagePrefix := Some("org.interscity.htc"),
+    // Pekko 2.0 (Artery) uses Agrona 2.x, which reads jdk.internal.misc.Unsafe. That package is not exported
+    // by java.base, so it must be exported to the unnamed module: via the jar manifest for `java -jar`
+    // (honoured by the JVM for executable jars) and via a forked JVM option for tests.
+    assembly / packageOptions += Package.ManifestAttributes("Add-Exports" -> "java.base/jdk.internal.misc"),
+    Test / fork := true,
+    Test / javaOptions += "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",
     assembly / assemblyJarName := s"${name.value}-${version.value}.jar",
     assembly / mainClass := Some("org.interscity.htc.main"),
     assembly / assemblyMergeStrategy := {
