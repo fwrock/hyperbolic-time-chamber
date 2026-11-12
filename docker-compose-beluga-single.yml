@@ -78,7 +78,7 @@ services:
           memory: 4G
   node1:
     image: uxhabam/hyperbolic-time-chamber:3.2.0
-    command: ["java", "-XX:+ZGenerational", "-jar", "app.jar"]
+    command: ["java", "-XX:+UseZGC", "-jar", "app.jar"]
     cap_add:
       - SYS_NICE
     container_name: node_1
@@ -145,7 +145,7 @@ services:
       # JVM Configuration
       # -Xmx: cap at 72GB (leaves 8GB headroom for ZGC off-heap + Netty + OS)
       # -XX:SoftMaxHeapSize: ZGC stays under 64GB at steady state; bursts to 72GB allowed
-      # Note: -XX:+ZGenerational is already in the command line; no -Xms so ZGC
+      # Note: -XX:+UseZGC is already in the command line; no -Xms so ZGC
       # grows the heap lazily (avoids pre-allocating 48GB × 8 nodes = 384GB at startup).
       JAVA_TOOL_OPTIONS: >-
         -Dconfig.resource=beluga.conf
