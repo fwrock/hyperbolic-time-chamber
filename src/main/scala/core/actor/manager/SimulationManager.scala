@@ -43,7 +43,7 @@ class SimulationManager(
       actorId = SIMULATION_MANAGER_ACTOR_NAME,
       timeManager = null
     ) {
-  override protected val config = context.system.settings.config
+  override protected def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)
 
   private var timeSingletonManager: ActorRef = uninitialized
   private var poolTimeManager: ActorRef = uninitialized
@@ -98,7 +98,7 @@ class SimulationManager(
     val apiEnabled = sys.env
       .getOrElse(
         "HTC_API_ENABLED",
-        try context.system.settings.config.getString("htc.api.enabled")
+        try org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getString("htc.api.enabled")
         catch { case _: Exception => "false" }
       )
       .equalsIgnoreCase("true")
@@ -390,7 +390,7 @@ class SimulationManager(
 
   private def timeManagerProps(): Props =
     if (configuration.timeManagerType == TimeManagerTypeEnum.TIME_WARP) {
-      val config = context.system.settings.config
+      val config = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)
       OptimisticGlobalTimeManager.props(
         simulationDuration = configuration.duration,
         simulationManager = getSelfProxy,

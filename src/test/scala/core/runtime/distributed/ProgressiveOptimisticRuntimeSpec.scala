@@ -132,6 +132,35 @@ class ProgressiveOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with Be
     f.manager.expectMsg(StopSimulationEvent())
   }
 
+  it should "accept empty coverage beyond the requested span and jump GVT across the gap in one round" in {
+    val f = new Fixture
+    val request = f.reachInputBoundary()
+    request.throughTick shouldBe 21L
+    // The producer proved [11, 60] empty: coverage passes the 21-tick request with no actors.
+    f.producer.send(f.gtm, OptimisticInputWindowReady(request.epoch, request.window, 60L, false, 0L))
+    f.first.expectMsgType[SetOptimisticExecutionLimits].ceiling shouldBe 60L
+    f.first.expectMsg(ResumeRuntime(1L))
+    f.gtm ! RequestRuntimeRound()
+    val round = f.first.expectMsgType[FreezeRuntime].round
+    f.first.send(f.joined.owner, RuntimeFrozen(round))
+    f.first.expectMsg(CollectRuntimeSnapshot(round))
+    f.first.send(f.joined.owner, RuntimeSnapshot(round, None, 0, 0))
+    f.first.expectMsgType[SetOptimisticExecutionLimits]
+    // Without the extension this cut would stop at 22 and need another input round.
+    f.first.expectMsg(CommitRuntime(round, 61L))
+    f.first.send(f.joined.owner, RuntimeCommitted(round, false))
+    val next = f.producer.expectMsgType[LoadOptimisticInputWindow]
+    next.fromTick shouldBe 61L
+    next.throughTick shouldBe 71L
+  }
+
+  it should "reject coverage beyond the requested span when the window created actors" in {
+    val f = new Fixture
+    val request = f.reachInputBoundary()
+    f.producer.send(f.gtm, OptimisticInputWindowReady(request.epoch, request.window, 60L, false, 1L))
+    f.manager.expectMsgType[RuntimeFailure].reason should include ("invalid input coverage")
+  }
+
   it should "reject enrollment below GVT" in {
     val f = new Fixture
     f.reachInputBoundary()

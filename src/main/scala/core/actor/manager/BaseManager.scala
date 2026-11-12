@@ -32,7 +32,7 @@ abstract class BaseManager[T <: BaseState](
   private lazy val managerLabel: String = getClass.getSimpleName
   private lazy val managerKind: String = if (self.path.name == "singleton") "singleton" else "node"
   private lazy val managerMetricsEnabled: Boolean =
-    scala.util.Try(context.system.settings.config.getBoolean("htc.node.manager-metrics")).getOrElse(true)
+    scala.util.Try(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getBoolean("htc.node.manager-metrics")).getOrElse(true)
   private val childCounters = new java.util.HashMap[String, (io.prometheus.client.Counter.Child, io.prometheus.client.Histogram.Child)]()
 
   override def preStart(): Unit = {

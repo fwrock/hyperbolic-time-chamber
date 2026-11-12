@@ -39,7 +39,7 @@ case class CHRebuildPolicy(
 
 object CHRebuildPolicy {
 
-  private val config = ConfigFactory.load()
+  private def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.effective
 
   /** Loads the policy from `application.conf` (section `htc.routing.ch`). Falls back to sensible
     * defaults when the section is absent.

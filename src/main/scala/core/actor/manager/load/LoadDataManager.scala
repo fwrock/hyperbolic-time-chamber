@@ -67,7 +67,7 @@ class LoadDataManager(
   }
 
   private def loadData(event: LoadDataEvent): Unit = {
-    val filter = scala.util.Try(ActorLoadFilter.configure(context.system.settings.config, event.loadFilter)) match {
+    val filter = scala.util.Try(ActorLoadFilter.configure(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config), event.loadFilter)) match {
       case Success(settings) => settings
       case Failure(error) =>
         simulationManager ! ScenarioPreflightValidationFailedEvent(ScenarioLoadError(s"Load filter: ${error.getMessage}"))
@@ -100,7 +100,7 @@ class LoadDataManager(
     }
 
     // what-if modifications first (they define the scenario the partial filter then sees)
-    val mods = event.modifications.map(m => ScenarioModifications.settings(m)).getOrElse(ScenarioModifications.settings(context.system.settings.config))
+    val mods = event.modifications.map(m => ScenarioModifications.settings(m)).getOrElse(ScenarioModifications.settings(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)))
     if (!mods.enabled) ScenarioModifications.clear()
     if (mods.enabled) {
       logInfo(s"Scenario modifications: ${mods.files.size} file(s) ${mods.files.mkString(", ")}")
@@ -139,7 +139,7 @@ class LoadDataManager(
     allSources: List[ActorDataSource]
   ): Unit = {
     // simulation.json's partial block wins; application.conf / env is the fallback (command-line runs)
-    val partial = event.partial.map(p => PartialFilter.settings(p)).getOrElse(PartialFilter.settings(context.system.settings.config))
+    val partial = event.partial.map(p => PartialFilter.settings(p)).getOrElse(PartialFilter.settings(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)))
     if (!partial.enabled) PartialFilter.clear()
     if (partial.enabled) {
       preparePartialFilter(partial, allSources, eagerSources, progressive)

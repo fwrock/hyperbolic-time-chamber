@@ -111,7 +111,7 @@ class RemoteShardAllocator(client: ActorRef, typeName: String, address: Address)
 }
 
 class AllocationRuntime(system: ExtendedActorSystem) extends Extension {
-  val enabled: Boolean = system.settings.config.getBoolean("htc.load-balance-manager.enabled")
+  val enabled: Boolean = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(system.settings.config).getBoolean("htc.load-balance-manager.enabled")
   private val name = "allocation-authority"
   private lazy val proxy: ActorRef = {
     system.actorOf(ClusterSingletonManager.props(AllocationAuthority.props(), PoisonPill,

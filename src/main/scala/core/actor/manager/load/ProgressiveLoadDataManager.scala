@@ -99,12 +99,12 @@ class ProgressiveLoadDataManager(
 
   private lazy val indexProgressLogStepPct: Int =
     scala.util.Try(
-      context.system.settings.config.getInt("htc.progressive-load.index-progress-log-step-pct")
+      org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getInt("htc.progressive-load.index-progress-log-step-pct")
     ).toOption.filter(v => v > 0 && v <= 100).getOrElse(10)
 
   private lazy val windowProgressLogStepPct: Int =
     scala.util.Try(
-      context.system.settings.config.getInt("htc.progressive-load.window-progress-log-step-pct")
+      org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getInt("htc.progressive-load.window-progress-log-step-pct")
     ).toOption.filter(v => v > 0 && v <= 100).getOrElse(20)
 
   private var lastIndexedProgressBucket: Int = -1
@@ -424,6 +424,19 @@ class ProgressiveLoadDataManager(
       return
     }
 
+    // An optimistic cut is bounded by loaded coverage, so each empty window costs a full round.
+    // The loaders already treat the tick index as exact (they verify actor counts against it),
+    // so a gap it proves empty can be covered in one answer without reading any source.
+    val emptyGapEnd =
+      if (optimisticWindow.isEmpty) None
+      else ProgressiveLoadDataManager.emptyGapEnd(aggregatedTickCounts, fromTick, maxHorizon)
+    if (emptyGapEnd.isDefined) {
+      loadedUpToTick = emptyGapEnd.get
+      logDebug(s"Optimistic window [$fromTick, $maxHorizon] is empty; covering through ${emptyGapEnd.get}")
+      notifyTimeManagerReady(emptyGapEnd.get, 0)
+      return
+    }
+
     require(windowTiming.isEmpty, "overlapping progressive load stopwatches")
     windowTiming = Some(ExecutionTimingMetrics.timers.start(TimedOperation.ProgressiveLoad))
     val toTick = calculateAdaptiveHorizon(fromTick, maxHorizon)
@@ -712,6 +725,14 @@ class ProgressiveLoadDataManager(
 }
 
 object ProgressiveLoadDataManager {
+
+  /** Last tick that can be covered without reading any source: the tick before the next indexed
+    * actor, provided that actor lies beyond `maxHorizon` (so [fromTick, maxHorizon] is empty).
+    * `None` when the range holds an actor or the index has none left at or after `fromTick`.
+    */
+  private[load] def emptyGapEnd(counts: TreeMap[Tick, Int], fromTick: Tick, maxHorizon: Tick): Option[Tick] =
+    counts.rangeFrom(fromTick).collectFirst { case (tick, count) if count > 0 => tick }
+      .filter(_ > maxHorizon).map(_ - 1L)
 
   /** Internal self-message carrying the result of `ScenarioPreflightValidator.validate`, along
     * with the original `StartProgressiveLoadingEvent` needed to resume (or abort) once the async

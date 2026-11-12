@@ -24,10 +24,10 @@ class RuntimeBirthInitializer(owner: ActorRef, coordinator: ActorRef, target: Lo
   private var region: ActorRef = _
   private val publicationId = java.util.UUID.randomUUID().toString
   override def preStart(): Unit = {
-    if (context.system.settings.config.getBoolean("htc.load-balance-manager.enabled")) {
+    if (org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getBoolean("htc.load-balance-manager.enabled")) {
       val proxy = context.actorOf(ClusterSingletonProxy.props(s"/user/$LOAD_BALANCE_MANAGER_ACTOR_NAME",
         ClusterSingletonProxySettings(context.system)))
-      val position = SpatialPositionUtil.resolve(data.stateJson, context.system.settings.config)
+      val position = SpatialPositionUtil.resolve(data.stateJson, org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config))
       proxy ! RegisterSpatialEntitiesBatchEvent(Vector(SpatialEntityData(target.id.toString,
         position._1, position._2, entityClassType = target.model)), publicationId)
     } else startEntity()

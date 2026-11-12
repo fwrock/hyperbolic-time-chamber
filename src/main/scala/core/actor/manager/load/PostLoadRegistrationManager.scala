@@ -48,7 +48,7 @@ class PostLoadRegistrationManager(
   private var totalRegistrations = 0
   private var queued = Iterator.empty[String]
   private val maxInFlight = scala.util.Try(
-    context.system.settings.config.getInt("htc.post-load-registration.max-in-flight")
+    org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getInt("htc.post-load-registration.max-in-flight")
   ).getOrElse(256)
   require(maxInFlight > 0, "post-load registration max-in-flight must be positive")
   private implicit def executionContext: scala.concurrent.ExecutionContext = context.dispatcher
@@ -67,14 +67,14 @@ class PostLoadRegistrationManager(
 
   private val RETRY_INTERVAL: FiniteDuration = {
     val secs = scala.util.Try(
-      context.system.settings.config.getInt("htc.post-load-registration.retry-interval-seconds")
+      org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getInt("htc.post-load-registration.retry-interval-seconds")
     ).getOrElse(10)
     secs.seconds
   }
 
   private val MAX_RETRIES: Int =
     scala.util.Try(
-      context.system.settings.config.getInt("htc.post-load-registration.max-retries")
+      org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getInt("htc.post-load-registration.max-retries")
     ).getOrElse(120)
 
   private case object RetryPostLoadRegistration

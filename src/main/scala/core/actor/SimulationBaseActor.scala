@@ -353,7 +353,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected lazy val rollbackHandler: RollbackHistoryHandler = new RollbackHistoryHandler(
     checkpointInterval =
-      SimulatorSettingsRegistry.getInt("htc.time-warp.checkpoint-interval", context.system.settings.config),
+      SimulatorSettingsRegistry.getInt("htc.time-warp.checkpoint-interval", org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)),
     captureSnapshotFn = () => buildMigrationSnapshot(),
     restoreSnapshotFn = snapshot => applyMigrationSnapshot(snapshot),
     replayEventFn = logged => replayLoggedEvent(logged)

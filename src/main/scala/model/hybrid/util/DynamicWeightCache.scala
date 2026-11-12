@@ -39,7 +39,7 @@ import scala.concurrent.ExecutionContext
   */
 object DynamicWeightCache {
 
-  private val config = ConfigFactory.load()
+  private def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.effective
 
   def configuredStrategy: String =
     if (config.hasPath("htc.routing.cache-strategy")) config.getString("htc.routing.cache-strategy")

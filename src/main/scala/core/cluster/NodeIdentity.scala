@@ -172,7 +172,7 @@ object NodeIdentity {
 
   /** Reads `htc.node.*`, subscribes to cluster membership and freezes the table once the quorum is Up. */
   def start(system: ActorSystem): Unit = {
-    val config = system.settings.config
+    val config = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(system.settings.config)
     def str(path: String, default: String) = scala.util.Try(config.getString(path)).filter(_.nonEmpty).getOrElse(default)
     currentStrategy = str("htc.node.label-strategy", "rank").toLowerCase
     originEnabled = scala.util.Try(config.getBoolean("htc.node.message-origin")).getOrElse(true)

@@ -170,12 +170,12 @@ class Link(
 
   /** Configuration: interval between dynamic cost publications (ticks) */
   private val costPublishInterval: Int =
-    try com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.publish-interval")
+    try org.interscity.htc.core.api.SimulatorSettingsRegistry.effective.getInt("htc.routing.link-cost.publish-interval")
     catch { case _: Exception => 10 }
 
   /** Configuration: TTL for cached dynamic costs (ticks) */
   private val cacheTtl: Int =
-    try com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.cache-ttl")
+    try org.interscity.htc.core.api.SimulatorSettingsRegistry.effective.getInt("htc.routing.link-cost.cache-ttl")
     catch { case _: Exception => 60 }
 
   private lazy val metricsReporter = new LinkMetricsReporter(
