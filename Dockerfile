@@ -1,6 +1,7 @@
 FROM eclipse-temurin:25-jdk
 # JEP 519 (product flag in JDK 25): 8-byte object headers, ~25% less heap for small objects
-ENV JDK_JAVA_OPTIONS="-XX:+UseCompactObjectHeaders"
+# Pekko 2.0 / Agrona 2.x (Artery) requires jdk.internal.misc to be exposed
+ENV JDK_JAVA_OPTIONS="-XX:+UseCompactObjectHeaders --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED"
 
 WORKDIR /app
 

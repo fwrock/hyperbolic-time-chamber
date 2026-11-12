@@ -5,6 +5,11 @@ ThisBuild / version := "3.2.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 
+// Pekko 2.0 upgrade (experimental): companion modules (management, http, connectors-kafka) are only
+// published as 2.0.0 milestones and the Kryo serializer targets Pekko 1.x, so sbt flags them as
+// "possibly binary incompatible". Downgraded to a warning while we validate at runtime.
+ThisBuild / evictionErrorLevel := Level.Warn
+
 ThisBuild / scalacOptions ++= Seq("-Wconf:msg=match may not be exhaustive:error")
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
@@ -15,10 +20,10 @@ val scalaTestVersion = "3.2.20"
 val scalapbVersion = "0.11.11"
 
 // Apache Pekko
-val pekkoVersion = "1.7.1"
-val pekkoManagementVersion = "1.2.1"
+val pekkoVersion = "2.0.0"
+val pekkoManagementVersion = "2.0.0-M1"
 val jacksonVersion = "2.22.4"
-val pekkoHttpVersion = "1.4.2"
+val pekkoHttpVersion = "2.0.0-M2"
 val pekkoCassandraPersistenceVersion="1.1.0"
 
 // Logs
@@ -42,7 +47,7 @@ val zstdVersion = "1.5.7-24"
 val hadoopVersion = "3.5.0"
 
 // Connectors
-val kafkaConnectorsVersion = "1.2.0"
+val kafkaConnectorsVersion = "2.0.0-M1"
 val jedisVersion = "8.0.2"
 val levelDBVersion = "1.8"
 val sqliteJdbcVersion = "3.53.4.0"
@@ -58,6 +63,13 @@ lazy val root = (project in file("."))
   .settings(
     name := "hyperbolic-time-chamber",
     idePackagePrefix := Some("org.interscity.htc"),
+    // Pekko 2.0 / Agrona 2.x (Artery) needs jdk.internal.misc exposed to the unnamed module.
+    Test / fork := true,
+    Test / javaOptions ++= Seq(
+      "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED",
+      "--add-opens=java.base/java.lang=ALL-UNNAMED",
+      "--add-opens=java.base/java.nio=ALL-UNNAMED"
+    ),
     assembly / assemblyJarName := s"${name.value}-${version.value}.jar",
     assembly / mainClass := Some("org.interscity.htc.main"),
     assembly / assemblyMergeStrategy := {
