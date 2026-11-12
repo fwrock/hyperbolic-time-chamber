@@ -44,6 +44,7 @@ class ReportRunIsolationSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     ConfigFactory.parseString(s"""
       pekko.actor.provider = local
       pekko.actor.fail-mixed-versions = off
+      pekko.test.single-expect-default = 15s
       htc.report-manager.csv.directory = "${directory}/csv"
       htc.report-manager.json.directory = "${directory}/json"
       htc.report-manager.parquet.directory = "${directory}/parquet"

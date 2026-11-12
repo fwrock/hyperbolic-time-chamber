@@ -37,7 +37,7 @@ class CreatorLoadData(
         data = creatorProperties.data
       )
     ) {
-  override protected val config = context.system.settings.config
+  override protected def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)
 
   private val timeManagers: mutable.Map[String, ActorRef] = creatorProperties.timeManagers
   private val creatorManager: ActorRef = creatorProperties.creatorManager

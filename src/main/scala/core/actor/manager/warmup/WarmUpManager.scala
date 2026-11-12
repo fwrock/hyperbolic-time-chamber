@@ -31,7 +31,7 @@ class WarmUpManager(val simulationManager: ActorRef, val expectedWorkers: Int)
 
   override def onStart(): Unit = {
     require(expectedWorkers > 0, "warm-up needs at least one worker")
-    val perNode = SimulatorSettingsRegistry.getInt("htc.warmup.max-workers-per-node", context.system.settings.config)
+    val perNode = SimulatorSettingsRegistry.getInt("htc.warmup.max-workers-per-node", org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config))
     context.actorOf(ClusterRouterPool(RoundRobinPool(0), ClusterRouterPoolSettings(
       totalInstances = expectedWorkers, maxInstancesPerNode = perNode, allowLocalRoutees = true
     )).props(WarmUpWorker.props(self)), name = "warm-up-worker-pool")

@@ -52,6 +52,14 @@ the adaptive density algorithm may choose a shorter range. It is a positive tick
 span, not an actor limit: an inclusive window can cover span + 1 timestamps, and
 all actors at one tick still need enrollment.
 
+**Empty gaps.** If the producer's tick index has no actor in the requested range, it
+answers with coverage through the tick before the next indexed actor, without reading
+any source (`ProgressiveLoadDataManager.processTickWindowRequest`). The GTM accepts
+coverage past the requested `throughTick` only when `actorsCreated == 0`, and clamps it
+to the horizon. A gap of N ticks therefore costs one input round instead of
+N / input-window-ticks. This relies on the index being exact, which the loaders already
+assume when they verify actor counts per range. Not yet measured on a real run.
+
 ## Enrollment between safe rounds
 
 ```mermaid

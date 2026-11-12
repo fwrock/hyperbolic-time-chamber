@@ -8,7 +8,7 @@ import org.apache.kafka.common.serialization.{ ByteArraySerializer, StringSerial
 
 object PublisherConfiguration {
 
-  private val config = ConfigFactory.load().getConfig("htc.brokers.kafka")
+  private val config = org.interscity.htc.core.api.SimulatorSettingsRegistry.effective.getConfig("htc.brokers.kafka")
 
   def producerConfig[K, V](system: ActorSystem): ProducerSettings[String, Array[Byte]] =
     ProducerSettings(

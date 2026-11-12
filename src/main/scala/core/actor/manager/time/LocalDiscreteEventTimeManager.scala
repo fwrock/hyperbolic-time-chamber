@@ -99,12 +99,12 @@ class LocalDiscreteEventTimeManager(
 
   private lazy val tickProgressLogInterval: Long =
     scala.util.Try(
-      context.system.settings.config.getLong("htc.time-manager.local-tick-progress-log-interval")
+      org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getLong("htc.time-manager.local-tick-progress-log-interval")
     ).toOption.filter(_ > 0).getOrElse(5000L)
 
   private lazy val batchDebugLogEvery: Long =
     scala.util.Try(
-      context.system.settings.config.getLong("htc.time-manager.local-batch-debug-log-every")
+      org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getLong("htc.time-manager.local-batch-debug-log-every")
     ).toOption.filter(_ > 0).getOrElse(10L)
 
   /** Processes a tick in discrete event manner. Events are processed one at a time in chronological

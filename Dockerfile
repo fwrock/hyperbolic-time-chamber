@@ -1,4 +1,6 @@
-FROM eclipse-temurin:21-jdk
+FROM eclipse-temurin:25-jdk
+# JEP 519 (product flag in JDK 25): 8-byte object headers, ~25% less heap for small objects
+ENV JDK_JAVA_OPTIONS="-XX:+UseCompactObjectHeaders"
 
 WORKDIR /app
 
@@ -12,4 +14,4 @@ COPY target/scala-${SCALA_VERSION}/hyperbolic-time-chamber-${HTC_VERSION}.jar ap
 EXPOSE 1600-2700
 
 #"-Djdk.attach.allowAttachSelf=true" if you want measure memory object storage
-CMD ["java", "-XX:+ZGenerational", "-jar", "app.jar"]
+CMD ["java", "-XX:+UseZGC", "-jar", "app.jar"]

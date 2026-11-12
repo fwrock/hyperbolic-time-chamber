@@ -23,7 +23,7 @@ abstract class ReportData(
       )
     ) {
 
-  override protected val config = context.system.settings.config
+  override protected def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)
 
   protected def onCommittedReport(event: ReportEvent): Unit = onReport(event)
   protected def flushCommittedReports(): Future[Unit] =

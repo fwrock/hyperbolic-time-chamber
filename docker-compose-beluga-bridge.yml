@@ -91,7 +91,7 @@ services:
           memory: 4G
   node1:
     image: uxhabam/hyperbolic-time-chamber:3.2.0
-    command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
+    command: [ "nice", "-n", "-10", "java", "-XX:+UseZGC", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
     container_name: node_1
@@ -157,7 +157,7 @@ services:
       # JVM Configuration
       # -Xmx: cap at 72GB (leaves 8GB headroom for ZGC off-heap + Netty + OS)
       # -XX:SoftMaxHeapSize: ZGC stays under 64GB at steady state; bursts to 72GB allowed
-      # Note: -XX:+ZGenerational is already in the command line; no -Xms so ZGC
+      # Note: -XX:+UseZGC is already in the command line; no -Xms so ZGC
       # grows the heap lazily (avoids pre-allocating 48GB × 8 nodes = 384GB at startup).
       JAVA_TOOL_OPTIONS: >-
         --add-opens=java.base/java.lang=ALL-UNNAMED
@@ -234,7 +234,7 @@ services:
 
   node2:
     image: uxhabam/hyperbolic-time-chamber:3.2.0
-    command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
+    command: [ "nice", "-n", "-10", "java", "-XX:+UseZGC", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
     container_name: node_2
@@ -299,7 +299,7 @@ services:
         -Xms48g
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
-        -XX:+ZGenerational
+        -XX:+UseZGC
 
       # Report Manager Configuration
       HTC_REPORT_ENABLED: "false"
@@ -370,7 +370,7 @@ services:
 
   node3:
     image: uxhabam/hyperbolic-time-chamber:3.2.0
-    command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
+    command: [ "nice", "-n", "-10", "java", "-XX:+UseZGC", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
     container_name: node_3
@@ -435,7 +435,7 @@ services:
         -Xms48g
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
-        -XX:+ZGenerational
+        -XX:+UseZGC
 
       # Report Manager Configuration
       HTC_REPORT_ENABLED: "false"
@@ -506,7 +506,7 @@ services:
 
   node4:
     image: uxhabam/hyperbolic-time-chamber:3.2.0
-    command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
+    command: [ "nice", "-n", "-10", "java", "-XX:+UseZGC", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
     container_name: node_4
@@ -571,7 +571,7 @@ services:
         -Xms48g
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
-        -XX:+ZGenerational
+        -XX:+UseZGC
 
       # Report Manager Configuration
       HTC_REPORT_ENABLED: "false"
@@ -642,7 +642,7 @@ services:
 
   node5:
     image: uxhabam/hyperbolic-time-chamber:3.2.0
-    command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
+    command: [ "nice", "-n", "-10", "java", "-XX:+UseZGC", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
     container_name: node_5
@@ -707,7 +707,7 @@ services:
         -Xms48g
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
-        -XX:+ZGenerational
+        -XX:+UseZGC
 
       # Report Manager Configuration
       HTC_REPORT_ENABLED: "false"
@@ -778,7 +778,7 @@ services:
 
   node6:
     image: uxhabam/hyperbolic-time-chamber:3.2.0
-    command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
+    command: [ "nice", "-n", "-10", "java", "-XX:+UseZGC", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
     container_name: node_6
@@ -843,7 +843,7 @@ services:
         -Xms48g
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
-        -XX:+ZGenerational
+        -XX:+UseZGC
 
       # Report Manager Configuration
       HTC_REPORT_ENABLED: "false"
@@ -914,7 +914,7 @@ services:
 
   node7:
     image: uxhabam/hyperbolic-time-chamber:3.2.0
-    command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
+    command: [ "nice", "-n", "-10", "java", "-XX:+UseZGC", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
     container_name: node_7
@@ -979,7 +979,7 @@ services:
         -Xms48g
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
-        -XX:+ZGenerational
+        -XX:+UseZGC
 
       # Report Manager Configuration
       HTC_REPORT_ENABLED: "false"
@@ -1050,7 +1050,7 @@ services:
 
   node8:
     image: uxhabam/hyperbolic-time-chamber:3.2.0
-    command: [ "nice", "-n", "-10", "java", "-XX:+ZGenerational", "-jar", "app.jar" ]
+    command: [ "nice", "-n", "-10", "java", "-XX:+UseZGC", "-jar", "app.jar" ]
     cap_add:
       - SYS_NICE
     container_name: node_8
@@ -1115,7 +1115,7 @@ services:
         -Xms48g
         -Xmx72g
         -XX:SoftMaxHeapSize=64g
-        -XX:+ZGenerational
+        -XX:+UseZGC
 
       # Report Manager Configuration
       HTC_REPORT_ENABLED: "false"

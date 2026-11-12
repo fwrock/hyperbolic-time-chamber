@@ -79,7 +79,7 @@ class KafkaCacheStrategy(implicit ec: ExecutionContext) extends WeightCacheStrat
 
   private def kafkaBootstrapServers: String =
     try
-      com.typesafe.config.ConfigFactory.load().getString("htc.kafka.bootstrap.servers")
+      org.interscity.htc.core.api.SimulatorSettingsRegistry.effective.getString("htc.kafka.bootstrap.servers")
     catch {
       case _: Exception => "localhost:9092"
     }

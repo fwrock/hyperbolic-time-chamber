@@ -23,7 +23,7 @@ import com.typesafe.config.ConfigFactory
   */
 object KafkaTopicNaming {
 
-  private val config = ConfigFactory.load()
+  private def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.effective
 
   private val envPrefix: String =
     try

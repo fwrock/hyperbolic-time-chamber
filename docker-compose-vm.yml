@@ -115,7 +115,7 @@ services:
       - redis
       - kafka
       - schema-registry
-    command: ["java", "-XX:+ZGenerational", "-jar", "app.jar"]
+    command: ["java", "-XX:+UseZGC", "-jar", "app.jar"]
     cap_add:
       - SYS_NICE
     environment:
@@ -189,7 +189,7 @@ services:
         -XX:+UseNUMA
         --add-opens=java.base/java.lang=ALL-UNNAMED
         --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED
-        -XX:+UseZGC -XX:+ZGenerational
+        -XX:+UseZGC
         
       # ── Kafka ─────────────────────────────────────────────────────────────
       HTC_KAFKA_BOOTSTRAP_SERVERS: "localhost:9092"
