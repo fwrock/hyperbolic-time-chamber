@@ -63,13 +63,10 @@ lazy val root = (project in file("."))
   .settings(
     name := "hyperbolic-time-chamber",
     idePackagePrefix := Some("org.interscity.htc"),
-    // Pekko 2.0 / Agrona 2.x (Artery) needs jdk.internal.misc exposed to the unnamed module.
-    Test / fork := true,
-    Test / javaOptions ++= Seq(
-      "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED",
-      "--add-opens=java.base/java.lang=ALL-UNNAMED",
-      "--add-opens=java.base/java.nio=ALL-UNNAMED"
-    ),
+    // Pekko 2.0 pulls Agrona 2.x, which reads jdk.internal.misc.Unsafe and needs --add-opens/--add-exports.
+    // Agrona 1.x uses sun.misc.Unsafe and needs no module flags. Artery uses the TCP transport (not Aeron UDP),
+    // so the Aeron-only classes that expect Agrona 2.x are never loaded.
+    dependencyOverrides += "org.agrona" % "agrona" % "1.23.1",
     assembly / assemblyJarName := s"${name.value}-${version.value}.jar",
     assembly / mainClass := Some("org.interscity.htc.main"),
     assembly / assemblyMergeStrategy := {
