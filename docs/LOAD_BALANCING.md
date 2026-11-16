@@ -1141,3 +1141,19 @@ were checked on 2026-10-25. Access limitations are recorded where applicable.
   Least Squares Regression.*
   [Official handbook](https://www.itl.nist.gov/div898/handbook/pmd/section1/pmd141.htm).
   Method reference for regression, not a paper proposing HTC's prediction policy.
+
+
+### API scenario preparation (2026-11-12)
+
+API-mode JVMs defer model shard registration even when a scenario file is already
+configured. `POST /api/v1/simulation/prepare` installs local shard regions without
+starting loaders; it accepts the same optional `configFile` and `settings` body as
+`/simulation/start`. The distributed controller reapplies saved settings to every
+JVM, waits for every preparation response, then starts the simulation singleton.
+Single-node `/simulation/start` includes preparation automatically.
+
+Routing and all creation paths use the mode captured by `AllocationRuntime` for
+that JVM. Changing `htc.load-balance-manager.enabled` after preparation requires a
+fresh JVM; a repeated preparation/start rejects a conflicting setting before
+loading. This prevents custom shard extractors from receiving entities created
+through the standard allocation path without published assignments.

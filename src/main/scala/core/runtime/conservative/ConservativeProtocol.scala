@@ -44,3 +44,6 @@ final case class EndConservativeProcessMigration(epoch: String, requestId: Strin
 final case class ConservativeMigrationResumed(epoch: String, requestId: String) extends ConservativeCommand
 final case class ConservativeMigrationDeclined(requestId: String) extends ConservativeCommand
 final case class ConservativeQueuedInput(event: AnyRef) extends ConservativeCommand
+
+/** Empty requestId consumes a registration permit; otherwise it identifies the acknowledged migration resume. */
+final case class PublishConservativePlacement(epoch: String, requestId: String, targets: Vector[ActorRef], event: ReportEvent) extends ConservativeCommand

@@ -68,11 +68,14 @@ class CarLinkHandler(
     }
     consumeAwaitedReplyFn(awaitKey)
 
+    if (journeyReporter.sumoDepartTick.nonEmpty && data.mesoEntryWaitSeconds > 0)
+      journeyReporter.updateHaltingState(0.0,data.mesoEntryWaitSeconds)
     setCurrentLinkIdFn(Some(linkId))
     setCurrentLinkLengthFn(data.linkLength)
     setLinkEntryTickFn(Some(tick))
 
-    val speed = linkDensitySpeed(
+    state.journey.mesoOriginActive = data.mesoOriginAtEnd
+    val speed = if (data.mesoOriginAtEnd) 0.0 else linkDensitySpeed(
       length       = data.linkLength,
       capacity     = data.linkCapacity,
       numberOfCars = data.linkNumberOfCars,
@@ -81,7 +84,7 @@ class CarLinkHandler(
     )
 
     val speedMs = speed / 3.6
-    val time = data.linkLength / speedMs
+    val time = if (data.mesoOriginAtEnd) 1.0 else data.linkLength / speedMs
     state.status = Moving
     journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / (math.max(0.1, data.linkFreeSpeed) / 3.6)
 
@@ -90,11 +93,12 @@ class CarLinkHandler(
       journeyReporter.sumoDepartSpeed = speed
       journeyReporter.sumoDepartLane  = Some(s"${linkId}_0")
       journeyReporter.sumoDepartPos   = 0.0
+
     }
 
     reportFn(
       Map(
-        "event_type"      -> "enter_link",
+        "event_type"      -> (if (data.mesoOriginAtEnd) "meso_origin_admitted" else "enter_link"),
         "car_id"          -> entityId,
         "link_id"         -> linkId,
         "mode"            -> "MESO",
@@ -104,10 +108,11 @@ class CarLinkHandler(
         "free_speed"      -> data.linkFreeSpeed,
         "calculated_speed" -> speed,
         "travel_time"     -> time,
+        "admission_wait_seconds" -> data.mesoEntryWaitSeconds,
         "lanes"           -> data.linkLanes,
         "tick"            -> tick
       ),
-      "enter_link"
+      if (data.mesoOriginAtEnd) "meso_origin_admitted" else "enter_link"
     )
 
     val exitTick = tick + Math.ceil(time).toLong
@@ -141,6 +146,7 @@ class CarLinkHandler(
     // so always safe to consume once accepted.
     consumeAwaitedReplyFn(awaitKey)
 
+    if (data.mesoExitWaitSeconds > 0) journeyReporter.updateHaltingState(0.0,data.mesoExitWaitSeconds)
     state.distance += data.linkLength
     journeyReporter.sumoArrivalSpeed = 0.0
     journeyReporter.sumoArrivalLane  = Some(s"${linkId}_0")
@@ -159,7 +165,7 @@ class CarLinkHandler(
 
     reportFn(
       Map(
-        "event_type"     -> "leave_link",
+        "event_type"     -> (if (data.mesoOriginAtEnd) "meso_origin_left" else "leave_link"),
         "car_id"         -> entityId,
         "link_id"        -> linkId,
         "mode"           -> "MESO",
@@ -167,15 +173,16 @@ class CarLinkHandler(
         "total_distance" -> state.distance,
         "tick"           -> tick
       ),
-      "leave_link"
+      if (data.mesoOriginAtEnd) "meso_origin_left" else "leave_link"
     )
+    state.journey.mesoOriginActive = false
 
     val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {
       val tripDest = getTripDestinationFn().getOrElse(state.destination)
       finishAndCleanupFn("reached_destination", tripDest)
     } else {
-      onFinishSpontaneousFn(Some(tick + 1))
+      onFinishSpontaneousFn(Some(if (data.mesoOriginAtEnd) tick else tick + 1))
     }
   }
 }

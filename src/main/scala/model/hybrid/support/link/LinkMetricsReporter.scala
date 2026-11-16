@@ -117,7 +117,7 @@ class LinkMetricsReporter(
         "loaded"          -> cumulativeLoadedVehicles,
         "inserted"        -> tickInserted,
         "running"         -> running,
-        "waiting"         -> waiting,
+        "waiting"         -> (waiting + state.pendingMicroEntries.size),
         "ended"           -> cumulativeArrived,
         "arrived"         -> tickArrived,
         "collisions"      -> 0,

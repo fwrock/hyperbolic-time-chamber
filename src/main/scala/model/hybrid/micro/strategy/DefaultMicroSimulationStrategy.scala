@@ -60,13 +60,29 @@ class DefaultMicroSimulationStrategy(
     signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
     downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
     stopLineGapM: Double = 0.0,
-    retainExits: Boolean = false
+    retainExits: Boolean = false,
+    laneChanging: model.hybrid.entity.state.model.LaneChangingConfig = model.hybrid.entity.state.model.LaneChangingConfig(),
+    laneConnections: List[model.hybrid.entity.state.model.LaneConnection] = Nil,
+    laneRestrictions: Map[Int,String] = Map.empty,
+    movementSignals: Map[(Long,Int),TrafficSignalPhaseStateEnum] = Map.empty,
+    laneChangedFn: (Long,Int,Int,String) => Unit = (_,_,_,_) => (),
+    observedFn: (VehicleInLane,VehicleInLane,Int,Double) => Unit = (_,_,_,_) => ()
   ): Seq[MicroVehicleUpdate] = {
     val lastUpdateByVehicle = mutable.LinkedHashMap[Long, MicroVehicleUpdate]()
     val nSubTicks = math.max(1, microTicksPerGlobalTick)
 
-    for (st <- 0 until nSubTicks)
-      vehiclesByLane.foreach {
+    for (st <- 0 until nSubTicks) {
+      val physicalStart = (tick-1).toDouble * microTimeStep * nSubTicks + st * microTimeStep
+      val strategicYieldLeaders = laneChanging.model match {
+        case model.hybrid.entity.state.model.LaneChangingModel.Mobil =>
+          MobilLaneChangeStrategy.execute(vehiclesByLane,laneChanging,laneConnections,laneRestrictions,
+            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn)
+        case model.hybrid.entity.state.model.LaneChangingModel.Lc2013 =>
+          Lc2013LaneChangeStrategy.execute(vehiclesByLane,laneChanging,laneConnections,laneRestrictions,
+            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn)
+        case _ => Map.empty[Long,VehicleInLane]
+      }
+      vehiclesByLane.toVector.sortBy(_._1).foreach {
         case (laneId, vehicles) =>
           if (vehicles.nonEmpty) {
             val laneUpdates = processMicroLane(
@@ -82,7 +98,12 @@ class DefaultMicroSimulationStrategy(
               signalAtExit = signalAtExit,
               downstreamLeaders = downstreamLeaders,
               stopLineGapM = stopLineGapM,
-              retainExits = retainExits
+              retainExits = retainExits,
+              movementSignals = movementSignals,
+              laneConnections = laneConnections,
+              strategicYieldLeaders = strategicYieldLeaders,
+              strategicYieldGapM = laneChanging.minGapMeters,
+              observedFn = (before,after,lane) => observedFn(before,after,lane,physicalStart)
             )
             laneUpdates.foreach(
               u => lastUpdateByVehicle.put(u.vehicleId, u)
@@ -92,6 +113,7 @@ class DefaultMicroSimulationStrategy(
           }
       }
 
+    }
     lastUpdateByVehicle.values.toSeq
   }
 
@@ -137,26 +159,14 @@ class DefaultMicroSimulationStrategy(
     signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
     downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
     stopLineGapM: Double = 0.0,
-    retainExits: Boolean = false
+    retainExits: Boolean = false,
+    movementSignals: Map[(Long,Int),TrafficSignalPhaseStateEnum] = Map.empty,
+    laneConnections: List[model.hybrid.entity.state.model.LaneConnection] = Nil,
+    strategicYieldLeaders: Map[Long,VehicleInLane] = Map.empty,
+    strategicYieldGapM: Double = 2.0,
+    observedFn: (VehicleInLane,VehicleInLane,Int) => Unit = (_,_,_) => ()
   ): Seq[MicroVehicleUpdate] = {
     VehicleInLane.sortFrontToBack(vehicles)
-
-    // Only a red signal supplies a stopped leader; an uncontrolled exit must preserve momentum.
-    val signalLeader: Option[VehicleInLane] =
-      signalAtExit.collect {
-        case Red =>
-          VehicleInLane(
-            actorId         = SignalBlockerId,
-            shardId         = "",
-            // A signal is a stop line, so it has no vehicle-to-vehicle standstill gap.
-            position        = linkLength - stopLineGapM + 2.0,
-            velocity        = 0.0,
-            acceleration    = 0.0,
-            vehicleLength   = 0.0,
-            maxAcceleration = 0.0,
-            maxDeceleration = 0.0
-          )
-      }
 
     val updates = mutable.ArrayBuffer[MicroVehicleUpdate]()
     val previous = vehicles.toVector
@@ -164,13 +174,13 @@ class DefaultMicroSimulationStrategy(
     def safeBehind(vehicle: VehicleInLane, leader: VehicleInLane): Double =
       carFollowingModel.calculateSafeVelocity(
         currentVelocity = vehicle.velocity,
-        desiredVelocity = speedLimit / 3.6,
+        desiredVelocity = vehicle.desiredSpeed(speedLimit / 3.6),
         gap = math.max(0.1, vehicle.gapTo(leader)),
         leaderVelocity = leader.velocity,
         maxAcceleration = vehicle.maxAcceleration,
         maxDeceleration = vehicle.maxDeceleration,
-        minGap = 2.0,
-        reactionTime = 1.0,
+        minGap = vehicle.minGap,
+        reactionTime = vehicle.reactionTime,
         deltaT = microTimeStep
       )
 
@@ -180,9 +190,19 @@ class DefaultMicroSimulationStrategy(
         vehicleWaitingSeconds.update(vehicle.actorId,
           vehicleWaitingSeconds.getOrElse(vehicle.actorId, 0.0) + microTimeStep)
       } else if (vehicle.entryTick < tick) {
+        val endPosition = vehicle.arrivalPosition.getOrElse(linkLength)
+        val aspect = movementSignals.get((vehicle.nextLinkId,laneId))
+          .orElse(movementSignals.get((vehicle.nextLinkId,-1))).orElse(signalAtExit)
+        val yellowStop = aspect.contains(model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Yellow) &&
+          vehicle.velocity * vehicle.velocity / (2 * vehicle.maxDeceleration) <= math.max(0,linkLength-stopLineGapM-vehicle.position)
+        val legalLanes = laneConnections.filter(_.outgoingLinkId == vehicle.nextLinkId).map(_.fromLane)
+        val wrongLane = legalLanes.nonEmpty && !legalLanes.contains(laneId)
+        val blocked = endPosition == linkLength && (aspect.contains(Red) || yellowStop || wrongLane)
+        val applicableSignal = Option.when(blocked)(VehicleInLane(SignalBlockerId,"",linkLength-stopLineGapM+vehicle.minGap,
+          0,0,0,maxAcceleration=0,maxDeceleration=0))
         val leader = if (i > 0) Some(previous(i - 1))
           // A nearer moving vehicle must not hide the stricter stopped signal constraint.
-          else (signalLeader.toList ++ downstreamLeaders.get(vehicle.actorId))
+          else (applicableSignal.toList ++ downstreamLeaders.get(vehicle.actorId))
             .minByOption(v => (safeBehind(vehicle, v), v.rearPosition, v.actorId))
 
         val (rawGap, leaderVel) = leader match {
@@ -195,8 +215,15 @@ class DefaultMicroSimulationStrategy(
 
         val maxAcceleration = vehicle.maxAcceleration
         val maxDeceleration = vehicle.maxDeceleration
-        val rawSafe = leader.fold(speedLimit / 3.6)(safeBehind(vehicle, _))
-        val turnSafe = vehicle.exitSpeedLimitMps.map { limit =>
+        val yieldSafe = strategicYieldLeaders.get(vehicle.actorId).fold(Double.PositiveInfinity) { neighbour =>
+          // A side-by-side car must create longitudinal room, not merely match its neighbour's
+          // speed. Braking remains bounded below; no position or velocity is reset here.
+          if (vehicle.gapTo(neighbour) < strategicYieldGapM) 0.0 else safeBehind(vehicle,neighbour)
+        }
+        val desiredSpeed = vehicle.desiredSpeed(speedLimit / 3.6)
+        val rawSafe = math.min(desiredSpeed, math.min(leader.fold(desiredSpeed)(safeBehind(vehicle, _)),yieldSafe))
+        val turnSafe = vehicle.exitSpeedLimitMps.map { roadTurnLimit =>
+          val limit = vehicle.desiredSpeed(roadTurnLimit)
           val brakingStep = maxDeceleration * microTimeStep
           // Include this step's travel before the remaining braking distance to avoid late turn braking.
           math.max(limit, -brakingStep + math.sqrt(brakingStep * brakingStep + limit * limit +
@@ -210,34 +237,37 @@ class DefaultMicroSimulationStrategy(
           else
             math.max(velDiff, -maxDeceleration * microTimeStep)
         val rawNewVelocity = vehicle.velocity + velChange
-        val cappedVelocity = math.max(
+        val deterministicVelocity = math.max(
           0.0,
           math.min(
             if (rawNewVelocity.isNaN || rawNewVelocity.isInfinite) 0.0 else rawNewVelocity,
-            speedLimit / 3.6
+            desiredSpeed
           )
         )
+        val physicalStep = (tick-1)*microTicksPerGlobalTick + subTick
+        val cappedVelocity = model.hybrid.micro.model.DriverRandomness.velocity(
+          vehicle,deterministicVelocity,physicalStep,microTimeStep)
 
         val rawNewPosition = vehicle.position + cappedVelocity * microTimeStep
-        val boundaryPosition = if (math.abs(rawNewPosition - linkLength) < 1e-10) linkLength
-          else math.min(rawNewPosition, linkLength)
+        val boundaryPosition = if (math.abs(rawNewPosition - endPosition) < 1e-10) endPosition
+          else math.min(rawNewPosition, endPosition)
         // A count-based admission stop can remove the leader's speed within one step.
         // Preserve geometric spacing even when bounded car-following deceleration cannot do so.
         val positionLimit = if (retainExits) {
           val obstacles = if (i > 0) List(previous(i - 1))
-            else signalLeader.toList ++ downstreamLeaders.get(vehicle.actorId)
-          obstacles.map(_.rearPosition - 2.0).minOption
+            else applicableSignal.toList ++ downstreamLeaders.get(vehicle.actorId)
+          obstacles.map(_.rearPosition - vehicle.minGap).minOption
             .fold(linkLength)(limit => math.max(vehicle.position, limit))
         } else linkLength
         val newPosition = math.min(boundaryPosition, positionLimit)
 
-        val exitBlocked = signalAtExit.contains(Red)
-        val reachedEnd = newPosition >= linkLength && !exitBlocked
+        val exitBlocked = blocked
+        val reachedEnd = newPosition >= endPosition && !exitBlocked
         val actualVelocity = if (newPosition >= linkLength && exitBlocked) 0.0
           else if (newPosition + 1e-10 < boundaryPosition)
             math.max(0.0, (newPosition - vehicle.position) / microTimeStep)
           else cappedVelocity
-        val newAcceleration = if (retainExits) (actualVelocity - vehicle.velocity) / microTimeStep
+        val newAcceleration = if (retainExits || vehicle.sigma > 0.0) (actualVelocity - vehicle.velocity) / microTimeStep
           else velChange / microTimeStep
 
         if (actualVelocity < 0.1) {
@@ -255,6 +285,7 @@ class DefaultMicroSimulationStrategy(
           pendingExitTick = Option.when(retainExits && reachedEnd)(tick)
         )
 
+        observedFn(vehicle,vehicles(i),laneId)
         if (reachedEnd || subTick >= microTicksPerGlobalTick - 1) {
           updates += MicroVehicleUpdate(
             vehicleId = vehicle.actorId,
@@ -270,8 +301,9 @@ class DefaultMicroSimulationStrategy(
             safeVelocity = actualVelocity,
             reachedEnd = reachedEnd,
             remainingStepSeconds = if (reachedEnd && cappedVelocity > 0.0)
-              math.max(0.0, math.min(microTimeStep, (rawNewPosition - linkLength) / cappedVelocity))
-            else 0.0
+              math.max(0.0, math.min(microTimeStep, (rawNewPosition - endPosition) / cappedVelocity))
+            else 0.0,
+            distanceTraveled = Some(math.max(0.0, newPosition - vehicle.entryPosition))
           )
         }
       }

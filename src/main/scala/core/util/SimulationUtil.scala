@@ -101,9 +101,17 @@ object SimulationUtil {
   def loadFronApplicationConfig(configFile: String): Simulation =
     fromJson[Simulation](readJsonFile(configFile))
 
+  def startShardsAtBoot(system: ActorSystem, apiWaitEnabled: Boolean): Unit = {
+    // API settings must be installed before a shard region captures its routing policy.
+    if (apiWaitEnabled) system.log.info("Shard startup deferred until API scenario preparation")
+    else startShards(system)
+  }
+
   def startShards(system: ActorSystem, configuration: String = null): Unit = {
     val simulationConfig = loadSimulationConfig(configuration)
-    val customBalancing = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(system.settings.config).getBoolean("htc.load-balance-manager.enabled")
+    val allocation = core.actor.manager.loadbalance.allocation.AllocationRuntime(system)
+    allocation.validateSettings()
+    val customBalancing = allocation.enabled
     require(!customBalancing || simulationConfig.timeManagerType != core.enumeration.TimeManagerTypeEnum.TIME_WARP,
       "custom load-balancing migration requires the production conservative runtime")
     if (customBalancing) core.actor.manager.loadbalance.strategy.LoadBalanceSettings.read(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(system.settings.config))
@@ -112,7 +120,7 @@ object SimulationUtil {
     // Remote shard actors can initialize lazy process-wide resources before the
     // SimulationManager's singleton runs; its registry writes reach only its own JVM.
     installLocalScenarioSettings(simulationConfig)
-    core.actor.manager.loadbalance.allocation.AllocationRuntime(system).start()
+    allocation.start()
 
     // Register shard regions for all actor types declared in actorsDataSources.
     simulationConfig.actorsDataSources

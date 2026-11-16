@@ -24,7 +24,7 @@ class RuntimeBirthInitializer(owner: ActorRef, coordinator: ActorRef, target: Lo
   private var region: ActorRef = _
   private val publicationId = java.util.UUID.randomUUID().toString
   override def preStart(): Unit = {
-    if (org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getBoolean("htc.load-balance-manager.enabled")) {
+    if (core.actor.manager.loadbalance.allocation.AllocationRuntime(context.system).enabled) {
       val proxy = context.actorOf(ClusterSingletonProxy.props(s"/user/$LOAD_BALANCE_MANAGER_ACTOR_NAME",
         ClusterSingletonProxySettings(context.system)))
       val position = SpatialPositionUtil.resolve(data.stateJson, org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config))

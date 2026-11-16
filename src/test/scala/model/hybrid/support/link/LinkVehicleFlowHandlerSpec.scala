@@ -267,12 +267,59 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     f.getState().vehiclesByLane(0).map(_.actorId) shouldBe Seq(13L, 15L)
   }
 
+  it should "preserve imported per-car physics and endpoint positions through lane checkpoints" in {
+    val f = newFixture("313", newMicroState("313", lanes = 1, speedLimit = 36.0))
+    f.handler.handleEnterLinkMicro(event(1L, "313"), enterData(1L).copy(
+      maxAcceleration = Some(1.5), maxDeceleration = Some(3.7),
+      initialPosition = 12.0, arrivalPosition = Some(250.0), minGap = Some(3.5),
+      reactionTime = Some(1.7), maxSpeed = Some(7.0), initialVelocity = 12.0,
+      speedFactor = 1.2, desiredMaxSpeed = Some(5),sigma=.5,randomSeed=9007199254740993L,
+      lc2013=model.hybrid.entity.state.model.Lc2013Parameters(strategic=2,keepRight=0)))
+    val restored = core.util.JsonUtil.fromJson[LinkState](core.util.JsonUtil.toJson(f.getState()))
+    val vehicle = restored.vehiclesByLane(0).head
+    vehicle.maxAcceleration shouldBe 1.5
+    vehicle.maxDeceleration shouldBe 3.7
+    vehicle.minGap shouldBe 3.5
+    vehicle.reactionTime shouldBe 1.7
+    vehicle.maxSpeed shouldBe Some(7.0)
+    vehicle.velocity shouldBe 6.0
+    vehicle.speedFactor shouldBe 1.2
+    vehicle.desiredMaxSpeed shouldBe Some(5.0)
+    vehicle.sigma shouldBe .5
+    vehicle.randomSeed shouldBe 9007199254740993L
+    vehicle.lc2013.strategic shouldBe 2.0
+    vehicle.lc2013.keepRight shouldBe 0.0
+    vehicle.position shouldBe 12.0
+    vehicle.entryPosition shouldBe 12.0
+    vehicle.arrivalPosition shouldBe Some(250.0)
+    f.sent.collectFirst { case d: model.hybrid.entity.event.data.MicroEnterLinkData => d.initialPosition }.get shouldBe 12.0
+    intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(2, "313"),
+      enterData(2).copy(maxAcceleration = Some(-1))))
+    intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(2, "313"),
+      enterData(2).copy(initialPosition = 301)))
+    for (bad <- List(enterData(2).copy(minGap = Some(-1)),
+      enterData(2).copy(reactionTime = Some(0)),enterData(2).copy(maxSpeed = Some(Double.NaN)),
+      enterData(2).copy(speedFactor = 0),enterData(2).copy(desiredMaxSpeed = Some(-1)),
+      enterData(2).copy(sigma = Double.NaN),enterData(2).copy(sigma = 1.1),enterData(2).copy(sigma = -1)))
+      intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(2, "313"),bad))
+  }
+
   it should "carry an entry speed into the lane and acknowledge the actual capped speed" in {
     val f = newFixture("309", newMicroState("309", speedLimit = 36.0))
     f.handler.handleEnterLinkMicro(event(1L, "309"), enterData(1L).copy(initialVelocity = 12.5))
     f.getState().vehiclesByLane.values.flatten.find(_.actorId == 1L).get.velocity shouldBe 10.0
     f.sent.collectFirst { case d: model.hybrid.entity.event.data.MicroEnterLinkData => d.initialVelocity }
       .get shouldBe Some(10.0)
+  }
+
+  it should "reject a driver factor that exceeds the supported boundary remainder step" in {
+    val road=newMicroState("314",speedLimit=36.0).copy(length=1.5,
+      microTicksPerGlobalTick=1,carryMicroRemainder=true)
+    val f=newFixture("314",road)
+    intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(1,"314"),
+      enterData(1).copy(speedFactor=2)))
+    f.handler.handleEnterLinkMicro(event(1,"314"),enterData(1).copy(speedFactor=.8))
+    f.getState().vehiclesByLane.values.flatten.head.speedFactor shouldBe .8
   }
 
   it should "select the exit speed for the actual next road and preserve it in the lane checkpoint" in {

@@ -6,7 +6,7 @@ import model.hybrid.entity.state.enumeration.LaneTypeEnum
 /** Configuration for a single lane in a microscopic link.
   *
   * @param laneId
-  *   Unique identifier for the lane within the link (0-indexed from left)
+  *   Unique identifier for the lane within the link (0-indexed from right (right-hand traffic))
   * @param laneType
   *   Type of lane (NORMAL, BUS_LANE, BIKE_LANE, etc.)
   * @param speedLimit

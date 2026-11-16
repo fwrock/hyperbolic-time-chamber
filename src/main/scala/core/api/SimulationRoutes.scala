@@ -114,6 +114,17 @@ object SimulationRoutes {
                 )
               }
             },
+            path("prepare") {
+              post {
+                entity(as[String]) { body =>
+                  val (configFile, settings) = parseStartBody(body)
+                  SimulationController.prepare(configFile, settings) match {
+                    case Right(_) => complete(ok("""{"status":"ok","message":"Local shard regions prepared"}"""))
+                    case Left(err) => complete(conflict(s"""{"status":"error","message":${jsonString(err)}}"""))
+                  }
+                }
+              }
+            },
             path("start") {
               post {
                 entity(as[String]) {

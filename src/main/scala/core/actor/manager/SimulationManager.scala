@@ -265,7 +265,7 @@ class SimulationManager(
 
   private def startLoadData(): Unit =
     if (!loadDataStarted && poolTimeManager != null && reporters != null &&
-      (!config.getBoolean("htc.load-balance-manager.enabled") || loadBalanceReady)) {
+      (!core.actor.manager.loadbalance.allocation.AllocationRuntime(context.system).enabled || loadBalanceReady)) {
       loadDataStarted = true
       PhaseMetrics.recordPhaseStart("loading")
       loadManager = createSingletonLoadManager()
@@ -456,12 +456,7 @@ class SimulationManager(
 
   /** Creates the LoadBalanceManager singleton if enabled in configuration. */
   private def createLoadBalanceManagerIfEnabled(): Unit = {
-    val loadBalanceEnabled =
-      try
-        config.getBoolean("htc.load-balance-manager.enabled")
-      catch {
-        case _: Exception => false
-      }
+    val loadBalanceEnabled = core.actor.manager.loadbalance.allocation.AllocationRuntime(context.system).enabled
 
     if (loadBalanceEnabled) {
       val settings = core.actor.manager.loadbalance.strategy.LoadBalanceSettings.read(config)

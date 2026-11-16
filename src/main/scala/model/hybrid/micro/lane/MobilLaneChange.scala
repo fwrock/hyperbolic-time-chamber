@@ -39,7 +39,8 @@ case class MobilLaneChange(
   accelerationThreshold: Double = 0.1,
   biasToRight: Double = 0.2,
   laneChangeDuration: Double = 2.0,
-  carFollowingModel: CarFollowingModel = KraussModel()
+  carFollowingModel: CarFollowingModel = KraussModel(),
+  decisionTimeStep: Double = 0.1
 ) extends LaneChangeModel {
 
   override def modelName: String = "MOBIL"
@@ -57,6 +58,7 @@ case class MobilLaneChange(
     randomSeed: Long
   ): LaneChangeDecision = {
 
+    require(decisionTimeStep.isFinite && decisionTimeStep > 0, "invalid MOBIL decision interval")
     if (!isLaneAvailable(vehicleState, targetLane, laneRestrictions)) {
       return LaneChangeDecision(false, None, "Lane restricted", 0.0)
     }
@@ -70,8 +72,7 @@ case class MobilLaneChange(
         val requiredDeceleration = calculateRequiredDeceleration(
           followerVel,
           vehicleState.velocity,
-          gap,
-          vehicleState.vehicleLength
+          gap
         )
         requiredDeceleration <= safeDeceleration
       case None => true
@@ -116,7 +117,7 @@ case class MobilLaneChange(
       case (_, gap, followerVel) =>
         leaderInTargetLane match {
           case Some((_, leaderGap, leaderVel)) =>
-            calculateFollowerAcceleration(followerVel, leaderVel, leaderGap)
+            calculateFollowerAcceleration(followerVel, leaderVel, gap + leaderGap + vehicleState.vehicleLength)
           case None => 0.5
         }
     }.getOrElse(0.0)
@@ -160,7 +161,7 @@ case class MobilLaneChange(
       maxDeceleration = vehicleState.maxDeceleration,
       minGap = vehicleState.minGap,
       reactionTime = vehicleState.reactionTime,
-      deltaT = 0.1
+      deltaT = decisionTimeStep
     )
 
     carFollowingModel.calculateAcceleration(
@@ -169,7 +170,7 @@ case class MobilLaneChange(
       safeVelocity = safeVel,
       maxAcceleration = vehicleState.maxAcceleration,
       maxDeceleration = vehicleState.maxDeceleration,
-      deltaT = 0.1,
+      deltaT = decisionTimeStep,
       randomSeed = randomSeed
     )
   }
@@ -194,10 +195,9 @@ case class MobilLaneChange(
   private def calculateRequiredDeceleration(
     followerVel: Double,
     leaderVel: Double,
-    gap: Double,
-    leaderLength: Double
+    gap: Double
   ): Double = {
-    val effectiveGap = max(0.1, gap - leaderLength)
+    val effectiveGap = max(0.1, gap)
     val relativeVel = followerVel - leaderVel
 
     if (relativeVel <= 0) return 0.0

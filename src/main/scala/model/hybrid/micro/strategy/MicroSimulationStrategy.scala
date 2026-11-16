@@ -51,7 +51,13 @@ trait MicroSimulationStrategy {
     signalAtExit: Option[TrafficSignalPhaseStateEnum] = None,
     downstreamLeaders: Map[Long, VehicleInLane] = Map.empty,
     stopLineGapM: Double = 0.0,
-    retainExits: Boolean = false
+    retainExits: Boolean = false,
+    laneChanging: model.hybrid.entity.state.model.LaneChangingConfig = model.hybrid.entity.state.model.LaneChangingConfig(),
+    laneConnections: List[model.hybrid.entity.state.model.LaneConnection] = Nil,
+    laneRestrictions: Map[Int,String] = Map.empty,
+    movementSignals: Map[(Long,Int),TrafficSignalPhaseStateEnum] = Map.empty,
+    laneChangedFn: (Long,Int,Int,String) => Unit = (_,_,_,_) => (),
+    observedFn: (VehicleInLane,VehicleInLane,Int,Double) => Unit = (_,_,_,_) => ()
   ): Seq[MicroVehicleUpdate]
 
   /** Initializes the strategy with link-specific parameters. Called once when the link enters MICRO
@@ -131,5 +137,6 @@ case class MicroVehicleUpdate(
   leaderVelocity: Double,
   safeVelocity: Double,
   reachedEnd: Boolean = false,
-  remainingStepSeconds: Double = 0.0
+  remainingStepSeconds: Double = 0.0,
+  distanceTraveled: Option[Double] = None
 )

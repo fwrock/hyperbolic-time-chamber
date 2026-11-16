@@ -71,6 +71,27 @@ class LinkMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAnd
     TestActorRef(new TestLink(Properties(entityId = entityId)), s"$entityId-$nextEntitySuffix").underlyingActor
   }
 
+  "MESO capacity migration" should "carry pending admission and flow state through the real snapshot hooks" in {
+    import model.hybrid.entity.state.model.*
+    import model.hybrid.entity.event.data.EnterLinkData
+    import model.hybrid.entity.state.enumeration.ActorTypeEnum
+    import core.enumeration.CreationTypeEnum
+    val source=newTestLink("meso-source")
+    source.testSetState(freshState().copy(mesoCapacity=Some(MesoCapacityConfig(1800,2)),
+      mesoCapacityState=MesoCapacityState(credit= -0.5,creditTick=Some(10),wakeTick=Some(12),destinationVehicles=List(42),
+        entries=List(PendingMesoEntry(9,"hybrid.actor.Car",10,77,
+          EnterLinkData(ActorTypeEnum.Car,CreationTypeEnum.LoadBalancedDistributed,5,mesoOriginAtEnd=true))))))
+    val restored=newTestLink("meso-restored")
+    val snapshot=source.testBuildMigrationSnapshot()
+    restored.testApplyMigrationSnapshot(snapshot)
+    val state=core.util.JsonUtil.fromJson[LinkState](restored.testBuildMigrationSnapshot().stateJson)
+    state.mesoCapacityState.credit shouldBe -0.5
+    state.mesoCapacityState.wakeTick shouldBe Some(12)
+    state.mesoCapacityState.destinationVehicles shouldBe List(42L)
+    state.mesoCapacityState.entries.head.requestSeq shouldBe 77L
+    state.mesoCapacityState.entries.head.data.mesoOriginAtEnd shouldBe true
+  }
+
   "Link.buildMigrationSnapshot" should "capture entry ticks and waiting seconds for every registered vehicle" in {
     val link = newTestLink("link-1")
     link.testSetState(freshState())

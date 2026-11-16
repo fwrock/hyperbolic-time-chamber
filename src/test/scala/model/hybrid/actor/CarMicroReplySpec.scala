@@ -91,4 +91,22 @@ class CarMicroReplySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
 
     car.underlyingActor.testVelocity shouldBe originalVelocity
   }
+
+  "A delayed MICRO acknowledgement" should "ignore a superseded request identity without consuming the current wait" in {
+    val tm=TestProbe()
+    val car=TestActorRef(new TestCar(Properties(entityId="17",reporters=mutable.Map.empty,
+      timeManagers=mutable.Map(TimeManagerTypeEnum.TIME_WARP->tm.ref))),"17")
+    tm.awaitAssert(car.underlyingActor.testRecoveryFinished shouldBe true,5.seconds,10.millis)
+    car.underlyingActor.testPrepare()
+    car.underlyingActor.testInitializeHistory()
+    car ! SpontaneousEvent(tick=0,actorRef=tm.ref)
+    tm.expectMsgType[FinishEvent].awaitingReply shouldBe true
+    car ! ActorInteractionEvent(tick=1,lamportTick=1,actorRefId=42,shardRefId="hybrid.actor.Link",
+      actorPathRef="42",actorClassType="hybrid.actor.Link",resourceId="test",seq=1,
+      data=MicroEnterLinkData(42,SimulationModeEnum.MICRO,0,200,50,1,.1,10,
+        initialPosition=5.1,queuedWaitSeconds=.1,requestSeq=99),eventType="MicroEnterLink")
+    tm.expectNoMessage(50.millis)
+    car.underlyingActor.testHasReplyObligation shouldBe true
+    car.underlyingActor.testVelocity shouldBe None
+  }
 }

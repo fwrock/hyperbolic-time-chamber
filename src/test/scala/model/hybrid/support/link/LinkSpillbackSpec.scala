@@ -111,7 +111,7 @@ class LinkSpillbackSpec extends AnyFlatSpec with Matchers {
     var consumed = Vector.empty[String]
     val handler = new CarSignalHandler((_, _) => (), () => "11", () => tick, reporter,
       _ => (), _ => (), () => (), _ => (), _ => (), (_, _, d, _) => sent :+= d,
-      () => 0L, () => 9L, () => Some(3L), _ => (), _ => (), _ => (),
+      () => 0L, () => 9L, _ => (), _ => (), _ => (),
       consumeAwaitedReplyFn = key => consumed :+= key)
     handler.handleLinkAccess(model.hybrid.entity.event.node.LinkAccessData(Green, 10,
       capacityState = model.hybrid.entity.state.enumeration.LinkCapacityStateEnum.Full), s)

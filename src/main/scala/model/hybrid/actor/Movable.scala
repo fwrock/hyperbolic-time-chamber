@@ -235,6 +235,20 @@ abstract class Movable[T <: MovableState](
 
   protected def microEntryVelocity: Double = 0.0
   protected def microEntryRemainderSeconds: Double = 0.0
+  protected def microAcceleration: Option[Double] = None
+  protected def microDeceleration: Option[Double] = None
+  protected def microMinGap: Option[Double] = None
+  protected def microReactionTime: Option[Double] = None
+  protected def microMaxSpeed: Option[Double] = None
+  protected def microSpeedFactor: Double = 1.0
+  protected def microDesiredMaxSpeed: Option[Double] = None
+  protected def microSigma: Double = 0.0
+  protected def microRandomSeed: Long = 0L
+  protected def microLc2013: model.hybrid.entity.state.model.Lc2013Parameters = model.hybrid.entity.state.model.Lc2013Parameters()
+  protected def microEntryPosition: Double = 0.0
+  protected def microArrivalPosition: Option[Double] = None
+  protected def microEntryLane: Option[Int] = None
+  protected def mesoOriginAtEnd: Boolean = false
 
   protected def enterLink(): Unit = {
     if (state.movableCurrentPath.isEmpty) {
@@ -266,7 +280,21 @@ abstract class Movable[T <: MovableState](
                 actorCreationType = LoadBalancedDistributed,
                 initialVelocity = microEntryVelocity,
                 nextLinkId = getNextLink,
-                initialRemainderSeconds = microEntryRemainderSeconds
+                initialRemainderSeconds = microEntryRemainderSeconds,
+                maxAcceleration = microAcceleration,
+                maxDeceleration = microDeceleration,
+                minGap = microMinGap,
+                reactionTime = microReactionTime,
+                maxSpeed = microMaxSpeed,
+                speedFactor = microSpeedFactor,
+                desiredMaxSpeed = microDesiredMaxSpeed,
+                sigma = microSigma,
+                randomSeed = microRandomSeed,
+                lc2013 = microLc2013,
+                initialPosition = microEntryPosition,
+                arrivalPosition = microArrivalPosition,
+                preferredLane = microEntryLane,
+                mesoOriginAtEnd = mesoOriginAtEnd
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed

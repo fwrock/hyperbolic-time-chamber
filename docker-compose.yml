@@ -160,7 +160,7 @@ services:
       # Disabled by default for single-node local testing. Enable for multi-node.
       HTC_LOAD_BALANCE_ENABLED: "false"
       # Strategy: "hybrid" (geo+type), "geo-affinity", "type-aware", "default", "disabled"
-      HTC_LOAD_BALANCE_STRATEGY: "type-aware"
+      HTC_LOAD_BALANCE_STRATEGY: "default"
       # Geographic affinity weight for GeoAffinity/Hybrid strategy target scoring.
       # 0.0 = pure load balance; 1.0 = pure geographic affinity; 0.4 recommended.
       HTC_LB_GEO_AFFINITY_WEIGHT: "0.4"

@@ -13,7 +13,7 @@ import org.interscity.htc.model.hybrid.util.CityMapUtil
 /** Handles traffic signal and downstream-link-capacity interaction for Car actors.
   *
   * Responsibilities:
-  *   - requestSignalState: determine if at destination or request link access from node
+  *   - requestSignalState: determine if the route is depleted or request link access from node
   *   - handleLinkAccess: react to Green/Red/capacity-Full response (or a later, unsolicited
   *     capacity-freed grant), guard against stale duplicates
   */
@@ -30,7 +30,6 @@ class CarSignalHandler(
   private val sendMessageFn: (Long, String, AnyRef, String) => Unit,
   private val getCurrentNodeFn: () => Long,
   private val getNextLinkFn: () => Long,
-  private val getTripDestinationFn: () => Option[Long],
   private val setSignalWaitUntilTickFn: Option[Tick] => Unit,
   private val setSignalWaitNeedsReverifyFn: Boolean => Unit,
   private val onSignalWaitFn: Long => Unit,
@@ -40,7 +39,9 @@ class CarSignalHandler(
   private val isTimeWarpFn: () => Boolean = () => false,
   private val registerAwaitedReplyFn: (String, String) => Unit = (_, _) => (),
   private val isAwaitingReplyFn: (String, String, Long) => Boolean = (_, _, _) => false,
-  private val consumeAwaitedReplyFn: String => Unit = _ => ()
+  private val consumeAwaitedReplyFn: String => Unit = _ => (),
+  private val lookupNodeFn: Long => Option[(Long, String)] = id =>
+    CityMapUtil.nodesById.get(id).map(node => (node.id, node.classType))
 ) {
 
   /** Correlation key for the one outstanding `RequestLinkAccessData` -> `LinkAccessData` exchange
@@ -64,20 +65,23 @@ class CarSignalHandler(
       return
     }
 
-    if (getTripDestinationFn().getOrElse(state.destination) == currentPathNode || routeDepleted) {
+    // A fixed route may revisit its destination node before its final road.
+    if (routeDepleted) {
       leavingLinkFn()
     } else {
       state.status = WaitingSignalState
       val nodeId = getCurrentNodeFn()
       if (nodeId != 0L) {
-        CityMapUtil.nodesById.get(nodeId) match {
-          case Some(node) =>
+        lookupNodeFn(nodeId) match {
+          case Some((nodeEntityId, nodeClassType)) =>
             val linkId = getNextLinkFn()
             if (linkId != 0L) {
               sendMessageFn(
-                node.id,
-                node.classType,
-                RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported, approachLinkId = state.currentPath.map(_._1).getOrElse(0L)),
+                nodeEntityId,
+                nodeClassType,
+                RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported,
+                  approachLinkId = state.currentPath.map(_._1).getOrElse(0L), approachLane = state.journey.lastMicroLane,
+                  followingLinkId = state.bestRoute.flatMap(_.iterator.drop(1).nextOption()).map(_._1).getOrElse(0L)),
                 EventTypeEnum.RequestLinkAccess.toString
               )
               registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
@@ -163,6 +167,7 @@ class CarSignalHandler(
     } else {
       completeCapacityWait(state)
       data.junctionLink.foreach(path => state.movablePendingJunctionPath = Some(path))
+      data.outgoingLane.foreach(lane => state.journey.pendingRoadLane = Some(lane))
       val tick = currentTickFn()
       state.status = WaitingSignal
       setSignalWaitUntilTickFn(Some(tick))

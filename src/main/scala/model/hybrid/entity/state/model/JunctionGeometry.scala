@@ -38,7 +38,12 @@ final case class JunctionGeometry(
   }
 }
 
-final case class JunctionMovement(incomingLinkId: Long, outgoingLinkId: Long, connectorLinkId: Long) {
+final case class JunctionMovement(incomingLinkId: Long, outgoingLinkId: Long, connectorLinkId: Long,
+                                  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
+                                  incomingLane: Option[Int] = None,
+                                  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
+                                  outgoingLane: Option[Int] = None,
+                                  continuationLanes: List[LaneConnection] = Nil) {
   require(connectorLinkId != incomingLinkId && connectorLinkId != outgoingLinkId,
     "junction connector must be distinct from its roads")
 }

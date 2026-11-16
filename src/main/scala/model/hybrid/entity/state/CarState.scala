@@ -64,7 +64,20 @@ case class CarState(
   override val size: Double,
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
   var microState: Option[MicroCarState] = None,
-  var journey: CarJourneyState = CarJourneyState()
+  var journey: CarJourneyState = CarJourneyState(),
+  microAcceleration: Option[Double] = None,
+  microDeceleration: Option[Double] = None,
+  microDepartPosition: Double = 0.0,
+  microArrivalPosition: Option[Double] = None,
+  microMinGap: Option[Double] = None,
+  microReactionTime: Option[Double] = None,
+  microMaxSpeed: Option[Double] = None,
+  microSpeedFactor: Double = 1.0,
+  microDesiredMaxSpeed: Option[Double] = None,
+  microSigma: Double = 0.0,
+  microRandomSeed: Long = 0L,
+  microLc2013: model.Lc2013Parameters = model.Lc2013Parameters(),
+  mesoOriginLinkId: Option[Long] = None
 ) extends MovableState(
       startTick = startTick,
       reporterType = reporterType,
@@ -74,6 +87,18 @@ case class CarState(
       actorType = actorType,
       size = size
     ) {
+
+  require(microAcceleration.forall(v => v.isFinite && v > 0), "invalid car MICRO acceleration")
+  require(microDeceleration.forall(v => v.isFinite && v > 0), "invalid car MICRO deceleration")
+  require(microDepartPosition.isFinite && microDepartPosition >= 0, "invalid car departure position")
+  require(microArrivalPosition.forall(v => v.isFinite && v >= 0), "invalid car arrival position")
+  require(microMinGap.forall(v => v.isFinite && v >= 0), "invalid car MICRO minimum gap")
+  require(microReactionTime.forall(v => v.isFinite && v > 0), "invalid car MICRO reaction time")
+  require(microMaxSpeed.forall(v => v.isFinite && v > 0), "invalid car MICRO maximum speed")
+  require(microSpeedFactor.isFinite && microSpeedFactor > 0, "invalid car MICRO speed factor")
+  require(microDesiredMaxSpeed.forall(v => v.isFinite && v > 0), "invalid car MICRO desired maximum speed")
+  require(microSigma.isFinite && microSigma >= 0 && microSigma <= 1, "invalid car MICRO sigma")
+  require(microLc2013 != null, "missing LC2013 parameters")
 
   def bestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
   def bestRoute_=(v: Option[mutable.Queue[(Long, Long)]]): Unit = movableBestRoute = v

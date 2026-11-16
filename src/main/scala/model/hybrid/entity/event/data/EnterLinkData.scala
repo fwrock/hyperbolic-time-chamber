@@ -15,5 +15,20 @@ final case class EnterLinkData(
   actorSize: Double,
   initialVelocity: Double = 0.0,
   nextLinkId: Long = 0L,
-  initialRemainderSeconds: Double = 0.0
+  initialRemainderSeconds: Double = 0.0,
+  maxAcceleration: Option[Double] = None,
+  maxDeceleration: Option[Double] = None,
+  initialPosition: Double = 0.0,
+  arrivalPosition: Option[Double] = None,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
+  preferredLane: Option[Int] = None,
+  minGap: Option[Double] = None,
+  reactionTime: Option[Double] = None,
+  maxSpeed: Option[Double] = None,
+  speedFactor: Double = 1.0,
+  desiredMaxSpeed: Option[Double] = None,
+  sigma: Double = 0.0,
+  randomSeed: Long = 0L,
+  lc2013: model.hybrid.entity.state.model.Lc2013Parameters = model.hybrid.entity.state.model.Lc2013Parameters(),
+  mesoOriginAtEnd: Boolean = false
 ) extends BaseEventData

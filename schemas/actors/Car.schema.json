@@ -135,6 +135,143 @@
               "x-htc-group": "Registros",
               "x-htc-widget": "json",
               "x-htc-editable": false
+            },
+            "microAcceleration": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Optional MICRO acceleration bound; otherwise use the actor-type default.",
+              "exclusiveMinimum": 0,
+              "x-htc-unit": "m/s²"
+            },
+            "microDeceleration": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0,
+              "x-htc-unit": "m/s²"
+            },
+            "microDepartPosition": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0,
+              "x-htc-unit": "m"
+            },
+            "microArrivalPosition": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Position on the final road; null traverses the full road.",
+              "minimum": 0,
+              "x-htc-unit": "m"
+            },
+            "microMinGap": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Minimum bumper gap for MICRO following; null keeps the native 2 m default.",
+              "x-htc-unit": "m",
+              "minimum": 0
+            },
+            "microReactionTime": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "MICRO following reaction time; null keeps the native 1 s default.",
+              "x-htc-unit": "s",
+              "exclusiveMinimum": 0
+            },
+            "microMaxSpeed": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Vehicle speed cap combined with each road limit; null uses the road limit.",
+              "x-htc-unit": "m/s",
+              "exclusiveMinimum": 0
+            },
+            "microSpeedFactor": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 1,
+              "description": "Driver multiplier on road and desired speed limits; the vehicle maximum speed remains an independent cap."
+            },
+            "microDesiredMaxSpeed": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0,
+              "x-htc-unit": "m/s",
+              "description": "Optional desired speed cap before applying microSpeedFactor; null uses the road limit."
+            },
+            "microSigma": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0,
+              "description": "Krauss-style driver imperfection, drawn every MICRO physics step. Zero preserves deterministic following."
+            },
+            "microRandomSeed": {
+              "type": "integer",
+              "default": 0,
+              "description": "Checkpointed seed for vehicle/physical-step random draws; independent of message order and JVM placement."
+            },
+            "microLc2013": {
+              "type": "object",
+              "description": "Per-vehicle parameters for the native LC2013-style supported subset; select Lc2013 on the Link.",
+              "additionalProperties": false,
+              "properties": {
+                "strategic": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 1
+                },
+                "cooperative": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 1
+                },
+                "speedGain": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 1
+                },
+                "keepRight": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 1
+                },
+                "lookaheadLeft": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "default": 2
+                },
+                "speedGainRight": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 0.1
+                },
+                "speedGainRemainTimeSeconds": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 20
+                },
+                "keepRightTimeSeconds": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "default": 5
+                }
+              }
+            },
+            "mesoOriginLinkId": {
+              "type": "integer",
+              "description": "Optional initial source link whose end is a zero-distance, flow-limited MESO origin boundary."
             }
           }
         }

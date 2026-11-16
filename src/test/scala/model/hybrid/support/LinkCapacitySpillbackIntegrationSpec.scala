@@ -126,7 +126,6 @@ class LinkCapacitySpillbackIntegrationSpec extends AnyFlatSpec with Matchers {
       sendMessageFn = (_, _, _, _) => (),
       getCurrentNodeFn = () => currentNodeId,
       getNextLinkFn = () => targetLinkId,
-      getTripDestinationFn = () => Some(destNodeId),
       setSignalWaitUntilTickFn = _ => (),
       setSignalWaitNeedsReverifyFn = _ => (),
       onSignalWaitFn = _ => ()

@@ -90,22 +90,8 @@ object HyperbolicTimeChamber {
       system.log.info(s"Member is removed: ${cluster.selfMember}")
     }
 
-    try
-      SimulationUtil.startShards(system)
+    try SimulationUtil.startShardsAtBoot(system, core.api.SimulationController.isApiWaitEnabled)
     catch {
-      case e: Exception if core.api.SimulationController.isApiWaitEnabled =>
-        // API mode's whole point is to boot with no scenario chosen yet (see
-        // ConfigApiServer's doc: "Simulation is IDLE — send POST /api/v1/simulation/start to
-        // begin"), but startShards() needs a scenario's actorsDataSources to know which
-        // classTypes to register as shard regions. Previously this threw uncaught here and
-        // crashed the whole JVM before the REST API (already bound above via
-        // ConfigApiServer.start) ever became reachable. Deferred: SimulationController.start
-        // calls startShards again once a scenario is actually resolved (from the /start
-        // request's configFile, or ApiConfigRegistry after /api/v1/scenarios/{name}/load).
-        system.log.warning(
-          s"startShards deferred: no scenario configured yet at boot (${e.getMessage}). " +
-            "Shard regions will be registered when a scenario is started via the API."
-        )
       case scala.util.control.NonFatal(error) =>
         system.log.error(error, "[SIMULATION-FAILED] Shard startup rejected: {}", error.getMessage)
         MetricsServer.stop()

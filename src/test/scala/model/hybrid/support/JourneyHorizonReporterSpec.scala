@@ -6,6 +6,19 @@ import org.scalatest.matchers.should.Matchers
 import scala.collection.mutable
 
 class JourneyHorizonReporterSpec extends AnyFlatSpec with Matchers {
+  "a queued origin at the horizon" should "remain not departed without inventing duration or distance" in {
+    val rows=mutable.Map.empty[String,Map[String,Any]]
+    JourneyHorizonReporter.report("car","42",1,4,-1,1000,0,None,(data,label)=>rows(label)=data,.1,scheduledDeparture=Some(10))
+    val trip=rows("sumo_tripinfo")
+    trip("depart") shouldBe -1.0
+    trip("arrival") shouldBe -1L
+    trip("duration") shouldBe -1.0
+    trip("routeLength") shouldBe 0.0
+    trip("completion_reason") shouldBe "not_departed"
+    trip("scheduledDepart") shouldBe 1.0
+    trip("actualDepart") shouldBe -1.0
+    trip("departDelay") shouldBe -1.0
+  }
   "horizon summaries" should "censor arrival and retain only confirmed distance for every vehicle type" in {
     Seq("car", "bus", "subway", "bicycle", "motorcycle").foreach { kind =>
       val rows = mutable.Map.empty[String, Map[String, Any]]

@@ -17,7 +17,8 @@ case class SimulationReportEvent(
   realTimeMs: Long,
   label: Option[String] = None,
   dataJson: String,
-  scenarioId: String = ""
+  scenarioId: String = "",
+  node: String = ""
 )
 
 object SimulationReportEventAvro {
@@ -31,7 +32,8 @@ object SimulationReportEventAvro {
     realTimeMs: Long,
     label: String,
     dataJson: String,
-    scenarioId: String = ""
+    scenarioId: String = "",
+    node: String = ""
   )
 
   def serialize(event: SimulationReportEvent): Try[Array[Byte]] =
@@ -45,7 +47,8 @@ object SimulationReportEventAvro {
         realTimeMs   = event.realTimeMs,
         label        = event.label.getOrElse(""),
         dataJson     = event.dataJson,
-        scenarioId   = event.scenarioId
+        scenarioId   = event.scenarioId,
+        node         = event.node
       )
       JsonUtil.toJson(wire).getBytes("UTF-8")
     }
@@ -63,7 +66,8 @@ object SimulationReportEventAvro {
         realTimeMs   = wire.realTimeMs,
         label        = if (wire.label.isEmpty) None else Some(wire.label),
         dataJson     = wire.dataJson,
-        scenarioId   = Option(wire.scenarioId).getOrElse("")
+        scenarioId   = Option(wire.scenarioId).getOrElse(""),
+        node         = Option(wire.node).getOrElse("")
       )
     }
 
@@ -79,7 +83,8 @@ object SimulationReportEventAvro {
       lamportTick  = event.lamportTick,
       realTimeMs   = System.currentTimeMillis(),
       label        = Option(event.label),
-      dataJson     = dataJson
+      dataJson     = dataJson,
+      node         = org.interscity.htc.core.cluster.NodeIdentity.originLabel(event.node)
     )
   }
 }

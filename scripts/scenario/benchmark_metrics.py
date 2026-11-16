@@ -32,7 +32,8 @@ class ProcessMonitor:
         self.output = Path(output)
         self.started = started if started is not None else time.monotonic()
         self.interval, self.ports = interval, tuple(metrics_ports)
-        self.pids, self.samples, self.prometheus = [], [], []
+        self.pids, self.samples = [], []
+        self.sampling_error = None
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
@@ -47,25 +48,44 @@ class ProcessMonitor:
                     hostCpu=Path('/proc/stat').read_text().splitlines()[0])
 
     def _run(self):
-        while not self.stop_event.is_set():
-            self.samples.append(self.sample())
-            for port in self.ports:
-                at = time.monotonic()-self.started
+        try:
+            self.output.mkdir(parents=True, exist_ok=True)
+            # Keep only one metrics response in memory, including during finalization.
+            with (self.output/'prometheus-samples.json').open('w') as stream:
+                stream.write('[')
+                first = True
                 try:
-                    with urllib.request.urlopen(f'http://127.0.0.1:{port}/metrics', timeout=.04) as response:
-                        body = response.read(2_000_000).decode()
-                    self.prometheus.append(dict(seconds=at, port=port, text=body))
-                except (OSError, TimeoutError):
-                    pass
-            self.stop_event.wait(max(0, self.interval-(time.monotonic()-self.started-self.samples[-1]['seconds'])))
+                    while not self.stop_event.is_set():
+                        self.samples.append(self.sample())
+                        for port in self.ports:
+                            at = time.monotonic()-self.started
+                            try:
+                                with urllib.request.urlopen(f'http://127.0.0.1:{port}/metrics', timeout=.04) as response:
+                                    body = response.read(2_000_000).decode()
+                            except (OSError, TimeoutError):
+                                continue
+                            if not first:
+                                stream.write(',\n')
+                            json.dump(dict(seconds=at, port=port, text=body), stream)
+                            stream.flush()
+                            first = False
+                        self.stop_event.wait(max(0, self.interval-(time.monotonic()-self.started-self.samples[-1]['seconds'])))
+                finally:
+                    stream.write(']\n')
+        except Exception as error:
+            self.sampling_error = error
 
     def finish(self):
         self.stop_event.set()
         self.thread.join(2)
+        if self.thread.is_alive():
+            raise RuntimeError('Process monitor did not stop; measurements are incomplete')
+        if self.sampling_error is not None:
+            raise RuntimeError('Process monitor failed to retain measurements') from self.sampling_error
         self.samples.append(self.sample())
         self.output.mkdir(parents=True, exist_ok=True)
-        (self.output/'process-samples.json').write_text(json.dumps(self.samples))
-        (self.output/'prometheus-samples.json').write_text(json.dumps(self.prometheus))
+        with (self.output/'process-samples.json').open('w') as stream:
+            json.dump(self.samples, stream)
         return summarize_samples(self.samples)
 
 
