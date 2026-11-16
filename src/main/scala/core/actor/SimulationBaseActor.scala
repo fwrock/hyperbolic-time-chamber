@@ -353,7 +353,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     */
   protected lazy val rollbackHandler: RollbackHistoryHandler = new RollbackHistoryHandler(
     checkpointInterval =
-      SimulatorSettingsRegistry.getInt("htc.time-warp.checkpoint-interval", context.system.settings.config),
+      SimulatorSettingsRegistry.getInt("htc.time-warp.checkpoint-interval", org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)),
     captureSnapshotFn = () => buildMigrationSnapshot(),
     restoreSnapshotFn = snapshot => applyMigrationSnapshot(snapshot),
     replayEventFn = logged => replayLoggedEvent(logged)
@@ -831,6 +831,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       }
     }
     onStart()
+    if (state != null && runtimeBorn && !usesConservativeRuntime) reportPlacement(startTick)
   }
 
   /** `Identify` for the shard-routed case (`LoadBalancedDistributed`, e.g. `Node`/`Link`/`RailLink`)
@@ -961,6 +962,8 @@ abstract class SimulationBaseActor[T <: BaseState](
         s"$entityId: state is NULL after deserialization (class=${getClass.getSimpleName}). Will still send ACK."
       )
     }
+
+    if (state != null && runtimeBorn && !usesConservativeRuntime) reportPlacement(startTick)
 
     if (requiresPostLoadRegistration && runtimeBirth.isEmpty && creatorManager != null && state != null) {
       creatorManager ! NeedsPostLoadRegistrationEvent(
@@ -1529,6 +1532,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       require(usesConservativeRuntime && sender() == currentTimeManager && runtimeEpoch.contains(epoch) &&
         runtimeMigrationRequest.contains(requestId), "invalid conservative migration resume")
       runtimeMigrationRequest = None
+      reportPlacement(currentTick, Some(requestId))
     case RuntimeJoined(epoch, coordinator, owner, distributed) =>
       require(accountedCoordinator.contains(coordinator), "runtime registration changed coordinator")
       runtimeEpoch = Some(epoch)
@@ -1537,6 +1541,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       if (distributed) runtimeFrozen = true
       if (usesConservativeRuntime) {
         runtimeFrozen = true
+        reportPlacement(startTick, Some(""))
         flushBufferedReportsUpTo(Long.MaxValue)
       }
       initializationAcks.foreach { case (target, ack) => target ! ack }
@@ -1862,6 +1867,7 @@ abstract class SimulationBaseActor[T <: BaseState](
           if (event.snapshot.conservativeRuntime.isEmpty && shouldRegisterOnTimeManagerAfterMigration()) registerOnTimeManager()
           onFinishInitialize()
           onMigrationRestore()
+          if (event.snapshot.conservativeRuntime.isEmpty) reportPlacement(currentTick)
           event.snapshot.conservativeRuntime.foreach { checkpoint =>
             conservativeRestore = Some(event)
             context.actorSelection(checkpoint.ownerPath) ! RebindConservativeProcess(checkpoint.epoch, checkpoint.requestId,
@@ -2008,6 +2014,24 @@ abstract class SimulationBaseActor[T <: BaseState](
       currentTick = previousTick
       horizonReporting = None
     }
+  }
+
+  private def reportPlacement(tick: Long, migrationRequest: Option[String] = None): Unit = {
+    if ((reporters == null || reporters.isEmpty || state == null) && migrationRequest.isEmpty) return
+    val event = ReportEvent(entityId = entityId, tick = tick, lamportTick = getLamportClock,
+      data = Map("actor_type" -> cachedSimpleName), label = "actor_placement")
+    val available = Option(reporters).getOrElse(mutable.Map.empty[ReportTypeEnum, ActorRef])
+    val selected = Option(state).flatMap(s => Option(s.getReporterType)).getOrElse(cachedDefaultReportType)
+    if (usesConservativeRuntime && migrationRequest.nonEmpty) {
+      val defaultTarget = if (defaultReportsEnabled) available.get(selected).orElse(available.get(cachedDefaultReportType)).toVector else Vector.empty
+      val targets = if (runtimeBorn) (defaultTarget ++ available.get(ReportTypeEnum.kafka)).distinct else Vector.empty
+      currentTimeManager ! PublishConservativePlacement(runtimeEpoch.get, migrationRequest.get, targets, event)
+      return
+    }
+    report(event)
+    val defaultTarget = available.get(selected).orElse(available.get(cachedDefaultReportType))
+    available.get(ReportTypeEnum.kafka).filter(ref => !defaultReportsEnabled || !defaultTarget.contains(ref))
+      .foreach(ref => reportToTarget(event, ref))
   }
 
   /** Reports data to the reporting system.

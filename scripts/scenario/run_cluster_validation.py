@@ -119,6 +119,18 @@ def run(args):
     monitor = ProcessMonitor(root, started, metrics_ports=[args.base_port + 20 + i for i in range(args.nodes)]) if measuring else None
     completion_seconds = None
     measurement = None
+    measurement_error = None
+
+    def finish_measurement():
+        nonlocal monitor, measurement, measurement_error
+        if monitor:
+            try:
+                measurement = monitor.finish()
+            except Exception as error:
+                measurement_error = repr(error)
+            finally:
+                monitor = None
+
     extra = args.extra_config.read_text() if args.extra_config else ""
     try:
         if relay:
@@ -176,9 +188,7 @@ htc.report-manager.json.batch-size=1
             stopped, completed, failed = execution_outcome(runtime_logs)
             if stopped or failed:
                 completion_seconds = time.monotonic() - started
-                if monitor:
-                    measurement = monitor.finish()
-                    monitor = None
+                finish_measurement()
                 time.sleep(2)
                 break
             if args.kill_node is not None and not killed and any(args.kill_after in log for log in runtime_logs):
@@ -198,8 +208,7 @@ htc.report-manager.json.batch-size=1
         # Keep lifecycle teardown out of execution acceptance while retaining full raw logs.
         (root / "runtime.log").write_text("\n".join(runtime_logs))
     finally:
-        if monitor:
-            measurement = monitor.finish()
+        finish_measurement()
         for proc in processes:
             if proc.poll() is None:
                 proc.terminate()
@@ -231,14 +240,14 @@ htc.report-manager.json.batch-size=1
         result["measurement"] = dict(measurement or {}, completionSeconds=completion_seconds,
             deadlineExceeded=completion_seconds is None and time.monotonic()-started >= args.timeout,
             sampleIntervalSeconds=.25, cpuIds=cpu_ids, totalMaxHeapGiB=4,
-            runtime=parse_runtime("\n".join(runtime_logs)))
+            runtime=parse_runtime("\n".join(runtime_logs)), error=measurement_error)
     if relay:
         result["relay"] = dict(connections=relay.connections, chunks=relay.chunks, bytes=relay.bytes)
     (root / "result.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))
     if args.kill_node is not None:
         return 0 if killed and failed and not completed and digest == initial_digest else 1
-    return 0 if stopped and completed and not failed and not any(engine_errors) and digest == initial_digest else 1
+    return 0 if stopped and completed and not failed and not any(engine_errors) and digest == initial_digest and measurement_error is None else 1
 
 
 def main():

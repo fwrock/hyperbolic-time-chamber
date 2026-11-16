@@ -18,6 +18,9 @@ import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPha
 import org.interscity.htc.model.hybrid.entity.state.model.{ Phase, SignalState }
 import org.interscity.htc.core.metrics.model.hybrid.TrafficSignalMetrics
 import org.interscity.htc.model.hybrid.support.trafficsignal.TrafficSignalPhaseHandler
+import org.interscity.htc.model.hybrid.support.trafficsignal.SignalProgramHandler
+import core.entity.event.ActorInteractionEvent
+import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficDetectionData
 
 import scala.collection.mutable
 
@@ -28,6 +31,11 @@ class TrafficSignal(
     ) {
 
   private val simulationEnd: Tick = TrafficSignal.simulationEndTick
+
+  private lazy val programHandler = new SignalProgramHandler(
+    () => state, () => getEntityId,
+    (id,shard,data,eventType) => sendMessageTo(id,shard,data,eventType),
+    (data,label) => report(data,label), tick => onFinishSpontaneous(tick), simulationEnd)
 
   private lazy val phaseHandler = new TrafficSignalPhaseHandler(
     getStateFn     = () => state,
@@ -50,7 +58,13 @@ class TrafficSignal(
   }
 
   override protected def actSpontaneous(event: SpontaneousEvent): Unit =
-    phaseHandler.handlePhaseTransition(event.tick)
+    if (state.program.nonEmpty) programHandler.step(event.tick)
+    else phaseHandler.handlePhaseTransition(event.tick)
+
+  override def actInteractWith(event: ActorInteractionEvent): Unit = event.data match {
+    case data: TrafficDetectionData => programHandler.detection(event.tick,data)
+    case _ => logWarn(s"Unhandled traffic signal input: ${event.data.getClass.getSimpleName}")
+  }
 }
 
 object TrafficSignal {

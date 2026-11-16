@@ -6,10 +6,8 @@ import org.interscity.htc.model.hybrid.entity.event.data.{ MicroLeaveLinkData, M
 import org.interscity.htc.model.hybrid.entity.state.LinkState
 import org.interscity.htc.model.hybrid.micro.strategy.{
   DefaultMicroSimulationStrategy,
-  LaneChangeStrategy,
   MicroSimulationStrategy,
-  MicroVehicleUpdate,
-  NoLaneChangeStrategy
+  MicroVehicleUpdate
 }
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
@@ -35,11 +33,11 @@ class LinkMicroSimulationHandler(
   getSignalAtExitFn:           () => Option[TrafficSignalPhaseStateEnum],
   metricsReporter:             LinkMetricsReporter,
   logDebugFn:                  String => Unit,
-  downstreamLeadersFn: Tick => Map[Long, model.hybrid.entity.state.model.VehicleInLane] = _ => Map.empty
+  downstreamLeadersFn: Tick => Map[Long, model.hybrid.entity.state.model.VehicleInLane] = _ => Map.empty,
+  reportFn: (Map[String,Any],String) => Unit = (_,_) => ()
 ) {
 
   private val microSimulationStrategy: MicroSimulationStrategy = DefaultMicroSimulationStrategy()
-  private val laneChangeStrategy: LaneChangeStrategy           = NoLaneChangeStrategy()
 
   def initializeMicroMode(): Unit = {
     logDebugFn(s"Initializing MICRO mode for link ${getLinkStateFn().from} -> ${getLinkStateFn().to}")
@@ -52,11 +50,6 @@ class LinkMicroSimulationHandler(
       speedLimit    = s.speedLimit,
       lanes         = s.lanes,
       microTimeStep = s.microTimeStep
-    )
-    laneChangeStrategy.initialize(
-      linkLength = s.length,
-      speedLimit = s.speedLimit,
-      lanes      = s.lanes
     )
     logDebugFn(s"✓ MICRO mode initialized: id=${entityIdFn()} lanes=${s.lanes} length=${s.length}m timeStep=${s.microTimeStep}s")
   }
@@ -79,6 +72,7 @@ class LinkMicroSimulationHandler(
 
     val state = getLinkStateFn()
     if (state.isMicroMode && state.totalVehiclesInMicro > 0) {
+      val observations = mutable.Map.empty[Long,Double]
       val updates = microSimulationStrategy.executeSubTick(
         vehiclesByLane           = mutable.Map.from(state.vehiclesByLane),
         subTick                  = 0,
@@ -91,8 +85,29 @@ class LinkMicroSimulationHandler(
         signalAtExit             = getSignalAtExitFn(),
         downstreamLeaders        = downstreamLeadersFn(tick),
         stopLineGapM             = state.stopLineGapM,
-        retainExits              = state.downstreamSpillback
+        retainExits              = state.downstreamSpillback,
+        laneChanging = state.laneChanging,
+        laneConnections = state.laneConnections,
+        laneRestrictions = state.laneConfigurations.map(c => c.laneId -> c.laneType.toString.toLowerCase).toMap,
+        movementSignals = state.signalControls.flatMap(s =>
+          (if (s.laneIds.isEmpty) List(-1) else s.laneIds).map(l => (s.targetLinkId,l) -> s.at(tick))).toMap,
+        laneChangedFn = (vehicle,from,to,reason) => reportFn(Map("vehicle_id" -> vehicle,
+          "link_id" -> entityIdFn(),"from_lane" -> from,"to_lane" -> to,"reason" -> reason,"tick" -> tick),"lane_change"),
+        observedFn = (before,after,lane,start) => state.detectors.filter(_.laneId == lane).foreach { detector =>
+          val end = detector.positionMeters + detector.lengthMeters
+          if (after.position >= detector.positionMeters && before.rearPosition <= end) {
+            val elapsed = if (after.rearPosition > end && after.position > before.position)
+              state.microTimeStep * math.max(0.0,math.min(1.0,(end-before.rearPosition)/(after.position-before.position)))
+            else state.microTimeStep
+            val until = start + elapsed
+            observations.update(detector.id,math.max(until,observations.getOrElse(detector.id,Double.NegativeInfinity)))
+          }
+        }
       )
+      state.detectors.filter(d => observations.contains(d.id)).foreach { detector =>
+        sendMessageFn(detector.controllerId,"hybrid.actor.TrafficSignal",
+          model.hybrid.entity.event.data.signal.TrafficDetectionData(detector.id,observations(detector.id)),"TrafficDetection")
+      }
       updates.foreach { u =>
         if (u.reachedEnd) sendMicroLeaveLinkToVehicle(u)
         else sendMicroUpdateToVehicle(u)
@@ -115,6 +130,9 @@ class LinkMicroSimulationHandler(
 
   def sendMicroLeaveLinkToVehicle(update: MicroVehicleUpdate): Unit = {
     val state = getLinkStateFn()
+    val entryPosition = state.vehiclesByLane.valuesIterator.flatMap(_.iterator)
+      .find(_.actorId == update.vehicleId).map(_.entryPosition).getOrElse(0.0)
+    val distanceTraveled = update.distanceTraveled.getOrElse(math.max(0.0, update.position - entryPosition))
     if (!state.downstreamSpillback)
       state.vehiclesByLane.foreach { case (_, q) => q.dequeueAll(_.actorId == update.vehicleId) }
 
@@ -126,7 +144,7 @@ class LinkMicroSimulationHandler(
     val secondsPerGlobalTick = state.microTicksPerGlobalTick * state.microTimeStep
     val avgSpeed =
       if (elapsedTicks > 0 && secondsPerGlobalTick > 0)
-        state.length / (elapsedTicks * secondsPerGlobalTick)
+        distanceTraveled / (elapsedTicks * secondsPerGlobalTick)
       else update.velocity
 
     sendMessageFn(
@@ -137,12 +155,13 @@ class LinkMicroSimulationHandler(
         finalPosition      = update.position,
         finalVelocity      = update.velocity,
         travelTime         = elapsedTicks * secondsPerGlobalTick,
-        distanceTraveled   = state.length,
+        distanceTraveled   = distanceTraveled,
         averageSpeed       = avgSpeed,
         waitingTimeSeconds = accWaiting,
         junctionPosition = state.junctionGeometry.map(_.positionAt(update.position)),
         remainingStepSeconds = if (state.carryMicroRemainder) update.remainingStepSeconds else 0.0,
-        retainedInLane = state.downstreamSpillback
+        retainedInLane = state.downstreamSpillback,
+        finalLane = Some(update.currentLane)
       ),
       "MicroLeaveLink"
     )

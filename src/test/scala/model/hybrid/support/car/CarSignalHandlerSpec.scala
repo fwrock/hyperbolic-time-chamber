@@ -19,12 +19,9 @@ import scala.collection.mutable
   * deregister-then-`scheduleEvent` re-entry, and the congestion-propagation link-capacity feature
   * (docs/CONGESTION_PROPAGATION_DESIGN.md).
   *
-  * `requestSignalState`'s message-send branch reads `CityMapUtil.nodesById` — a JVM-wide
-  * singleton with an eager `lazy val` that loads `city_map.json` from disk and throws when it's
-  * absent, with no seam to fake it in this shared test JVM (see `RaptorMultiModalEngineSpec`'s doc
-  * comment for the established precedent on why that branch isn't unit-tested directly here).
-  * What *is* fully testable, and is where the fix's behavior lives, is
-  * [[CarSignalHandler.handleLinkAccess]] — the reply-side half of the exchange. It now NEVER
+  * The node lookup is injected so fixed-route cycles exercise connector admission without
+  * loading the process-wide city map. [[CarSignalHandler.handleLinkAccess]] covers the
+  * reply-side half of the exchange. It NEVER
   * calls `onFinishSpontaneousFn` directly: the car fully deregistered from the TimeManager (a real
   * `onFinishSpontaneous(None)`, not a deferred safety-net suppression) before this reply could
   * ever arrive, so there's no pending spontaneous event left to resolve here. Instead, for
@@ -58,7 +55,8 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
     waitUntilTicks: mutable.ArrayBuffer[Option[Tick]],
     needsReverifyCalls: mutable.ArrayBuffer[Boolean],
     reported: mutable.ArrayBuffer[Map[String, Any]],
-    journeyReporter: CarJourneyReporter
+    journeyReporter: CarJourneyReporter,
+    sent: mutable.ArrayBuffer[AnyRef]
   )
 
   private def newFixture(currentTick: Tick = 100L): Fixture = {
@@ -68,6 +66,7 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
     val waitUntilTicks = mutable.ArrayBuffer.empty[Option[Tick]]
     val needsReverifyCalls = mutable.ArrayBuffer.empty[Boolean]
     val reported = mutable.ArrayBuffer.empty[Map[String, Any]]
+    val sent = mutable.ArrayBuffer.empty[AnyRef]
 
     val journeyState = model.hybrid.entity.state.CarJourneyState()
     val journeyReporter = new CarJourneyReporter(
@@ -91,16 +90,37 @@ class CarSignalHandlerSpec extends AnyFlatSpec with Matchers {
       leavingLinkFn = () => leavingLinkCalls += (()),
       logWarnFn = _ => (),
       logStaleEventDebugFn = _ => (),
-      sendMessageFn = (_, _, _, _) => (),
+      sendMessageFn = (_, _, data, _) => { sent += data; () },
       getCurrentNodeFn = () => 3L,
       getNextLinkFn = () => 100L,
-      getTripDestinationFn = () => Some(2L),
       setSignalWaitUntilTickFn = tick => waitUntilTicks += tick,
       setSignalWaitNeedsReverifyFn = v => needsReverifyCalls += v,
-      onSignalWaitFn = _ => ()
+      onSignalWaitFn = _ => (),
+      lookupNodeFn = id => Some(id -> "hybrid.actor.Node")
     )
 
-    Fixture(handler, finishCalls, scheduleEventCalls, leavingLinkCalls, waitUntilTicks, needsReverifyCalls, reported, journeyReporter)
+    Fixture(handler, finishCalls, scheduleEventCalls, leavingLinkCalls, waitUntilTicks, needsReverifyCalls, reported, journeyReporter, sent)
+  }
+
+  "requestSignalState" should "request the connector when a fixed route revisits its destination before the final road" in {
+    val f = newFixture()
+    val state = newCarState(status = Moving)
+    state.currentPath = Some(50L -> 2L)
+    state.bestRoute = Some(mutable.Queue(100L -> 3L, 101L -> 2L))
+    f.handler.requestSignalState(state)
+    f.leavingLinkCalls shouldBe empty
+    state.status shouldBe WaitingSignalState
+    val request = f.sent.head.asInstanceOf[model.hybrid.entity.event.data.vehicle.RequestLinkAccessData]
+    request.targetLinkId shouldBe 100L
+    request.approachLinkId shouldBe 50L
+    request.followingLinkId shouldBe 101L
+    f.finishCalls.toList shouldBe List(None)
+
+    val terminal = newFixture()
+    state.bestRoute = Some(mutable.Queue.empty)
+    terminal.handler.requestSignalState(state)
+    terminal.leavingLinkCalls should have size 1
+    terminal.sent shouldBe empty
   }
 
   "handleLinkAccess" should "ignore a reply when the car is neither WaitingSignalState nor WaitingCapacity (stale/duplicate guard)" in {

@@ -68,7 +68,7 @@ class SpatialDirectoryReplica(authority: ActorRef, address: Address) extends Act
 }
 
 class SpatialDirectoryRuntime(system: ExtendedActorSystem) extends Extension {
-  val enabled: Boolean = system.settings.config.getBoolean("htc.load-balance-manager.enabled")
+  val enabled: Boolean = AllocationRuntime(system).enabled
   private lazy val proxy: ActorRef = {
     val name = "spatial-directory"
     system.actorOf(ClusterSingletonManager.props(Props(classOf[SpatialDirectoryAuthority]), PoisonPill,

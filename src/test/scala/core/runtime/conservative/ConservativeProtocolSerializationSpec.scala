@@ -41,6 +41,7 @@ class ConservativeProtocolSerializationSpec extends AnyFlatSpec with Matchers wi
       ExecuteConservativeBatch(1L, 10L, 2L), ConservativeBatchProcessed(1L, None, 0, terminal = true),
       ConservativeBatchComplete(1L),
       PublishConservativeReport(owner, ReportEvent("2", 10L, 1L, data = "state", label = "value")),
+      PublishConservativePlacement("epoch", "request", Vector(owner), ReportEvent("2", 10L, 1L, data = Map("actor_type" -> "Car"), label = "actor_placement")),
       StopConservativeRuntime(1L, truncated = false), RetireConservativeProcess(1L, truncated = false),
       ConservativeProcessRetired(1L), ConservativeRuntimeStopped(1L, Set(owner)))
     val codec = SerializationExtension(system)

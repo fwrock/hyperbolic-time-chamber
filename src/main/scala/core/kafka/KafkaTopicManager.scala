@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
   */
 object KafkaTopicManager {
 
-  private val config = ConfigFactory.load()
+  private def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.effective
 
   private def bootstrapServers: String =
     try

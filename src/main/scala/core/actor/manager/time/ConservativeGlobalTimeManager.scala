@@ -110,7 +110,7 @@ class ConservativeGlobalTimeManager(
   }
 
   override def onStart(): Unit = {
-    val config = context.system.settings.config
+    val config = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)
     metricsLogInterval =
       SimulatorSettingsRegistry.getInt("htc.time-manager.metrics-log-interval", config).toLong
     selectiveBarrierLogInterval =

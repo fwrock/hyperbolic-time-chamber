@@ -77,7 +77,7 @@ abstract class GlobalTimeManagerBase(
   protected def localTimeManagerProps(): Props
 
   protected def createTimeManagersPool(): Unit = {
-    val config = context.system.settings.config
+    val config = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)
     val totalInstances =
       SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
     val maxInstancesPerNode =

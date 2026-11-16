@@ -7,6 +7,16 @@ evidence. This page consolidates the recovered MICRO/SUMO work, its
 scientific interpretation and the remaining work. Dated experiment records
 remain the source of detailed measurements; older failures are preserved.
 
+The opt-in [native traffic controls](TRAFFIC_CONTROL.md) added on 2026-11-14 introduce
+ordered fixed/gap-actuated stages, movement/lane-specific signals and configurable MICRO MOBIL
+lane changes. Their bounded operational checks and Berlin run are separate engineering evidence;
+the frozen scientific v1/v2 campaigns below were not rerun or reclassified for those options.
+Legacy inputs keep their previous defaults. The separate native-control
+[v3 protocol](../scripts/scenario/native_traffic_controls_protocol_v3.json) and
+[acceptance](../scripts/scenario/native_traffic_controls_acceptance_v3_20261114.json)
+cover a 0.1 s runtime clock and source-correct upstream/internal detector placement on two
+fresh reserved cases. Both operational cases pass; this adds no scientific equivalence claim.
+
 ## Current outcome
 
 Engineering verification and the predeclared v2 numerical comparisons pass.
@@ -75,9 +85,11 @@ Current evidence:
 | Optimistic stale publications | Ignore a late positive observation after rollback undoes its subscription; preserve ordinary transport, anti-message and commit accounting | [Rollback repair](MICRO_CROSS_LINK_FOLLOWING.md#exchange-and-ordering), `222f2d0` |
 
 `Link.actSpontaneous` delegates physics to `LinkMicroSimulationHandler` and
-`DefaultMicroSimulationStrategy`. The active default is simplified Krauss
-car-following with `NoLaneChangeStrategy`. The presence of other model classes
-does not establish integrated MOBIL lane changing in this path.
+`DefaultMicroSimulationStrategy`. The active default is simplified Krauss car-following with lane changing disabled.
+The opt-in `LinkState.laneChanging.model = Mobil` path now executes safe adjacent-lane
+changes and strategic turn preparation inside that strategy. The frozen studies below
+used the disabled path; see [native traffic controls](TRAFFIC_CONTROL.md) for the new
+configuration and its separate operational acceptance.
 
 Boundary observations use ordinary fire-and-forget `sendMessageTo` exchanges.
 Snapshots are immutable; subscriptions, publication sequence and two tick cohorts

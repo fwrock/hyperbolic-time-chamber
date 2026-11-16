@@ -65,7 +65,7 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
   private var acceleratedAt: Option[(Long, Long)] = None
   protected def simulationMetrics: SimulationMetricSet = SimulationMetrics
   protected def timeWarpMetrics: TimeWarpMetricSet = TimeWarpMetrics
-  protected lazy val executionLimits: OptimisticExecutionLimits = OptimisticExecutionLimits.fromConfig(context.system.settings.config)
+  protected lazy val executionLimits: OptimisticExecutionLimits = OptimisticExecutionLimits.fromConfig(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config))
   protected def recordRetention(round: Long, retained: RuntimeRetention): Unit = {
     timeWarpMetrics.checkpoints.set(retained.checkpoints.toDouble)
     timeWarpMetrics.events.set(retained.events.toDouble)
@@ -150,7 +150,7 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
       loadedThrough = Long.MinValue
       require(event.lookAheadTicks > 0L, "input look-ahead must be positive")
       val configuredWindow = SimulatorSettingsRegistry.get("htc.time-warp.input-window-ticks")
-        .fold(context.system.settings.config.getLong("htc.time-warp.input-window-ticks"))(_.toLong)
+        .fold(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getLong("htc.time-warp.input-window-ticks"))(_.toLong)
       require(configuredWindow > 0L, "optimistic input window must be positive")
       lookAhead = math.min(event.lookAheadTicks, configuredWindow)
       event.ackTo.foreach(_ ! ProgressiveLoadManagerRegisteredEvent(event.lookAheadTicks))
@@ -168,7 +168,9 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
       require((phase == Loading || phase == Enrolling) && event.epoch == epoch &&
         event.window == request.window && inputReady.isEmpty, "stale/duplicate input window completion")
       require(producerActor.contains(sender()), "input producer did not establish its actor identity")
-      require(event.loadedThrough >= request.fromTick && event.loadedThrough <= request.throughTick &&
+      // Coverage may pass the requested span only across a gap the producer proved empty.
+      val maxCoverage = if (event.actorsCreated == 0L) Long.MaxValue else request.throughTick
+      require(event.loadedThrough >= request.fromTick && event.loadedThrough <= maxCoverage &&
         event.actorsCreated >= 0L, "invalid input coverage")
       inputReady = Some(event)
       maybeCompleteInput()
@@ -281,7 +283,7 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
     pendingStart = None
     logInfo(s"[OPTIMISTIC-LIMITS] maxAheadTicks=${executionLimits.maxAheadTicks} maxUncommittedEvents=${executionLimits.maxUncommittedEvents} maxEventsPerTurn=${executionLimits.maxEventsPerTurn} fossilCollection=${executionLimits.fossilCollection}")
     workers.foreach(_ ! StartLocalRuntime(initialTick, horizon, executionLimits, loadedThrough))
-    val interval = SimulatorSettingsRegistry.getInt("htc.time-warp.termination-heartbeat-interval-ms", context.system.settings.config).millis
+    val interval = SimulatorSettingsRegistry.getInt("htc.time-warp.termination-heartbeat-interval-ms", org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)).millis
     heartbeat = Some(context.system.scheduler.scheduleWithFixedDelay(interval, interval, self, RequestRuntimeRound())(context.dispatcher))
     if (isPaused) beginRound()
   }
@@ -295,7 +297,7 @@ class AccountedOptimisticGlobalTimeManager(duration: Tick, manager: ActorRef)
   }
   private def maybeCompleteInput(): Unit = if (inputReady.nonEmpty && registrations.isEmpty && waitingJoins.isEmpty) {
     val ready = inputReady.get
-    loadedThrough = if (ready.closed) Long.MaxValue else ready.loadedThrough
+    loadedThrough = if (ready.closed) Long.MaxValue else math.min(ready.loadedThrough, horizon)
     inputClosed = ready.closed
     inputReady = None
     inputRequest = None

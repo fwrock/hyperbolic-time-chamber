@@ -68,6 +68,9 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private var migration: Option[FreezeConservativeMigration] = None
   private val frozenProcesses = mutable.Map.empty[LogicalProcessId, FrozenProcess]
   private var migrationStarted = false
+  private val pendingInitialPlacements = mutable.Set.empty[ActorRef]
+  private var migrationResumeTarget: Option[ActorRef] = None
+  private val pendingMigrationPlacements = mutable.Set.empty[ActorRef]
   private val pendingMigrationAcks = mutable.Set.empty[ActorRef]
   protected def createRuntimeBirthInitializer(target: LogicalProcessId, origin: RuntimeBirthOrigin, data: RuntimeBirthData): ActorRef =
     context.actorOf(RuntimeBirthInitializer.props(self, coordinator, target, origin, data))
@@ -138,6 +141,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       val process = Process(id, join.ref, join.identity, handle, join.incarnation)
       processes(id) = process
       byRef(join.ref) = process
+      pendingInitialPlacements.add(join.ref)
       byHandle(handle) = process
       context.watch(join.ref)
       registerOwnedProcess(join.identity.copy(id = handle), join.initialWake, join.identity)
@@ -281,10 +285,27 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       reports.add(id)
       target ! CommittedReportDelivery(epoch, id, report, self)
     }
+    case e: PublishConservativePlacement => protect {
+      checkEpoch(e.epoch)
+      if (e.requestId.isEmpty) require(pendingInitialPlacements.remove(sender()), "placement outside authorized registration")
+      else require(migrationResumeTarget.nonEmpty && migration.exists(_.requestId == e.requestId) &&
+        pendingMigrationPlacements.remove(sender()), "placement outside authorized migration resume")
+      require(byRef.contains(sender()) && e.event.entityId == byRef(sender()).id.id.toString &&
+        e.event.label == "actor_placement", "invalid migration placement identity")
+      e.targets.distinct.foreach { target =>
+        val id = nextToken()
+        reports.add(id)
+        target ! CommittedReportDelivery(epoch, id, e.event, self)
+      }
+      completeMigrationResume()
+      completeRegistrationFences()
+      reportReady()
+    }
     case DeliveryAccepted(run, id) => protect {
       checkEpoch(run)
       require(reports.remove(id), "unknown report receipt")
       sinks.add(sender())
+      completeMigrationResume()
       completeBatch()
       completeStop()
     }
@@ -332,6 +353,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       if (frozen.replacement.isEmpty) {
         val old = process.ref
         byRef.remove(old)
+        pendingInitialPlacements.remove(old)
         readyInputs.remove(old).foreach(order => readyInputs(sender()) = order)
         if (blockedProcesses.remove(old)) blockedProcesses.add(sender())
         if (terminalProcesses.remove(old)) terminalProcesses.add(sender())
@@ -357,11 +379,11 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       require(sender() == coordinator && migration.exists(_.requestId == e.requestId) && pendingMigrationAcks.isEmpty &&
         retiring.isEmpty, "resume outside acknowledged migration")
       require(frozenProcesses.values.forall(f => !f.stopAuthorized || f.replacement.nonEmpty), "resume before source replacement")
+      require(migrationResumeTarget.isEmpty, "duplicate migration resume")
+      migrationResumeTarget = Some(sender())
+      pendingMigrationPlacements ++= frozenProcesses.valuesIterator.map(_.process.ref)
       frozenProcesses.values.foreach(f => f.process.ref ! EndConservativeProcessMigration(epoch, e.requestId))
-      frozenProcesses.clear()
-      migration = None
-      migrationStarted = false
-      sender() ! ConservativeMigrationResumed(epoch, e.requestId)
+      completeMigrationResume()
     }
     case Terminated(ref) if retiringInFlight.contains(ref) => protect {
       retiredRefs.add(ref)
@@ -379,6 +401,17 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   }
 
   private def protect(body: => Unit): Unit = try body catch { case NonFatal(e) => fail(e) }
+  private def completeMigrationResume(): Unit = migrationResumeTarget.foreach { target =>
+    if (pendingMigrationPlacements.isEmpty && reports.isEmpty) {
+      val requestId = migration.get.requestId
+      frozenProcesses.clear()
+      migration = None
+      migrationStarted = false
+      migrationResumeTarget = None
+      target ! ConservativeMigrationResumed(epoch, requestId)
+    }
+  }
+
   private def completeMigrationFreeze(): Unit = migration.foreach { request =>
     if (retiring.isEmpty && !migrationStarted) {
       migrationStarted = true
@@ -442,6 +475,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     // The model receipt precedes physical stop. DeathWatch closes the transport flush as well.
     if (retiring.get(ref).contains(round)) {
       retiring.remove(ref)
+      pendingInitialPlacements.remove(ref)
       val process = byRef.remove(ref).get
       processes.remove(process.id)
       byHandle.remove(process.handle)

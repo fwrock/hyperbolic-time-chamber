@@ -34,4 +34,5 @@ enum EventTypeEnum:
     ModeDecisionQuery,
     ModeDecisionReply,
     SubscribeMicroBoundary,
-    MicroBoundaryUpdate
+    MicroBoundaryUpdate,
+    TrafficDetection

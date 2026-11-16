@@ -89,7 +89,11 @@ class Link(
   override protected def internStateStrings(s: LinkState): LinkState =
     s.copy(
       from = s.from,
-      to   = s.to
+      to   = s.to,
+      pendingMicroEntries = s.pendingMicroEntries.map(p => p.copy(shardId=core.util.StringPool.intern(p.shardId))),
+      mesoCapacityState = s.mesoCapacityState.copy(
+        entries=s.mesoCapacityState.entries.map(p => p.copy(shardId=StringPool.intern(p.shardId))),
+        exits=s.mesoCapacityState.exits.map(p => p.copy(shardId=StringPool.intern(p.shardId))))
     )
 
   /** Tracks when each vehicle entered the link (for travel time calculation).
@@ -170,12 +174,12 @@ class Link(
 
   /** Configuration: interval between dynamic cost publications (ticks) */
   private val costPublishInterval: Int =
-    try com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.publish-interval")
+    try org.interscity.htc.core.api.SimulatorSettingsRegistry.effective.getInt("htc.routing.link-cost.publish-interval")
     catch { case _: Exception => 10 }
 
   /** Configuration: TTL for cached dynamic costs (ticks) */
   private val cacheTtl: Int =
-    try com.typesafe.config.ConfigFactory.load().getInt("htc.routing.link-cost.cache-ttl")
+    try org.interscity.htc.core.api.SimulatorSettingsRegistry.effective.getInt("htc.routing.link-cost.cache-ttl")
     catch { case _: Exception => 60 }
 
   private lazy val metricsReporter = new LinkMetricsReporter(
@@ -230,7 +234,8 @@ class Link(
     getSignalAtExitFn             = () => signalForMicroIntervalEndingAt(currentTick),
     metricsReporter               = metricsReporter,
     logDebugFn                    = msg => logDebug(msg),
-    downstreamLeadersFn           = tick => followingHandler.leaders(tick)
+    downstreamLeadersFn           = tick => followingHandler.leaders(tick),
+    reportFn = (data,label) => report(data,label)
   )
 
   private lazy val vehicleFlowHandler = new LinkVehicleFlowHandler(
@@ -251,7 +256,25 @@ class Link(
     metricsReporter             = metricsReporter,
     findVehicleLaneFn           = id => microSimHandler.findVehicleLane(id),
     findLeastOccupiedLaneFn     = () => microSimHandler.findLeastOccupiedLane(),
-    logDebugFn                  = msg => logDebug(msg)
+    logDebugFn                  = msg => logDebug(msg),
+    reportFn                    = (data,label) => report(data,label)
+  )
+
+  private lazy val mesoCapacityHandler = new model.hybrid.support.link.LinkMesoCapacityHandler(
+    stateFn=() => state,setStateFn=s => state=s,tickFn=() => currentTick,linkIdFn=() => getEntityId.toLong,
+    sendFn=(id,shard,data,eventType) => sendMessageTo(entityId=id,shardId=shard,data=data,
+      eventType=eventType,actorType=LoadBalancedDistributed),
+    scheduleFn=tick => scheduleEvent(tick),reportFn=(data,label) => report(data,label),
+    enteredFn=id => {
+      vehicleEntryTick.put(id,currentTick)
+      vehicleWaitingSeconds.getOrElseUpdate(id,0.0)
+      metricsReporter.onVehicleLoaded(isMicro=false)
+    },
+    leftFn=id => {
+      val entered=vehicleEntryTick.remove(id)
+      vehicleWaitingSeconds.remove(id)
+      metricsReporter.onVehicleArrived(isMicro=false,travelTime=entered.map(t => (currentTick-t).toDouble).getOrElse(0.0))
+    }
   )
 
   override def onInitialize(event: InitializeEvent): Unit = {
@@ -281,7 +304,7 @@ class Link(
           )
       )
     val nodeId = dependencyOpt.map(_.id).getOrElse(state.from)
-    sendMessageTo(
+    if (state.mesoCapacity.isEmpty) sendMessageTo(
       entityId  = nodeId,
       shardId   = "hybrid.actor.Node",
       data      = RegisterLinkCapacityData(linkId = getEntityId.toLong, capacity = state.capacity.toInt),
@@ -299,9 +322,22 @@ class Link(
       case d: MicroBoundaryUpdateData => followingHandler.receive(event.actorRefId, d.snapshot)
       case d: LinkSignalStateData =>
         // The tick-t MICRO batch integrates (t-1, t]; a phase effective at t governs the next interval.
-        if (event.tick != signalAtExitSinceTick) previousSignalAtExit = signalAtExit
-        signalAtExitSinceTick = event.tick
-        signalAtExit = Some(d.phase)
+        def applyMovement(target: Long,lanes: List[Int],phase: TrafficSignalPhaseStateEnum): Unit = {
+          val old=state.signalControls.find(s => s.targetLinkId == target && s.laneIds == lanes)
+            .getOrElse(model.hybrid.entity.state.model.LinkMovementSignal(target,lanes))
+          val updated=old.copy(phase=phase,
+            previousPhase=if (event.tick == old.effectiveTick) old.previousPhase else old.phase,effectiveTick=event.tick)
+          state=state.copy(signalControls=state.signalControls.filterNot(s => s.targetLinkId == target && s.laneIds == lanes) :+ updated)
+        }
+        d.targetLinkId match {
+          case Some(target) => applyMovement(target,d.laneIds,d.phase)
+          case None =>
+            if (event.tick != signalAtExitSinceTick) previousSignalAtExit = signalAtExit
+            signalAtExitSinceTick = event.tick
+            signalAtExit = Some(d.phase)
+        }
+        d.updates.foreach(change => applyMovement(change.targetLinkId,change.laneIds,change.phase))
+
       case _ =>
         logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
     }
@@ -320,12 +356,20 @@ class Link(
     */
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
     // logInfo(s"[LINK] actSpontaneous tick=$currentTick id=$getEntityId =${state.isMicroMode} vehicles=${if (state.isMicroMode) state.totalVehiclesInMicro else 0}")
+    if (state.mesoCapacity.nonEmpty) {
+      onFinishSpontaneous(mesoCapacityHandler.onTick())
+      return
+    }
     if (!state.isMicroMode) {
       microTickScheduled = false
       onFinishSpontaneous(None)
       return
     }
 
+    if (state.pendingMicroEntries.nonEmpty) {
+      metricsReporter.ensureSummaryTick(currentTick)
+      vehicleFlowHandler.drainMicroEntries()
+    }
     val vehicleCount = state.totalVehiclesInMicro
     val hasVehicles = vehicleCount > 0
 
@@ -346,8 +390,9 @@ class Link(
     microSimHandler.handleGlobalTick(currentTick)
     followingHandler.publish()
 
-    val hasVehiclesAfterTick = state.totalVehiclesInMicro > 0
+    val hasVehiclesAfterTick = state.totalVehiclesInMicro > 0 || state.pendingMicroEntries.nonEmpty
     if (hasVehiclesAfterTick) {
+      microTickScheduled = true
       emptyGraceTick = 0
       onFinishSpontaneous(Some(currentTick + 1))
     } else {
@@ -368,14 +413,18 @@ class Link(
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "enter", vehicleId = event.actorRefId.toString,
+        linkId = getEntityId, eventType = (if (state.mesoCapacity.nonEmpty) "entry_request" else "enter"), vehicleId = event.actorRefId.toString,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = state.registered.size
       ),
       "vehicle_link_flow"
     )
     if (state.isMicroMode) vehicleFlowHandler.handleEnterLinkMicro(event, data)
-    else vehicleFlowHandler.handleEnterLinkMeso(event, data)
+    else if (state.mesoCapacity.nonEmpty) mesoCapacityHandler.enter(event,data)
+    else {
+      require(!data.mesoOriginAtEnd,"origin-end admission requires separate MESO capacity")
+      vehicleFlowHandler.handleEnterLinkMeso(event,data)
+    }
     followingHandler.observeNextRoad(data.nextLinkId)
     followingHandler.publish()
   }
@@ -388,13 +437,14 @@ class Link(
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(
-        linkId = getEntityId, eventType = "leave", vehicleId = event.actorRefId.toString,
+        linkId = getEntityId, eventType = (if (state.mesoCapacity.nonEmpty) "leave_request" else "leave"), vehicleId = event.actorRefId.toString,
         actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
         vehicleCountOnLink = vehiclesRemaining
       ),
       "vehicle_link_flow"
     )
-    vehicleFlowHandler.handleLeaveLink(event, data, wasRegistered)
+    if (state.mesoCapacity.nonEmpty) mesoCapacityHandler.leave(event,data)
+    else vehicleFlowHandler.handleLeaveLink(event, data, wasRegistered)
     followingHandler.publish()
   }
   /** Handles link destruction on simulation termination.

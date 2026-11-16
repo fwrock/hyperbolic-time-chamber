@@ -27,5 +27,6 @@ case class LinkAccessData(
   queuePosition: Int = 0,
   capacityState: LinkCapacityStateEnum = LinkCapacityStateEnum.Available,
   requestSeq: Long = 0L,
-  junctionLink: Option[model.hybrid.entity.state.model.PrecomputedRouteItem] = None
+  junctionLink: Option[model.hybrid.entity.state.model.PrecomputedRouteItem] = None,
+  outgoingLane: Option[Int] = None
 ) extends BaseEventData

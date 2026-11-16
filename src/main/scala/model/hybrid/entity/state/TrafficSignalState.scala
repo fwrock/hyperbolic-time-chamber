@@ -16,12 +16,14 @@ import scala.collection.mutable
   */
 case class TrafficSignalState(
   startTick: Tick,
-  cycleDuration: Tick,
-  offset: Tick,
-  nodes: List[Long],
-  phases: List[Phase],
+  cycleDuration: Tick = 1L,
+  offset: Tick = 0L,
+  nodes: List[Long] = Nil,
+  phases: List[Phase] = Nil,
   @JsonDeserialize(keyAs = classOf[java.lang.Long])
-  signalStates: mutable.Map[Long, SignalState]
+  signalStates: mutable.Map[Long, SignalState] = mutable.Map.empty,
+  program: Option[model.SignalProgram] = None,
+  var programRuntime: model.SignalProgramRuntime = model.SignalProgramRuntime()
 ) extends BaseState(startTick = startTick) {
-  override def getStartTick: Tick = startTick + offset
+  override def getStartTick: Tick = if (program.nonEmpty) startTick else startTick + offset
 }

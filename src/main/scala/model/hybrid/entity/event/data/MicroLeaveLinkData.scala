@@ -32,5 +32,6 @@ case class MicroLeaveLinkData(
   waitingTimeSeconds: Double = 0.0,
   junctionPosition: Option[model.hybrid.entity.state.model.MetricPoint] = None,
   remainingStepSeconds: Double = 0.0,
-  retainedInLane: Boolean = false
+  retainedInLane: Boolean = false,
+  finalLane: Option[Int] = None
 ) extends BaseEventData

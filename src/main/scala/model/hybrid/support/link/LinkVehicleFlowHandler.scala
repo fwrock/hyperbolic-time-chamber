@@ -37,7 +37,8 @@ class LinkVehicleFlowHandler(
   metricsReporter:                LinkMetricsReporter,
   findVehicleLaneFn:              Long => Option[Int],
   findLeastOccupiedLaneFn:        () => Int,
-  logDebugFn:                     String => Unit
+  logDebugFn:                     String => Unit,
+  reportFn: (Map[String,Any],String) => Unit = (_,_) => ()
 ) {
 
   /** Recomputes `currentSpeed`/`congestionFactor` from the link's current registered-vehicle
@@ -111,6 +112,24 @@ class LinkVehicleFlowHandler(
   }
 
   def handleEnterLinkMicro(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    val requestedState = getLinkStateFn()
+    require(data.maxAcceleration.forall(v => v.isFinite && v > 0.0), "invalid MICRO acceleration")
+    require(data.maxDeceleration.forall(v => v.isFinite && v > 0.0), "invalid MICRO deceleration")
+    require(data.minGap.forall(v => v.isFinite && v >= 0.0), "invalid MICRO minimum gap")
+    require(data.reactionTime.forall(v => v.isFinite && v > 0.0), "invalid MICRO reaction time")
+    require(data.maxSpeed.forall(v => v.isFinite && v > 0.0), "invalid MICRO maximum speed")
+    require(data.speedFactor.isFinite && data.speedFactor > 0.0, "invalid MICRO speed factor")
+    require(data.desiredMaxSpeed.forall(v => v.isFinite && v > 0.0), "invalid MICRO desired maximum speed")
+    require(data.sigma.isFinite && data.sigma >= 0 && data.sigma <= 1, "invalid MICRO sigma")
+    require(data.lc2013 != null, "missing LC2013 parameters")
+    require(!requestedState.carryMicroRemainder || requestedState.length >
+      model.hybrid.entity.state.model.MicroSpeed.limit(requestedState.speedLimit/3.6,
+        data.maxSpeed,data.speedFactor,data.desiredMaxSpeed)*requestedState.microTimeStep,
+      "MICRO remainder requires a Link longer than the driver-adjusted speed step")
+    require(data.initialPosition.isFinite && data.initialPosition >= 0.0 &&
+      data.initialPosition <= requestedState.length, "invalid MICRO departure position")
+    require(data.arrivalPosition.forall(v => v.isFinite && v >= data.initialPosition &&
+      v <= requestedState.length), "invalid MICRO arrival position")
     require(!getLinkStateFn().downstreamSpillback || data.actorType ==
       model.hybrid.entity.state.enumeration.ActorTypeEnum.Car,
       "downstream spillback currently supports Car entry only")
@@ -120,23 +139,68 @@ class LinkVehicleFlowHandler(
     require(data.initialRemainderSeconds == 0.0 || (getLinkStateFn().carryMicroRemainder &&
       data.initialRemainderSeconds <= getLinkStateFn().microTimeStep + 1e-9),
       "MICRO remainder cannot cross an incompatible physics interval")
+    require(data.preferredLane.forall(l => l >= 0 && l < requestedState.lanes), "invalid preferred entry lane")
     findVehicleLaneFn(event.actorRefId) match {
       case Some(existingLane) =>
-        sendMicroEnterAck(event, existingLane)
+        sendMicroEnterAck(event.actorRefId,event.shardRefId,existingLane,requestSeq=event.seq)
         if (!isMicroScheduledFn()) { setMicroScheduledFn(true); scheduleEventFn(currentTickFn() + 1) }
         return
       case None =>
     }
 
+    if (requestedState.microEntry.enabled) {
+      require(data.actorType == model.hybrid.entity.state.enumeration.ActorTypeEnum.Car,
+        "queued MICRO entry currently supports Car only")
+      val pending = model.hybrid.entity.state.model.PendingMicroEntry(event.actorRefId,
+        core.util.StringPool.intern(event.shardRefId),event.tick,event.seq,data)
+      requestedState.pendingMicroEntries =
+        (requestedState.pendingMicroEntries.filterNot(_.actorId == pending.actorId) :+ pending)
+          .sortBy(p => (p.requestedTick,p.actorId,p.requestSeq))
+      drainMicroEntries()
+      if (!isMicroScheduledFn()) { setMicroScheduledFn(true); scheduleEventFn(currentTickFn() + 1) }
+      return
+    }
+
+    admitMicroEntry(event.actorRefId,event.shardRefId,event.tick,event.seq,data)
+  }
+
+  def drainMicroEntries(): Unit = {
+    val state = getLinkStateFn()
+    if (!state.microEntry.enabled || state.pendingMicroEntries.isEmpty) return
+    if (state.vehiclesByLane.isEmpty) setLinkStateFn(state.initializeMicroLanes())
+    // Try independent lanes too: a held entry must not prevent traffic that can release its gap.
+    state.pendingMicroEntries.foreach { pending =>
+      val fresh = getLinkStateFn()
+      val lane = MicroEntryAdmission.lane(fresh,pending.data)
+      MicroEntryAdmission.reason(fresh,pending.data,lane) match {
+        case None =>
+          fresh.pendingMicroEntries = fresh.pendingMicroEntries.filterNot(_.actorId == pending.actorId)
+          val delayed = currentTickFn() > pending.requestedTick
+          admitMicroEntry(pending.actorId,pending.shardId,pending.requestedTick,pending.requestSeq,
+            if (delayed) pending.data.copy(initialVelocity=0.0,initialRemainderSeconds=0.0) else pending.data,
+            Some(lane))
+        case Some(reason) =>
+          if (pending.requestedTick == currentTickFn())
+            reportFn(Map("vehicle_id" -> pending.actorId,"link_id" -> entityIdFn(),
+              "requested_position" -> pending.data.initialPosition,"lane" -> lane,
+              "reason" -> reason,"tick" -> currentTickFn()),"micro_entry_queued")
+      }
+    }
+  }
+
+  private def admitMicroEntry(actorId: Long, shardId: String, requestedTick: Tick, requestSeq: Long,
+                             data: EnterLinkData, selectedLane: Option[Int] = None): Unit = {
+    val admissionTick = if (getLinkStateFn().microEntry.enabled) currentTickFn() else requestedTick
+
     metricsReporter.onVehicleLoaded(isMicro = true)
-    putVehicleEntryTickFn(event.actorRefId, event.tick)
-    getOrUpdateVehicleWaitingFn(event.actorRefId)
+    putVehicleEntryTickFn(actorId, admissionTick)
+    getOrUpdateVehicleWaitingFn(actorId)
 
     val state = getLinkStateFn()
-    if (!state.registered.containsActor(event.actorRefId)) {
+    if (!state.registered.containsActor(actorId)) {
       state.registered.add(LinkRegister(
-        actorId           = event.actorRefId,
-        shardId           = event.shardRefId,
+        actorId           = actorId,
+        shardId           = shardId,
         actorType         = data.actorType,
         actorSize         = data.actorSize,
         actorCreationType = data.actorCreationType
@@ -145,42 +209,63 @@ class LinkVehicleFlowHandler(
 
     if (state.vehiclesByLane.isEmpty) setLinkStateFn(state.initializeMicroLanes())
 
-    val assignedLane = findLeastOccupiedLaneFn()
-    val entryVelocity = math.min(data.initialVelocity, state.speedLimit / 3.6)
-    val requestedPosition = entryVelocity * data.initialRemainderSeconds
+    require(data.preferredLane.forall(l => l >= 0 && l < state.lanes), "invalid preferred entry lane")
+    val compatible = state.laneConnections.filter(_.outgoingLinkId == data.nextLinkId).map(_.fromLane).distinct
+    val assignedLane = selectedLane.getOrElse(data.preferredLane.getOrElse(if (compatible.nonEmpty)
+      compatible.minBy(l => (getLinkStateFn().vehiclesByLane.get(l).fold(0)(_.size),l)) else findLeastOccupiedLaneFn()))
+    val entryVelocity = math.min(data.initialVelocity, model.hybrid.entity.state.model.MicroSpeed.limit(
+      state.speedLimit/3.6,data.maxSpeed,data.speedFactor,data.desiredMaxSpeed))
+    val requestedPosition = math.min(data.arrivalPosition.getOrElse(state.length),
+      data.initialPosition + entryVelocity * data.initialRemainderSeconds)
     val availablePosition = getLinkStateFn().vehiclesByLane.get(assignedLane).toSeq.flatMap(_.iterator)
-      .map(v => v.position - v.vehicleLength - 2.0).minOption.getOrElse(state.length)
+      .map(v => v.position - v.vehicleLength - data.minGap.getOrElse(2.0)).minOption.getOrElse(state.length)
     require(!state.downstreamSpillback || availablePosition >= -1e-9,
       "MICRO spillback entry has no physical room; origin injection or handoff requires admission")
     val entryPosition = math.max(0.0, math.min(requestedPosition, availablePosition))
     val vehicle = VehicleInLane(
-      actorId         = event.actorRefId,
-      shardId         = event.shardRefId,
+      actorId         = actorId,
+      shardId         = shardId,
       position        = entryPosition,
       velocity        = if (entryPosition + 1e-9 < requestedPosition) 0.0 else entryVelocity,
       acceleration    = 0.0,
       vehicleLength   = data.actorSize,
-      entryTick       = event.tick,
-      maxAcceleration = data.actorType.microMaxAcceleration,
-      maxDeceleration = data.actorType.microMaxDeceleration,
+      entryTick       = admissionTick,
+      maxAcceleration = data.maxAcceleration.getOrElse(data.actorType.microMaxAcceleration),
+      maxDeceleration = data.maxDeceleration.getOrElse(data.actorType.microMaxDeceleration),
       exitSpeedLimitMps = state.exitSpeedLimitsMps.get(data.nextLinkId),
-      nextLinkId = data.nextLinkId
+      nextLinkId = data.nextLinkId,
+      entryPosition = math.min(data.initialPosition, entryPosition),
+      arrivalPosition = data.arrivalPosition,
+      minGap = data.minGap.getOrElse(2.0),
+      reactionTime = data.reactionTime.getOrElse(1.0),
+      maxSpeed = data.maxSpeed,
+      speedFactor = data.speedFactor,
+      desiredMaxSpeed = data.desiredMaxSpeed,
+      sigma = data.sigma,
+      randomSeed = data.randomSeed,
+      lc2013 = data.lc2013
     )
 
     getLinkStateFn().vehiclesByLane.get(assignedLane).foreach { queue =>
       VehicleInLane.insertFrontToBack(queue, vehicle)
     }
 
-    sendMicroEnterAck(event, assignedLane)
+    val waitSeconds = if (state.microEntry.enabled)
+      math.max(0L,currentTickFn()-requestedTick).toDouble * state.microTimeStep * state.microTicksPerGlobalTick else 0.0
+    sendMicroEnterAck(actorId,shardId,assignedLane,waitSeconds,requestSeq)
     if (!isMicroScheduledFn()) { setMicroScheduledFn(true); scheduleEventFn(currentTickFn() + 1) }
   }
 
-  def sendMicroEnterAck(event: ActorInteractionEvent, lane: Int): Unit = {
+  def sendMicroEnterAck(event: ActorInteractionEvent, lane: Int): Unit =
+    sendMicroEnterAck(event.actorRefId,event.shardRefId,lane,requestSeq=event.seq)
+
+  private def sendMicroEnterAck(actorId: Long, shardId: String, lane: Int,
+                               waitSeconds: Double = 0.0, requestSeq: Long = 0L): Unit = {
     val state = getLinkStateFn()
-    val vehicle = state.vehiclesByLane.get(lane).flatMap(_.find(_.actorId == event.actorRefId))
+    val vehicle = state.vehiclesByLane.get(lane).flatMap(_.find(_.actorId == actorId))
     val initialPosition = vehicle.map(_.position).getOrElse(0.0)
     sendMessageFn(
-      event.actorRefId, event.shardRefId,
+      actorId, shardId,
       MicroEnterLinkData(
         linkId             = entityIdFn().toLong,
         mode               = SimulationModeEnum.MICRO,
@@ -192,7 +277,9 @@ class LinkVehicleFlowHandler(
         ticksPerGlobalTick = state.microTicksPerGlobalTick,
         initialVelocity = vehicle.map(_.velocity),
         junctionPosition = state.junctionGeometry.map(_.positionAt(initialPosition)),
-        initialPosition = initialPosition
+        initialPosition = initialPosition,
+        queuedWaitSeconds = waitSeconds,
+        requestSeq = requestSeq
       ),
       "MicroEnterLink"
     )
@@ -204,6 +291,7 @@ class LinkVehicleFlowHandler(
     wasRegistered: Boolean
   ): Unit = {
     val state = getLinkStateFn()
+    state.pendingMicroEntries = state.pendingMicroEntries.filterNot(_.actorId == event.actorRefId)
     state.registered.removeActor(event.actorRefId)
     recomputeAndPublishMesoDynamics()
 

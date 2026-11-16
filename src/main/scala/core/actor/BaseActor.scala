@@ -43,7 +43,7 @@ abstract class BaseActor[T <: BaseState](
     with ActorLogging
     with Stash {
 
-  protected val config = ConfigFactory.load()
+  protected def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.effective
   private var isInitialized: Boolean = false
   private val snapShotInterval = 10000000
 

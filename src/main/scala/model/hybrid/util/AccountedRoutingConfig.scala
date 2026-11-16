@@ -10,7 +10,7 @@ import scala.jdk.CollectionConverters.*
 object AccountedRoutingConfig {
   val ActorClassType = "hybrid.actor.RoutingService"
 
-  private def config = ConfigFactory.load()
+  private def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.effective
 
   def enabled: Boolean =
     DynamicWeightCache.configuredStrategy.toLowerCase(Locale.ROOT) == "accounted"

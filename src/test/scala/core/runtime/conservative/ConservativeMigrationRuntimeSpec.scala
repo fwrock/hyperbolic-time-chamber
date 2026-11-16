@@ -106,6 +106,9 @@ class ConservativeMigrationRuntimeSpec extends AnyFlatSpec with Matchers with Be
       mutable.Map(ReportTypeEnum.parquet -> sink.ref), timeManagers = mutable.Map(TimeManagerTypeEnum.DISCRETE_EVENT -> worker),
       runtimeCoordinator = Some(gtm)))
     creator.expectMsgType[InitializeEntityAckEvent]
+    val initialPlacement = sink.expectMsgType[CommittedReportDelivery]
+    initialPlacement.event.label shouldBe "actor_placement"
+    sink.send(initialPlacement.ackTo, DeliveryAccepted(initialPlacement.epoch, initialPlacement.token))
     gtm ! StartSimulationTimeEvent(startTick = 0L)
     observer.expectMsg(("waiting", 0))
     val report = sink.expectMsgType[CommittedReportDelivery]
@@ -133,6 +136,9 @@ class ConservativeMigrationRuntimeSpec extends AnyFlatSpec with Matchers with Be
     control.send(gtm, MigrationCompleteNotifyEvent("stale"))
     observer.expectNoMessage(100.millis)
     control.send(gtm, MigrationCompleteNotifyEvent("freeze-one"))
+    val restoredPlacement = sink.expectMsgType[CommittedReportDelivery]
+    restoredPlacement.event.label shouldBe "actor_placement"
+    sink.send(restoredPlacement.ackTo, DeliveryAccepted(restoredPlacement.epoch, restoredPlacement.token))
     observer.expectMsg(("reply", 0L, 1))
     observer.expectMsg(("finished", 10L, 1))
     val drain = reports.expectMsgType[DrainRuntimeReports](5.seconds)

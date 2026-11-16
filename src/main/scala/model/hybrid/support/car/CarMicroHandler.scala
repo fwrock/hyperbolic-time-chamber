@@ -41,8 +41,12 @@ class CarMicroHandler(
   private var microUpdateReportCount: Long = 0L
 
   def handleMicroEnterLink(data: MicroEnterLinkData, state: CarState): Unit = {
+    require(data.queuedWaitSeconds.isFinite && data.queuedWaitSeconds >= 0.0, "invalid MICRO admission wait")
+    if (journeyReporter.sumoDepartTick.nonEmpty && data.queuedWaitSeconds > 0.0)
+      journeyReporter.updateHaltingState(0.0,data.queuedWaitSeconds)
     val tick     = currentTickFn()
     val entityId = entityIdFn()
+    if (!state.movableCurrentPathIsJunction) state.journey.pendingRoadLane = None
 
     setCurrentLinkIdFn(Some(data.linkId))
     setCurrentLinkLengthFn(data.linkLength)
@@ -50,16 +54,24 @@ class CarMicroHandler(
 
     // speedLimit from LinkState is stored in km/h; Link micro physics converts with /3.6
     val speedLimitMs = data.speedLimit / 3.6
+    val desiredSpeedMs = model.hybrid.entity.state.model.MicroSpeed.limit(speedLimitMs,
+      state.microMaxSpeed,state.microSpeedFactor,state.microDesiredMaxSpeed)
 
     val initialMicroState = MicroCarState(
       positionInLink = data.initialPosition,
-      velocity       = data.initialVelocity.getOrElse(state.microState.map(_.velocity).getOrElse(journeyReporter.sumoArrivalSpeed)),
+      velocity       = math.min(desiredSpeedMs,
+        data.initialVelocity.getOrElse(state.microState.map(_.velocity).getOrElse(journeyReporter.sumoArrivalSpeed))),
       acceleration   = 0.0,
       currentLane    = data.assignedLane,
       leaderVehicle  = None,
       gapToLeader    = data.linkLength,
       leaderVelocity = speedLimitMs,
-      desiredVelocity = speedLimitMs
+      desiredVelocity = desiredSpeedMs,
+      minGap = state.microMinGap.getOrElse(2.0),
+      reactionTime = state.microReactionTime.getOrElse(1.0),
+      maxAcceleration = state.microAcceleration.getOrElse(2.6),
+      maxDeceleration = state.microDeceleration.getOrElse(4.5),
+      vehicleLength = state.size
     )
 
     state.activateMicroMode(initialMicroState)
@@ -67,13 +79,15 @@ class CarMicroHandler(
     state.journey.secondsPerTick = data.microTimeStep * data.ticksPerGlobalTick
     journeyReporter.sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
     // Ideal travel time: length(m) / speed(m/s)
-    journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, speedLimitMs)
+    val endPosition = if (!state.movableCurrentPathIsJunction && state.movableBestRoute.forall(_.isEmpty))
+      state.microArrivalPosition.getOrElse(data.linkLength) else data.linkLength
+    journeyReporter.sumoIdealTravelTimeSeconds += (endPosition - data.initialPosition) / math.max(0.1, desiredSpeedMs)
 
     if (journeyReporter.sumoDepartTick.isEmpty) {
       journeyReporter.sumoDepartTick  = Some(tick)
       journeyReporter.sumoDepartSpeed = initialMicroState.velocity
       journeyReporter.sumoDepartLane  = Some(s"${data.linkId}_${initialMicroState.currentLane}")
-      journeyReporter.sumoDepartPos   = 0.0
+      journeyReporter.sumoDepartPos   = data.initialPosition
     }
 
     reportFn(
@@ -87,6 +101,17 @@ class CarMicroHandler(
         "speed_limit"           -> data.speedLimit,
         "initial_velocity"      -> initialMicroState.velocity,
         "initial_position"      -> data.initialPosition,
+        "min_gap"               -> initialMicroState.minGap,
+        "reaction_time"         -> initialMicroState.reactionTime,
+        "desired_velocity"      -> initialMicroState.desiredVelocity,
+        "speed_factor"          -> state.microSpeedFactor,
+        "driver_sigma"          -> state.microSigma,
+        "driver_random_seed"    -> state.microRandomSeed,
+        "lc2013_strategic"       -> state.microLc2013.strategic,
+        "lc2013_cooperative"     -> state.microLc2013.cooperative,
+        "lc2013_speed_gain"      -> state.microLc2013.speedGain,
+        "lc2013_keep_right"      -> state.microLc2013.keepRight,
+        "admission_wait_seconds" -> data.queuedWaitSeconds,
         "micro_time_step"       -> data.microTimeStep,
         "ticks_per_global_tick" -> data.ticksPerGlobalTick,
         "tick"                  -> tick
@@ -162,7 +187,9 @@ class CarMicroHandler(
     state.journey.boundaryExitTick = Some(currentTickFn())
     state.distance += data.distanceTraveled
     journeyReporter.sumoArrivalSpeed = data.finalVelocity
-    journeyReporter.sumoArrivalLane  = Some(s"${data.linkId}_${state.microState.map(_.currentLane).getOrElse(0)}")
+    val finalLane = data.finalLane.orElse(state.microState.map(_.currentLane)).getOrElse(0)
+    state.journey.lastMicroLane = Some(finalLane)
+    journeyReporter.sumoArrivalLane  = Some(s"${data.linkId}_$finalLane")
     journeyReporter.sumoArrivalPos   = data.finalPosition
     journeyReporter.sumoWaitingTimeSeconds += data.waitingTimeSeconds
     if (data.waitingTimeSeconds > 0.0) journeyReporter.sumoWaitingCount += 1
@@ -174,6 +201,7 @@ class CarMicroHandler(
         "link_id"                -> data.linkId,
         "mode"                   -> "MICRO",
         "final_position"         -> data.finalPosition,
+        "lane"                   -> finalLane,
         "final_velocity"         -> data.finalVelocity,
         "travel_time_ticks"      -> travelTime,
         "travel_time_seconds"    -> data.travelTime,

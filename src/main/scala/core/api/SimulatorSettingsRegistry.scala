@@ -1,9 +1,10 @@
 package org.interscity.htc
 package core.api
 
-import com.typesafe.config.{ Config, ConfigFactory }
+import com.typesafe.config.{ Config, ConfigFactory, ConfigValueType }
 
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters.*
 
 /** Thread-safe registry for htc.* setting overrides provided via the REST API.
@@ -175,18 +176,176 @@ object SimulatorSettingsRegistry {
     )
     .toMap
   private val overrides = new ConcurrentHashMap[String, String]()
+  private val version = new AtomicLong(0L)
 
   private lazy val baseConfig: Config = ConfigFactory.load()
 
-  def set(key: String, value: String): Unit = overrides.put(key, value)
+  /** Keys that are only read while the process boots (REST server, cluster); changing them through
+    * the API is accepted but has no effect until the engine restarts.
+    */
+  val startupOnlyPrefixes: List[String] = List("htc.api.", "htc.clustering.", "htc.brokers.", "htc.kafka-clients.")
+
+  /** Closed value sets, taken from the code that parses each setting (not from comments). */
+  val options: Map[String, List[String]] = {
+    val reporters = List("csv", "json", "clickhouse", "parquet", "kafka")
+    Map(
+      "htc.load-balance-manager.strategy" -> List("hybrid", "type-aware", "geo-affinity", "default", "disabled"),
+      "htc.node.label-strategy" -> List("rank", "animals", "cities"),
+      "htc.report-manager.default-strategy" -> reporters,
+      "htc.report-manager.enabled-strategies" -> reporters,
+      "htc.report-manager.parquet.compression" -> List("snappy", "zstd", "gzip", "uncompressed"),
+      "htc.routing.cache-strategy" -> List("kafka", "inmemory", "accounted", "disabled"),
+      "htc.mobility.load-policy.transit-trip-policy" -> List("reject", "walk"),
+      "htc.snapshot-manager.migration.state-store" -> List("inmemory", "redis"),
+      "htc.brokers.kafka.producer.acks" -> List("all", "1", "0"),
+      "htc.kafka.producer.acks" -> List("all", "1", "0"),
+      "htc.brokers.kafka.producer.compression-type" -> List("none", "gzip", "snappy", "lz4", "zstd"),
+      "htc.kafka.producer.compression.type" -> List("none", "gzip", "snappy", "lz4", "zstd"),
+      "htc.brokers.kafka.consumer.auto-offset-reset" -> List("earliest", "latest", "none"),
+      "htc.kafka.consumer.auto.offset.reset" -> List("earliest", "latest", "none")
+    )
+  }
+
+  private val secretMarkers = List("password", "secret", "token")
+
+  def isSecret(key: String): Boolean = secretMarkers.exists(key.toLowerCase.contains)
+
+  def isStartupOnly(key: String): Boolean = startupOnlyPrefixes.exists(key.startsWith)
+
+  def set(key: String, value: String): Unit = { overrides.put(key, value); version.incrementAndGet() }
   def setAll(settings: Map[String, String]): Unit = settings.foreach {
     case (k, v) => set(k, v)
   }
-  def clear(key: String): Unit = overrides.remove(key)
-  def clearAll(): Unit = overrides.clear()
+  def clear(key: String): Unit = { overrides.remove(key); version.incrementAndGet() }
+  def clearAll(): Unit = { overrides.clear(); version.incrementAndGet() }
 
   def get(key: String): Option[String] = Option(overrides.get(key))
   def getAll: Map[String, String] = overrides.asScala.toMap
+
+  /** Layered view of `base` with every API override applied on top, so any `htc.*` key can be
+    * adjusted without each reader being wired individually. Readers must call this per use (not
+    * cache it in a `val` created before the simulation starts) to see later changes.
+    */
+  def overlay(base: Config): Config = {
+    if (overrides.isEmpty) base
+    else {
+      val v = version.get()
+      overlays.synchronized {
+        if (overlayVersion != v) { overlays.clear(); overlayVersion = v }
+        val hit = overlays.get(base)
+        if (hit != null) hit
+        else {
+          val map = new java.util.HashMap[String, AnyRef]()
+          overrides.asScala.foreach {
+            case (k, raw) => map.put(k, toConfigValue(base, k, raw))
+          }
+          val result = ConfigFactory.parseMap(map, "htc-api-overrides").withFallback(base).resolve()
+          overlays.put(base, result)
+          result
+        }
+      }
+    }
+  }
+
+  /** `ConfigFactory.load()` plus API overrides. */
+  def effective: Config = overlay(baseConfig)
+
+  // identity-keyed (Config.equals is a deep compare); few distinct bases exist per JVM
+  private val overlays = new java.util.IdentityHashMap[Config, Config]()
+  private var overlayVersion = -1L
+
+  private def toConfigValue(base: Config, key: String, raw: String): AnyRef =
+    if (typeOf(base, key) == "list") parseList(raw) else raw
+
+  private[api] def parseList(raw: String): java.util.List[String] = {
+    val s = raw.trim
+    val items =
+      if (s.startsWith("[")) {
+        val node = jsonMapper.readTree(s)
+        node.elements().asScala.map(
+          n => if (n.isTextual) n.asText() else n.toString
+        ).toList
+      } else s.split(",").map(_.trim).filter(_.nonEmpty).toList
+    items.asJava
+  }
+
+  private val jsonMapper = new com.fasterxml.jackson.databind.ObjectMapper()
+
+  /** "string" | "number" | "boolean" | "list" | "object" | "null" for a key in `base` ("string" when absent). */
+  def typeOf(base: Config, key: String): String =
+    if (!base.hasPath(key)) "string"
+    else base.getValue(key).valueType match {
+      case ConfigValueType.NUMBER  => "number"
+      case ConfigValueType.BOOLEAN => "boolean"
+      case ConfigValueType.LIST    => "list"
+      case ConfigValueType.OBJECT  => "object"
+      case ConfigValueType.NULL    => "null"
+      case _                       => "string"
+    }
+
+  /** Every settable key: the curated catalog plus every leaf under `htc.` in the loaded config. */
+  def allKeys: List[String] = {
+    val fromConf = scala.util.Try(
+      baseConfig.getConfig("htc").entrySet().asScala.map(
+        e => "htc." + e.getKey
+      ).toList
+    ).getOrElse(Nil)
+    (catalog.map(_.configPath) ++ fromConf).distinct.sorted
+  }
+
+  def describe(key: String): String = catalogByPath.get(key).map(_.description).getOrElse("")
+
+  def envVarOf(key: String): String = catalogByPath.get(key).map(_.envVar).getOrElse("")
+
+  def defaultOf(key: String): String =
+    catalogByPath.get(key).map(_.defaultValue).getOrElse(
+      if (baseConfig.hasPath(key)) renderValue(baseConfig, key) else ""
+    )
+
+  /** Value of `key` in `config` rendered as a plain string (lists as JSON arrays). */
+  def renderValue(config: Config, key: String): String =
+    if (!config.hasPath(key)) ""
+    else {
+      val v = config.getValue(key)
+      v.valueType match {
+        case ConfigValueType.STRING => v.unwrapped().toString
+        case ConfigValueType.LIST   => v.render(com.typesafe.config.ConfigRenderOptions.concise())
+        case _                      => v.unwrapped().toString
+      }
+    }
+
+  /** Validates `value` for `key` against the type currently defined; returns an error message. */
+  def validate(key: String, value: String): Option[String] = {
+    if (!key.startsWith("htc.")) Some(s"only htc.* settings can be adjusted (got '$key'); pekko.* is fixed at JVM start")
+    else if (key.length <= 4 || key.endsWith(".")) Some(s"invalid key '$key'")
+    else {
+      val t = typeOf(baseConfig, key)
+      scala.util.Try {
+        t match {
+          case "number" =>
+            val n = value.trim
+            if (n.contains('.') || n.contains('e') || n.contains('E')) n.toDouble else n.toLong
+          case "boolean" =>
+            if (!Set("true", "false").contains(value.trim.toLowerCase)) throw new IllegalArgumentException("expected true or false")
+          case "list" =>
+            val items = parseList(value).asScala
+            options.get(key).foreach { o =>
+              val bad = items.filterNot(o.contains)
+              if (bad.nonEmpty) throw new IllegalArgumentException(s"invalid ${bad.mkString(", ")}")
+            }
+          case "object" => throw new IllegalArgumentException("is a group of settings; set its leaf keys instead")
+          case _ => ()
+        }
+        if (t != "list") options.get(key).foreach { o =>
+          if (!o.contains(value.trim)) throw new IllegalArgumentException(s"invalid '${value.trim}'")
+        }
+      }.failed.toOption.map(e =>
+        options.get(key) match {
+          case Some(o) => s"'$key' must be one of ${o.mkString(", ")}: ${e.getMessage}"
+          case None    => s"'$key' expects $t: ${e.getMessage}"
+        })
+    }
+  }
 
   /** Effective value: API override > env var > application.conf */
   def effectiveValue(key: String): String =
@@ -199,7 +358,7 @@ object SimulatorSettingsRegistry {
           )
       )
       .getOrElse {
-        try baseConfig.getString(key)
+        try renderValue(baseConfig, key)
         catch { case _: Exception => "" }
       }
 

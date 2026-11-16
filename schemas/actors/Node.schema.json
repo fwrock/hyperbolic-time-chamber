@@ -112,7 +112,92 @@
               "type": "array",
               "x-htc-label": "Movimentos do cruzamento",
               "x-htc-group": "Rede",
-              "x-htc-widget": "json"
+              "x-htc-widget": "json",
+              "items": {
+                "type": "object",
+                "required": [
+                  "incomingLinkId",
+                  "outgoingLinkId",
+                  "connectorLinkId"
+                ],
+                "properties": {
+                  "incomingLinkId": {
+                    "type": "integer"
+                  },
+                  "outgoingLinkId": {
+                    "type": "integer"
+                  },
+                  "connectorLinkId": {
+                    "type": "integer"
+                  },
+                  "incomingLane": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "outgoingLane": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "continuationLanes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "outgoingLinkId",
+                        "fromLane",
+                        "toLane"
+                      ],
+                      "properties": {
+                        "outgoingLinkId": {
+                          "type": "integer"
+                        },
+                        "fromLane": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "toLane": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "movementSignals": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "incomingLinkId",
+                  "outgoingLinkId",
+                  "origin"
+                ],
+                "properties": {
+                  "incomingLinkId": {
+                    "type": "integer"
+                  },
+                  "outgoingLinkId": {
+                    "type": "integer"
+                  },
+                  "origin": {
+                    "type": "integer"
+                  },
+                  "laneIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            },
+            "routeAwareJunctionLanes": {
+              "type": "boolean",
+              "default": false,
+              "description": "Choose legal junction connectors by following-turn lane distance, connector capacity and lane alignment."
             }
           }
         }

@@ -21,5 +21,10 @@ case class PendingLinkAccessRequest(
   requestSeq: Long = 0L,
   signalAlreadyCleared: Boolean = false,
   targetLinkId: Long = 0L,
-  junctionLink: Option[PrecomputedRouteItem] = None
+  junctionLink: Option[PrecomputedRouteItem] = None,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
+  outgoingLane: Option[Int] = None,
+  approachLinkId: Long = 0L,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
+  approachLane: Option[Int] = None
 )

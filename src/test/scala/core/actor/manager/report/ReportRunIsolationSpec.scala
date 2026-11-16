@@ -44,6 +44,7 @@ class ReportRunIsolationSpec extends AnyFlatSpec with Matchers with BeforeAndAft
     ConfigFactory.parseString(s"""
       pekko.actor.provider = local
       pekko.actor.fail-mixed-versions = off
+      pekko.test.single-expect-default = 15s
       htc.report-manager.csv.directory = "${directory}/csv"
       htc.report-manager.json.directory = "${directory}/json"
       htc.report-manager.parquet.directory = "${directory}/parquet"
@@ -141,6 +142,7 @@ class ReportRunIsolationSpec extends AnyFlatSpec with Matchers with BeforeAndAft
       "entityType" -> "", "tick" -> 0L, "lamportTick" -> 0L, "realTimeMs" -> 0L,
       "label" -> "sample", "dataJson" -> "{}"))
     SimulationReportEventAvro.deserialize(legacy.getBytes(UTF_8)).get.scenarioId shouldBe ""
+    SimulationReportEventAvro.deserialize(legacy.getBytes(UTF_8)).get.node shouldBe ""
   }
 
   it should "give ClickHouse flow and timing inserts separate IDs on every execution" in {
