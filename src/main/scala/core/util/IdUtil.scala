@@ -1,6 +1,7 @@
 package org.interscity.htc
 package core.util
 
+/** Converts logical identifiers to the string representation accepted at actor-path boundaries. */
 object IdUtil {
 
   /** Renders a `Long` entity id at the Pekko actor-path / shard-routing boundary, where ids must be

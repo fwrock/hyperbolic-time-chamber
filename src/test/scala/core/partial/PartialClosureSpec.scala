@@ -23,7 +23,12 @@ class PartialClosureSpec extends AnyFlatSpec with Matchers {
   }
 
   "a selected whole with a shared part" should "also keep the other owner of that part (rule 3), not its private parts" in {
-    kept(Set(2L)) shouldBe Set(2L, 21L, 30L, 1L)       // car 30 is shared with person 1; person 1's cars 11, 12 stay out
+    kept(Set(2L)) shouldBe Set(
+      2L,
+      21L,
+      30L,
+      1L
+    ) // car 30 is shared with person 1; person 1's cars 11, 12 stay out
   }
 
   "a selected part" should "keep its whole, without the whole's other parts" in {
@@ -35,7 +40,8 @@ class PartialClosureSpec extends AnyFlatSpec with Matchers {
   }
 
   "a whole selected together with a shared part" should "bring that part's other whole too (but not that whole's other parts)" in {
-    kept(Set(1L)) shouldBe Set(1L, 11L, 12L, 30L, 2L)   // person 2 comes from rule 3; its car 21 does not
+    kept(Set(1L)) shouldBe Set(1L, 11L, 12L, 30L,
+      2L) // person 2 comes from rule 3; its car 21 does not
   }
 
   "reasons" should "say why each actor is kept" in {
@@ -48,7 +54,7 @@ class PartialClosureSpec extends AnyFlatSpec with Matchers {
 
   "hierarchies" should "work across several levels in both directions" in {
     val ids = Set(1L, 2L, 3L, 4L)
-    val chain = List((2L, 1L), (3L, 2L), (4L, 3L))                      // 4 part of 3 part of 2 part of 1
+    val chain = List((2L, 1L), (3L, 2L), (4L, 3L)) // 4 part of 3 part of 2 part of 1
     PartialClosure.compute(ids, chain, Set(1L)).kept shouldBe Set(1L, 2L, 3L, 4L)
     PartialClosure.compute(ids, chain, Set(3L)).kept shouldBe Set(3L, 4L, 2L, 1L)
     PartialClosure.compute(ids, chain, Set(4L)).kept shouldBe Set(4L, 3L, 2L, 1L)
@@ -71,8 +77,20 @@ class PartialClosureSpec extends AnyFlatSpec with Matchers {
 
   "linksOf" should "read part_of on the part and contains on the whole, and ignore references" in {
     def actor(id: Long, rel: Map[String, ShardActorId]) =
-      ActorSimulation(id = id, name = null, typeActor = "x", data = null.asInstanceOf[ActorDataSimulation], relationships = rel)
-    val car = actor(11, Map("owner" -> ShardActorId(1, "P", relation = ShardActorId.PartOf), "from_node" -> ShardActorId(99, "N")))
+      ActorSimulation(
+        id = id,
+        name = null,
+        typeActor = "x",
+        data = null.asInstanceOf[ActorDataSimulation],
+        relationships = rel
+      )
+    val car = actor(
+      11,
+      Map(
+        "owner" -> ShardActorId(1, "P", relation = ShardActorId.PartOf),
+        "from_node" -> ShardActorId(99, "N")
+      )
+    )
     PartialClosure.linksOf(car) shouldBe Seq((11L, 1L))
     val person = actor(2, Map("v" -> ShardActorId(21, "C", relation = ShardActorId.Contains)))
     PartialClosure.linksOf(person) shouldBe Seq((21L, 2L))
@@ -83,13 +101,19 @@ class PartialClosureSpec extends AnyFlatSpec with Matchers {
     val mapper = new ObjectMapper().registerModule(DefaultScalaModule)
     val plain = mapper.readValue("""{"id": 1, "classType": "N"}""", classOf[ShardActorId])
     plain.relation shouldBe ShardActorId.Reference
-    val owner = mapper.readValue("""{"id": 40, "classType": "P", "relation": "part_of"}""", classOf[ShardActorId])
+    val owner = mapper.readValue(
+      """{"id": 40, "classType": "P", "relation": "part_of"}""",
+      classOf[ShardActorId]
+    )
     owner.relation shouldBe ShardActorId.PartOf
   }
 
   "the manifest reader" should "return numeric unit ids and flag the others" in {
     val f = Files.createTempFile("selection", ".json")
-    Files.writeString(f, """{"schema":"htc.simedape.selection.v1","scenario_id":"s","selected":[{"unit":"10"},{"unit":"12"},{"unit":"abc"}]}""")
+    Files.writeString(
+      f,
+      """{"schema":"htc.simedape.selection.v1","scenario_id":"s","selected":[{"unit":"10"},{"unit":"12"},{"unit":"abc"}]}"""
+    )
     val s = PartialManifest.read(f.toString)
     s.units shouldBe Set(10L, 12L)
     s.nonNumeric shouldBe List("abc")
@@ -98,4 +122,50 @@ class PartialClosureSpec extends AnyFlatSpec with Matchers {
     an[IllegalArgumentException] should be thrownBy PartialManifest.read(f.toString)
     Files.delete(f)
   }
+
+  "deep hierarchies" should "retain both directions without recursive traversal" in {
+    val ids = (1L to 10000L).toSet
+    val chain = (2L to 10000L).map(
+      id => (id, id - 1L)
+    )
+    val result = PartialClosure.compute(ids, chain, Set(5000L))
+
+    result.kept shouldBe ids
+    result.problems shouldBe Nil
+    result.reasons(5000L) shouldBe PartialClosure.Selected
+    result.reasons(10000L) shouldBe PartialClosure.PartOfSelectedWhole
+    result.reasons(1L) shouldBe PartialClosure.WholeOfKeptPart
+  }
+
+  "invalid links" should "retain diagnostic order and exclude bad edges from traversal" in {
+    val result = PartialClosure.compute(
+      Set(1L, 2L),
+      List((99L, 1L), (2L, 88L), (1L, 1L), (2L, 1L), (2L, 1L)),
+      Set(1L, 77L)
+    )
+
+    result.problems shouldBe List(
+      "relation mentions actor 99, which does not exist",
+      "actor 2 is part of 88, which does not exist",
+      "actor 1 is declared a part of itself"
+    )
+    result.kept shouldBe Set(1L, 2L)
+    result.selectedNotFound shouldBe Set(77L)
+  }
+
+  "cyclic input" should "terminate while preserving explicit selections and reporting each disconnected cycle" in {
+    val result = PartialClosure.compute(
+      Set(1L, 2L, 3L, 4L),
+      List((1L, 2L), (2L, 1L), (3L, 4L), (4L, 3L)),
+      Set(1L, 2L, 3L)
+    )
+
+    result.kept shouldBe Set(1L, 2L, 3L, 4L)
+    result.problems should have size 2
+    result.reasons(1L) shouldBe PartialClosure.Selected
+    result.reasons(2L) shouldBe PartialClosure.Selected
+    result.reasons(3L) shouldBe PartialClosure.Selected
+    result.reasons(4L) shouldBe PartialClosure.PartOfSelectedWhole
+  }
+
 }

@@ -14,8 +14,8 @@ import java.sql.{ Connection, DriverManager }
 
 /** Locks in that `SqliteActorSimulationUtil.fromResultSet` reconstructs an `ActorSimulation` from
   * an `actor_simulation` row exactly as `JsonStreamingUtil`/Jackson would from the equivalent JSON
-  * record — this is what makes `SqliteLoadData`/`ProgressiveSqliteLoadData` drop-in alternatives
-  * to the JSON strategies for every downstream consumer of `ActorSimulation`.
+  * record — this is what makes `SqliteLoadData`/`ProgressiveSqliteLoadData` drop-in alternatives to
+  * the JSON strategies for every downstream consumer of `ActorSimulation`.
   *
   * Uses an in-memory SQLite database (`jdbc:sqlite::memory:`) populated with the same DDL as
   * `tools/scenario-db-converter/convert.py`, so this test has no dependency on that script or on
@@ -28,25 +28,7 @@ class SqliteActorSimulationUtilSpec extends AnyFlatSpec with Matchers with Befor
   private val mapper = new ObjectMapper()
   mapper.registerModule(DefaultScalaModule)
 
-  private val DDL =
-    """
-      |CREATE TABLE actor_simulation (
-      |  seq                          INTEGER PRIMARY KEY AUTOINCREMENT,
-      |  id                           TEXT NOT NULL,
-      |  name                         TEXT,
-      |  type_actor                   TEXT NOT NULL,
-      |  creation_type                TEXT NOT NULL,
-      |  start_tick                   INTEGER NOT NULL DEFAULT 0,
-      |  pool_round_robin_pool        INTEGER,
-      |  pool_total_instances         INTEGER,
-      |  pool_max_instances_per_node  INTEGER,
-      |  pool_allow_local_routes      INTEGER,
-      |  pool_use_roles               TEXT,
-      |  data_type                    TEXT NOT NULL,
-      |  data_content                 TEXT NOT NULL,
-      |  relationships                TEXT
-      |)
-      |""".stripMargin
+  private val DDL = SqliteActorSourceFixture.schema
 
   private var conn: Connection = _
 
@@ -101,11 +83,16 @@ class SqliteActorSimulationUtilSpec extends AnyFlatSpec with Matchers with Befor
     actor.data.dataType shouldBe "PersonData"
     // `content` is `Any` — normalize via `convertValue` instead of asserting a concrete container
     // type, since that's an internal Jackson/DefaultScalaModule detail this test isn't about.
-    val normalizedContent = mapper.convertValue(actor.data.content, classOf[java.util.Map[String, Any]])
+    val normalizedContent =
+      mapper.convertValue(actor.data.content, classOf[java.util.Map[String, Any]])
     normalizedContent.get("startTick") shouldBe 120
     normalizedContent.get("home") shouldBe "node-1"
     actor.relationships should not be null
-    actor.relationships("vehicle") shouldBe ShardActorId(entityId = 1L, classType = "Car", shardBucket = "shard-1")
+    actor.relationships("vehicle") shouldBe ShardActorId(
+      entityId = 1L,
+      classType = "Car",
+      shardBucket = "shard-1"
+    )
   }
 
   it should "default poolConfiguration and relationships when the columns are NULL" in {
@@ -135,4 +122,34 @@ class SqliteActorSimulationUtilSpec extends AnyFlatSpec with Matchers with Befor
     actor.poolConfiguration.useRoles shouldBe null
     actor.relationships shouldBe null
   }
+
+  it should "preserve escaped scalar text and nested content exactly as a JSON source does" in {
+    val name = "ação \"quoted\"\npath\\source"
+    val content = """{"startTick":7,"nested":{"items":[1,true,null,"é"]},"decimal":1.25}"""
+    SqliteActorSourceFixture.insertActor(conn, id = 3, seq = 1, content = content, name = name)
+    val json = s"""[{"id":3,"name":${mapper.writeValueAsString(
+        name
+      )},"typeActor":"example.Model","creationType":"LoadBalancedDistributed","data":{"dataType":"state","content":$content},"relationships":null}]"""
+    val stream =
+      new java.io.ByteArrayInputStream(json.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+    val (parser, actors) = JsonStreamingUtil.createParser(stream)
+    val expected =
+      try actors.next()
+      finally parser.close()
+
+    scala.util.Using.resource(conn.createStatement()) {
+      statement =>
+        scala.util.Using.resource(statement.executeQuery("SELECT * FROM actor_simulation")) {
+          rows =>
+            rows.next() shouldBe true
+            val decoded = SqliteActorSimulationUtil.fromResultSet(rows)
+            decoded shouldBe expected
+            decoded.data.content.getClass shouldBe expected.data.content.getClass
+            decoded.name shouldBe name
+            SqliteActorSimulationUtil.fromResultSet(rows) shouldBe decoded
+            rows.next() shouldBe false
+        }
+    }
+  }
+
 }

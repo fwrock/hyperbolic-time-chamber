@@ -324,6 +324,10 @@ pool broadcast reaches remote routees that have not been created yet. See
 
 ## Coding Rules
 
+For package organization, one-type-per-file exceptions, Scaladoc contracts, size/complexity
+targets and formatting/lint commands, follow [docs/CODE_STYLE.md](docs/CODE_STYLE.md) when
+adding or refactoring code. Preserve the runtime and model invariants in this file.
+
 1. **No blocking in actors** — never `Await.result`, `Thread.sleep`, or synchronous DB calls inside `receive`
 2. **No `Future` chained into actor state** — use `pipeTo(self)` if needed, then match the reply message
 3. **Handlers are stateless** — helper classes (`CarMicroHandler` etc.) receive only lambdas, hold no Pekko refs

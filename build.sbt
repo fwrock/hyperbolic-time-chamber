@@ -163,3 +163,8 @@ lazy val root = (project in file("."))
     ),
     PB.protocVersion := "4.30.2"
   )
+
+addCommandAlias("fmt", ";scalafmtAll;scalafmtSbt")
+addCommandAlias("fmtCheck", ";scalafmtCheckAll;scalafmtSbtCheck")
+addCommandAlias("lint", ";fmtCheck;Compile / compile;Test / compile")
+addCommandAlias("qualityCheck", ";lint;test")

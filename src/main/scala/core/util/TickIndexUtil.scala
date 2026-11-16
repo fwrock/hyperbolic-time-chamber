@@ -1,46 +1,37 @@
 package org.interscity.htc
 package core.util
 
-import core.types.Tick
 import core.entity.actor.ActorSimulation
+import core.types.Tick
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.core.JsonParser
-
-import java.io.{ BufferedInputStream, File, FileInputStream }
+import java.io.{ BufferedInputStream, FileInputStream }
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.*
+import scala.util.Using
 
-/** Utility for building lightweight tick-based indexes of actors in JSON files.
+/** Streams actor sources into tick counts or bounded loading chunks without retaining a full
+  * source.
   *
-  * Two-phase approach to avoid holding all ActorSimulation objects in memory:
-  *
-  * Phase 1 — Light index (buildLightIndex): Streams through JSON, extracts only startTick from each
-  * actor, builds a counts-only map (tick → actor count). No ActorSimulation objects are retained —
-  * they are parsed and immediately discarded. Memory footprint is just a Map[Tick, Int] per source.
-  *
-  * Phase 2 — On-demand loading (loadActorsForTickRange): Re-reads the JSON file, streaming actors
-  * and only retaining those whose startTick falls in the requested range. This trades disk I/O for
-  * memory.
-  *
-  * For actors without a `startTick` (or with startTick = Long.MinValue), they are indexed under
-  * tick 0 (should be created at startup).
+  * Missing and nonnumeric start ticks map to zero. An explicit `Long.MinValue` remains in the count
+  * map but is excluded from the bounds calculation. Loading a window re-reads the source, trading
+  * disk I/O for bounded retained actor data.
   */
 object TickIndexUtil {
 
-  private val mapper = new ObjectMapper()
-  mapper.registerModule(com.fasterxml.jackson.module.scala.DefaultScalaModule)
-
-  /** Lightweight index metadata — no ActorSimulation objects retained.
+  /** Counts and bounds without retained actor payloads.
+    *
+    * This existing nested public type retains its owner to preserve its JVM name and callers using
+    * `TickIndexUtil.LightTickIndex`. Bounds exclude `Long.MinValue`; the upper bound starts at
+    * zero.
     *
     * @param tickCounts
-    *   immutable map of tick -> actor count (for density analysis and window sizing)
+    *   actor count per extracted start tick
     * @param totalActors
-    *   total number of actors in the file
+    *   total records scanned
     * @param maxTick
-    *   the maximum startTick found
+    *   maximum non-sentinel start tick, or zero if every such tick is negative or absent
     * @param minTick
-    *   the minimum startTick found (excluding Long.MinValue)
+    *   minimum non-sentinel start tick, or zero when the minimum accumulator remains
+    *   `Long.MaxValue`
     */
   case class LightTickIndex(
     tickCounts: Map[Tick, Int],
@@ -49,75 +40,54 @@ object TickIndexUtil {
     minTick: Tick
   )
 
-  /** Scan a JSON file and build a lightweight tick index (counts only).
+  /** Scans a JSON source with scoped stream and parser lifetimes.
     *
-    * Streams through ALL actors in the file but only extracts startTick, increments a counter, and
-    * immediately discards the parsed ActorSimulation. This keeps memory usage minimal — just a
-    * Map[Tick, Int].
-    *
-    * @param filePath
-    *   path to the JSON file
-    * @return
-    *   LightTickIndex with tick counts and bounds (no actor objects)
+    * The stream always closes; a parser returned by the factory closes when scanning finishes or
+    * fails. Only counts and bounds survive the scan. File and JSON failures propagate to the
+    * caller.
     */
-  def buildLightIndex(filePath: String): LightTickIndex = {
-    val is = new BufferedInputStream(new FileInputStream(new File(filePath)))
-    try {
-      val (_, iter) = JsonStreamingUtil.createParser(is)
-      val tickCounts = mutable.Map[Tick, Int]()
-      var maxTick: Tick = 0
-      var minTick: Tick = Long.MaxValue
-      var totalActors = 0
+  def buildLightIndex(filePath: String): LightTickIndex =
+    Using.resource(new BufferedInputStream(new FileInputStream(filePath))) {
+      stream =>
+        val (parser, actors) = JsonStreamingUtil.createParser(stream)
+        Using.resource(parser)(
+          _ => indexActors(actors)
+        )
+    }
 
-      while (iter.hasNext) {
-        val actor = iter.next()
-        val tick = extractStartTick(actor)
+  /** Reduces one record at a time while preserving the existing sentinel and bound conventions. */
+  private def indexActors(actors: Iterator[ActorSimulation]): LightTickIndex = {
+    val tickCounts = mutable.Map.empty[Tick, Int]
+    var maxTick: Tick = 0L
+    var minTick: Tick = Long.MaxValue
+    var totalActors = 0
 
-        tickCounts.updateWith(tick) {
-          case Some(count) => Some(count + 1)
-          case None        => Some(1)
-        }
-        // actor is NOT stored — eligible for GC immediately
-
-        if (tick != Long.MinValue) {
-          if (tick > maxTick) maxTick = tick
-          if (tick < minTick) minTick = tick
-        }
-
-        totalActors += 1
+    while (actors.hasNext) {
+      val tick = extractStartTick(actors.next())
+      tickCounts.updateWith(tick) {
+        case Some(count) => Some(count + 1)
+        case None        => Some(1)
       }
+      if (tick != Long.MinValue) {
+        if (tick > maxTick) maxTick = tick
+        if (tick < minTick) minTick = tick
+      }
+      totalActors += 1
+    }
 
-      if (minTick == Long.MaxValue) minTick = 0
-
-      LightTickIndex(
-        tickCounts = tickCounts.toMap,
-        totalActors = totalActors,
-        maxTick = maxTick,
-        minTick = minTick
-      )
-    } finally is.close()
+    LightTickIndex(
+      tickCounts = tickCounts.toMap,
+      totalActors = totalActors,
+      maxTick = maxTick,
+      minTick = if (minTick == Long.MaxValue) 0L else minTick
+    )
   }
 
-  /** Read up to maxCount matching actors from an open iterator.
+  /** Collects up to `maxCount` actors in the inclusive tick range from a caller-owned iterator.
     *
-    * Reads actors one-by-one from the iterator, filtering by tick range. Stops after collecting
-    * maxCount matching actors OR when the iterator is exhausted. Non-matching actors are parsed but
-    * immediately discarded (eligible for GC).
-    *
-    * This is designed for chunked streaming: the caller holds the file stream open and calls this
-    * repeatedly with the same iterator, processing each chunk before requesting the next. This
-    * keeps at most maxCount actors in memory per loader.
-    *
-    * @param iter
-    *   open Jackson iterator over ActorSimulation objects
-    * @param fromTick
-    *   start tick (inclusive)
-    * @param toTick
-    *   end tick (inclusive)
-    * @param maxCount
-    *   maximum number of matching actors to collect per call
-    * @return
-    *   tuple of (matching actors, true if iterator exhausted)
+    * Nonmatching records are consumed without being retained. The returned flag becomes true only
+    * when exhaustion is observed: reaching the chunk limit exactly leaves it false until a later
+    * call probes the iterator. Nonpositive limits consume nothing and return false.
     */
   def readMatchingChunk(
     iter: Iterator[ActorSimulation],
@@ -125,58 +95,42 @@ object TickIndexUtil {
     toTick: Tick,
     maxCount: Int
   ): (List[ActorSimulation], Boolean) = {
-    val chunk = mutable.ListBuffer[ActorSimulation]()
+    val chunk = mutable.ListBuffer.empty[ActorSimulation]
     var exhausted = false
 
     while (!exhausted && chunk.size < maxCount)
       if (iter.hasNext) {
         val actor = iter.next()
         val tick = extractStartTick(actor)
-        if (tick >= fromTick && tick <= toTick) {
-          chunk += actor
-        }
-        // non-matching actors are immediately eligible for GC
-      } else {
-        exhausted = true
-      }
+        if (tick >= fromTick && tick <= toTick) chunk += actor
+      } else exhausted = true
 
     (chunk.toList, exhausted)
   }
 
-  /** Extract startTick from an ActorSimulation's data.content. The content is typically a
-    * LinkedHashMap from Jackson deserialization before being converted to the specific state type.
-    *
-    * Returns 0 for actors without a startTick (infrastructure actors).
-    */
+  /** Reads the supported Jackson/Scala map representations, defaulting absent data to tick zero. */
   private def extractStartTick(actor: ActorSimulation): Tick = {
     if (actor.data == null || actor.data.content == null) return 0L
-
     actor.data.content match {
-      case map: java.util.LinkedHashMap[?, ?] =>
-        val value = map.get("startTick")
-        if (value == null) 0L
-        else
-          value match {
-            case n: java.lang.Number => n.longValue()
-            case _                   => 0L
-          }
+      case map: java.util.LinkedHashMap[?, ?] => numericStartTick(map.get("startTick"))
       case map: Map[String @unchecked, Any @unchecked] =>
-        map.get("startTick") match {
-          case Some(n: java.lang.Number) => n.longValue()
-          case _                         => 0L
-        }
+        numericStartTick(map.getOrElse("startTick", null))
       case _ => 0L
     }
   }
 
-  /** Count actors in a tick range using the lightweight tick counts map.
-    */
+  /** Keeps numeric conversion identical for both supported map representations. */
+  private def numericStartTick(value: Any): Tick = value match {
+    case number: java.lang.Number => number.longValue()
+    case _                        => 0L
+  }
+
+  /** Sums counts in an inclusive tick range; an inverted range contains no ticks. */
   def countActorsInRange(
     tickCounts: Map[Tick, Int],
     fromTick: Tick,
     toTick: Tick
-  ): Int =
-    tickCounts.filter {
-      case (tick, _) => tick >= fromTick && tick <= toTick
-    }.values.sum
+  ): Int = tickCounts.iterator.collect {
+    case (tick, count) if tick >= fromTick && tick <= toTick => count
+  }.sum
 }
