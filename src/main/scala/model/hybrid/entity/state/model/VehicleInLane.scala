@@ -35,11 +35,28 @@ case class VehicleInLane(
   microStateRef: Option[Any] = None, // Can hold MicroCarState, MicroBusState, etc.
   exitSpeedLimitMps: Option[Double] = None,
   nextLinkId: Long = 0L,
-  pendingExitTick: Option[Tick] = None
+  pendingExitTick: Option[Tick] = None,
+  entryPosition: Double = 0.0,
+  arrivalPosition: Option[Double] = None,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Double])
+  lastLaneChangeSeconds: Option[Double] = None,
+  minGap: Double = 2.0,
+  reactionTime: Double = 1.0,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Double])
+  maxSpeed: Option[Double] = None,
+  speedFactor: Double = 1.0,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Double])
+  desiredMaxSpeed: Option[Double] = None,
+  sigma: Double = 0.0,
+  randomSeed: Long = 0L,
+  lc2013: Lc2013Parameters = Lc2013Parameters(),
+  lc2013Memory: Lc2013Memory = Lc2013Memory()
 ) {
 
   /** Calculate the rear position of the vehicle */
   def rearPosition: Double = position - vehicleLength
+
+  def desiredSpeed(roadSpeedMps: Double): Double = MicroSpeed.limit(roadSpeedMps,maxSpeed,speedFactor,desiredMaxSpeed)
 
   /** Calculate gap to a leader vehicle */
   def gapTo(leader: VehicleInLane): Double =

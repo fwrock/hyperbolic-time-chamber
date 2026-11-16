@@ -241,6 +241,177 @@
                 }
               },
               "additionalProperties": false
+            },
+            "laneChanging": {
+              "type": "object",
+              "properties": {
+                "model": {
+                  "type": "string",
+                  "enum": [
+                    "Disabled",
+                    "Mobil",
+                    "Lc2013"
+                  ],
+                  "default": "Disabled"
+                },
+                "politeness": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "default": 0.5
+                },
+                "safeDeceleration": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "default": 4
+                },
+                "accelerationThreshold": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "default": 0.1
+                },
+                "biasToRight": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 0.2
+                },
+                "minGapMeters": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 2
+                },
+                "cooldownSeconds": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 2
+                },
+                "strategicLookaheadMeters": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 150
+                },
+                "strategicCooldownSeconds": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 0.2
+                },
+                "cooperativeStrategicChanges": {
+                  "type": "boolean",
+                  "default": true
+                }
+              },
+              "required": []
+            },
+            "laneConnections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "outgoingLinkId": {
+                    "type": "integer"
+                  },
+                  "fromLane": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "toLane": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "outgoingLinkId",
+                  "fromLane",
+                  "toLane"
+                ]
+              }
+            },
+            "signalControls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "targetLinkId": {
+                    "type": "integer"
+                  },
+                  "laneIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                },
+                "required": [
+                  "targetLinkId"
+                ]
+              }
+            },
+            "detectors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "controllerId": {
+                    "type": "integer"
+                  },
+                  "laneId": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "positionMeters": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "lengthMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 0
+                  }
+                },
+                "required": [
+                  "id",
+                  "controllerId",
+                  "laneId",
+                  "positionMeters"
+                ]
+              }
+            },
+            "microEntry": {
+              "type": "object",
+              "description": "Optional Car admission queue preserving entry positions and preventing unsafe short-link weaving admission. Existing native inputs default to disabled.",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "avoidWeavingConflicts": {
+                  "type": "boolean",
+                  "default": true
+                }
+              },
+              "additionalProperties": false
+            },
+            "mesoCapacity": {
+              "type": "object",
+              "required": [
+                "flowVehiclesPerHour",
+                "storageVehicles"
+              ],
+              "description": "Optional Car MESO admission/storage and discharge limits; density speed retains legacy capacity.",
+              "properties": {
+                "flowVehiclesPerHour": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "storageVehicles": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
             }
           }
         }

@@ -113,6 +113,56 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     state.availableCapacity(100L) shouldBe 0
   }
 
+  it should "choose a legal destination lane that avoids changes for the following turn" in {
+    import model.hybrid.entity.state.model.{JunctionMovement, LaneConnection}
+    val onward = List(LaneConnection(9,2,0))
+    val state = newState(junctionMovements=List(
+      JunctionMovement(5,7,700,Some(0),Some(0),onward),
+      JunctionMovement(5,7,702,Some(0),Some(2),onward)))
+      .copy(routeAwareJunctionLanes=true)
+    val (handler,sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq=77),
+      RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(0),followingLinkId=9))
+    val grant=sent.last._3.asInstanceOf[LinkAccessData]
+    grant.junctionLink.map(_.linkId) shouldBe Some(702)
+    grant.outgoingLane shouldBe Some(2)
+    grant.requestSeq shouldBe 77
+  }
+
+  it should "prefer available connectors among equally suitable lanes and keep the choice through restore" in {
+    import model.hybrid.entity.state.model.{JunctionMovement, LaneConnection}
+    val onward=List(LaneConnection(9,0,0),LaneConnection(9,1,0))
+    val initial=newState(availableCapacity=mutable.Map(700L -> 0,701L -> 1),junctionMovements=List(
+      JunctionMovement(5,7,700,Some(0),Some(0),onward),
+      JunctionMovement(5,7,701,Some(0),Some(1),onward))).copy(routeAwareJunctionLanes=true)
+    val state=core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(initial))
+    state.junctionMovements.head.continuationLanes.head.fromLane shouldBe 0
+    val (handler,sent)=newHandler(state)
+    val req=RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(0),followingLinkId=9)
+    handler.handleRequestLinkAccess(requestEvent(1),req)
+    sent.last._3.asInstanceOf[LinkAccessData].outgoingLane shouldBe Some(1)
+    handler.handleRequestLinkAccess(requestEvent(2).copy(seq=88),req)
+    sent.last._3.asInstanceOf[LinkAccessData].capacityState shouldBe Full
+    val restored=core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(state))
+    val (resumed,grants)=newHandler(restored)
+    resumed.handleLinkCapacityFreed(LinkCapacityFreedData(700,1))
+    val grant=grants.last._3.asInstanceOf[LinkAccessData]
+    grant.outgoingLane shouldBe Some(0)
+    grant.requestSeq shouldBe 88
+  }
+
+  it should "keep destination selection deterministic without route lookahead and exclude other approach lanes" in {
+    import model.hybrid.entity.state.model.JunctionMovement
+    val options=List(JunctionMovement(5,7,702,Some(0),Some(2)),
+      JunctionMovement(5,7,700,Some(0),Some(0)),JunctionMovement(5,7,701,Some(1),Some(1)))
+    for (order <- List(options,options.reverse)) {
+      val state=newState(junctionMovements=order).copy(routeAwareJunctionLanes=true)
+      val (handler,sent)=newHandler(state)
+      handler.handleRequestLinkAccess(requestEvent(),RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(0)))
+      sent.last._3.asInstanceOf[LinkAccessData].outgoingLane shouldBe Some(0)
+    }
+  }
+
   it should "restore a connector wait and grant its original road request after space is freed" in {
     val state = newState(availableCapacity = mutable.Map(700L -> 0, 100L -> 1),
       junctionMovements = List(model.hybrid.entity.state.model.JunctionMovement(50, 100, 700)))
@@ -528,4 +578,46 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
 
     waitingCounts.get(103L) shouldBe None
   }
+  "Native movement control" should "grant only the green lane and preserve connector destination lanes through a capacity checkpoint" in {
+    import model.hybrid.entity.state.model.{JunctionMovement,MovementSignalBinding}
+    val state = newState(signals=mutable.Map(91L -> SignalState(Red,2,102),92L -> SignalState(Green,2,102)),
+      availableCapacity=mutable.Map(701L -> 0),
+      junctionMovements=List(JunctionMovement(5,7,700,Some(0),Some(0)),JunctionMovement(5,7,701,Some(1),Some(2))))
+      .copy(movementSignals=List(MovementSignalBinding(5,7,91,List(0)),MovementSignalBinding(5,7,92,List(1))))
+    val (handler,sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent(),RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(0)))
+    sent.last._3.asInstanceOf[LinkAccessData].phase shouldBe Red
+    handler.handleRequestLinkAccess(requestEvent(2),RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(1)))
+    sent.last._3.asInstanceOf[LinkAccessData].capacityState shouldBe Full
+    val restored = core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(state))
+    restored.movementSignals.head.laneIds.head shouldBe 0
+    restored.capacityWaitQueue(701).head.approachLane shouldBe Some(1)
+    val (resumed,grants) = newHandler(restored)
+    resumed.handleLinkCapacityFreed(LinkCapacityFreedData(701,1))
+    val grant = grants.last._3.asInstanceOf[LinkAccessData]
+    grant.junctionLink.map(_.linkId) shouldBe Some(701)
+    grant.outgoingLane shouldBe Some(2)
+  }
+
+  it should "apply a same-tick native batch before draining and publish one update per approach road" in {
+    import model.hybrid.entity.state.model.MovementSignalBinding
+    import model.hybrid.entity.event.data.signal.SignalAspectUpdate
+    val state=newState(signals=mutable.Map(91L -> SignalState(Red,1,100),92L -> SignalState(Green,1,100)),
+      availableCapacity=mutable.Map(7L -> 1),
+      capacityWaitQueue=mutable.Map(7L -> mutable.Queue(PendingLinkAccessRequest(4,"cars",approachLinkId=5,approachLane=Some(1)))))
+      .copy(movementSignals=List(MovementSignalBinding(5,7,91,List(0)),MovementSignalBinding(5,7,92,List(1))))
+    val (handler,sent)=newHandler(state,id => Some(ShardActorId(entityId=id,classType="hybrid.actor.Link")))
+    handler.handleReceiveSignalChangeStatus(requestEvent(),TrafficSignalChangeStatusData(SignalState(Green,2,102),102,91,
+      List(SignalAspectUpdate(92,SignalState(Red,2,102),102))))
+    state.signals(91).state shouldBe Green
+    state.signals(92).state shouldBe Red
+    state.capacityWaitQueue(7).size shouldBe 1
+    sent.size shouldBe 1
+    val publication=sent.head._3.asInstanceOf[model.hybrid.entity.event.data.link.LinkSignalStateData]
+    publication.targetLinkId shouldBe Some(7)
+    publication.laneIds shouldBe List(0)
+    publication.updates.map(_.laneIds) shouldBe List(List(1))
+    publication.updates.head.phase shouldBe Red
+  }
+
 }

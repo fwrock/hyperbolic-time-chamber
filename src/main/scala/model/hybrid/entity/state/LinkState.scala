@@ -95,13 +95,33 @@ case class LinkState(
   stopLineGapM: Double = 0.0,
   following: model.MicroFollowingState = model.MicroFollowingState(),
   downstreamSpillback: Boolean = false,
-  sidewalk: model.SidewalkConfig = model.SidewalkConfig.Default
+  sidewalk: model.SidewalkConfig = model.SidewalkConfig.Default,
+  laneChanging: model.LaneChangingConfig = model.LaneChangingConfig(),
+  laneConnections: List[model.LaneConnection] = Nil,
+  signalControls: List[model.LinkMovementSignal] = Nil,
+  detectors: List[model.MicroDetectorConfig] = Nil,
+  microEntry: model.MicroEntryConfig = model.MicroEntryConfig(),
+  var pendingMicroEntries: List[model.PendingMicroEntry] = Nil,
+  mesoCapacity: Option[model.MesoCapacityConfig] = None,
+  mesoCapacityState: model.MesoCapacityState = model.MesoCapacityState()
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
       scheduleOnTimeManager = scheduleOnTimeManager
     ) {
+  require(mesoCapacity != null && (mesoCapacity.isEmpty || isMesoMode), "separate MESO capacity requires MESO links")
+  require(mesoCapacityState != null, "missing MESO capacity state")
   require(sidewalk != null, "sidewalk configuration cannot be null; use enabled=false to disable walking")
+  require(laneChanging != null, "lane-changing configuration cannot be null")
+  require(microEntry != null && (!microEntry.enabled || isMicroMode), "queued entry requires MICRO")
+  require(!microEntry.enabled || !downstreamSpillback,
+    "queued MICRO entry does not yet support retained upstream spillback footprints")
+  require(laneChanging.model == model.LaneChangingModel.Disabled || isMicroMode,
+    "active lane changing requires MICRO links")
+  require(laneConnections.forall(_.fromLane < lanes), "lane connection exceeds link lane count")
+  require(detectors.forall(d => d.laneId < lanes && d.positionMeters + d.lengthMeters <= length),
+    "signal detector lies outside its link")
+  require(signalControls.forall(_.laneIds.forall(l => l >= 0 && l < lanes)), "invalid signal control lane")
   require(exitSpeedLimitsMps.values.forall(v => v.isFinite && v > 0.0), "exit speed limits must be positive m/s")
   require(stopLineGapM.isFinite && stopLineGapM >= 0 && stopLineGapM < length, "invalid signal stop-line gap")
   require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && lanes == 1 && microTicksPerGlobalTick == 1),

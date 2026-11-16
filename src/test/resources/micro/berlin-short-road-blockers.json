@@ -1,0 +1,809 @@
+{
+  "cases": [
+    {
+      "sourceRoad": 44172,
+      "length": 15.33,
+      "lanes": 2,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 43951,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 88740,
+          "fromLane": 1,
+          "toLane": 1
+        }
+      ],
+      "requester": {
+        "actorId": 143811,
+        "shardId": "cars",
+        "position": 14.83,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 43951,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 1,
+      "blocker": {
+        "actorId": 144188,
+        "shardId": "cars",
+        "position": 14.83,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 43951,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 0
+    },
+    {
+      "sourceRoad": 45746,
+      "length": 45.14,
+      "lanes": 3,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 57812,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 43961,
+          "fromLane": 1,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 93784,
+          "fromLane": 2,
+          "toLane": 0
+        }
+      ],
+      "requester": {
+        "actorId": 149130,
+        "shardId": "cars",
+        "position": 44.64,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 93784,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 0,
+      "blocker": {
+        "actorId": 149712,
+        "shardId": "cars",
+        "position": 44.64,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 43961,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 1
+    },
+    {
+      "sourceRoad": 59364,
+      "length": 35.27,
+      "lanes": 3,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 64041,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 79444,
+          "fromLane": 1,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 64037,
+          "fromLane": 2,
+          "toLane": 0
+        }
+      ],
+      "requester": {
+        "actorId": 123851,
+        "shardId": "cars",
+        "position": 34.77,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 64037,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 0,
+      "blocker": {
+        "actorId": 123898,
+        "shardId": "cars",
+        "position": 34.77,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 79444,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 1
+    },
+    {
+      "sourceRoad": 67871,
+      "length": 39.63,
+      "lanes": 3,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 67813,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 56744,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 56744,
+          "fromLane": 1,
+          "toLane": 1
+        },
+        {
+          "outgoingLinkId": 60040,
+          "fromLane": 2,
+          "toLane": 2
+        }
+      ],
+      "requester": {
+        "actorId": 138460,
+        "shardId": "cars",
+        "position": 39.13,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 67813,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 1,
+      "blocker": {
+        "actorId": 139052,
+        "shardId": "cars",
+        "position": 39.13,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 67813,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 0
+    },
+    {
+      "sourceRoad": 74687,
+      "length": 32.78,
+      "lanes": 3,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 36078,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 67813,
+          "fromLane": 1,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 56744,
+          "fromLane": 2,
+          "toLane": 1
+        }
+      ],
+      "requester": {
+        "actorId": 139624,
+        "shardId": "cars",
+        "position": 32.28,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 67813,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 0,
+      "blocker": {
+        "actorId": 139705,
+        "shardId": "cars",
+        "position": 32.28,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 67813,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 1
+    },
+    {
+      "sourceRoad": 76369,
+      "length": 28.82,
+      "lanes": 3,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 86392,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 74131,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 74131,
+          "fromLane": 1,
+          "toLane": 1
+        },
+        {
+          "outgoingLinkId": 59476,
+          "fromLane": 2,
+          "toLane": 1
+        }
+      ],
+      "requester": {
+        "actorId": 118823,
+        "shardId": "cars",
+        "position": 28.32,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 59476,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 1,
+      "blocker": {
+        "actorId": 118960,
+        "shardId": "cars",
+        "position": 28.32,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 59476,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 2
+    },
+    {
+      "sourceRoad": 79305,
+      "length": 36.05,
+      "lanes": 3,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 86377,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 95681,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 95681,
+          "fromLane": 1,
+          "toLane": 1
+        },
+        {
+          "outgoingLinkId": 76142,
+          "fromLane": 2,
+          "toLane": 1
+        }
+      ],
+      "requester": {
+        "actorId": 122573,
+        "shardId": "cars",
+        "position": 35.55,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 76142,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 1,
+      "blocker": {
+        "actorId": 122608,
+        "shardId": "cars",
+        "position": 35.55,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 76142,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 2
+    },
+    {
+      "sourceRoad": 79658,
+      "length": 38.84,
+      "lanes": 4,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 73637,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 84518,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 84518,
+          "fromLane": 1,
+          "toLane": 1
+        },
+        {
+          "outgoingLinkId": 84518,
+          "fromLane": 2,
+          "toLane": 2
+        },
+        {
+          "outgoingLinkId": 73633,
+          "fromLane": 3,
+          "toLane": 2
+        }
+      ],
+      "requester": {
+        "actorId": 151234,
+        "shardId": "cars",
+        "position": 38.34,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 73633,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 2,
+      "blocker": {
+        "actorId": 151537,
+        "shardId": "cars",
+        "position": 38.34,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 73633,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 3
+    },
+    {
+      "sourceRoad": 80618,
+      "length": 23.75,
+      "lanes": 3,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 32238,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 80620,
+          "fromLane": 1,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 66996,
+          "fromLane": 2,
+          "toLane": 0
+        }
+      ],
+      "requester": {
+        "actorId": 152008,
+        "shardId": "cars",
+        "position": 23.25,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 80620,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 0,
+      "blocker": {
+        "actorId": 152620,
+        "shardId": "cars",
+        "position": 23.25,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 80620,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 1
+    },
+    {
+      "sourceRoad": 82850,
+      "length": 42.18,
+      "lanes": 2,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 92759,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 81477,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 81477,
+          "fromLane": 1,
+          "toLane": 1
+        },
+        {
+          "outgoingLinkId": 86562,
+          "fromLane": 1,
+          "toLane": 1
+        }
+      ],
+      "requester": {
+        "actorId": 144027,
+        "shardId": "cars",
+        "position": 41.68,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 92759,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 1,
+      "blocker": {
+        "actorId": 145872,
+        "shardId": "cars",
+        "position": 41.68,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 92759,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 0
+    },
+    {
+      "sourceRoad": 84055,
+      "length": 24.23,
+      "lanes": 2,
+      "speedKmh": 29.988,
+      "connections": [
+        {
+          "outgoingLinkId": 34702,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 88373,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 46675,
+          "fromLane": 1,
+          "toLane": 0
+        }
+      ],
+      "requester": {
+        "actorId": 148542,
+        "shardId": "cars",
+        "position": 23.73,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 46675,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 0,
+      "blocker": {
+        "actorId": 148567,
+        "shardId": "cars",
+        "position": 23.73,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 46675,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 1
+    },
+    {
+      "sourceRoad": 85587,
+      "length": 39.63,
+      "lanes": 3,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 97855,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 97855,
+          "fromLane": 1,
+          "toLane": 1
+        },
+        {
+          "outgoingLinkId": 59161,
+          "fromLane": 1,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 97866,
+          "fromLane": 2,
+          "toLane": 1
+        }
+      ],
+      "requester": {
+        "actorId": 127682,
+        "shardId": "cars",
+        "position": 39.13,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 59161,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 0,
+      "blocker": {
+        "actorId": 127733,
+        "shardId": "cars",
+        "position": 39.13,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 59161,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 1
+    },
+    {
+      "sourceRoad": 91725,
+      "length": 27.02,
+      "lanes": 4,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 91724,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 53252,
+          "fromLane": 2,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 84525,
+          "fromLane": 3,
+          "toLane": 0
+        }
+      ],
+      "requester": {
+        "actorId": 115844,
+        "shardId": "cars",
+        "position": 26.52,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 53252,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 1,
+      "blocker": {
+        "actorId": 115883,
+        "shardId": "cars",
+        "position": 26.52,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 53252,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 2
+    },
+    {
+      "sourceRoad": 97189,
+      "length": 32.86,
+      "lanes": 3,
+      "speedKmh": 50.004000000000005,
+      "connections": [
+        {
+          "outgoingLinkId": 88759,
+          "fromLane": 0,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 88754,
+          "fromLane": 1,
+          "toLane": 0
+        },
+        {
+          "outgoingLinkId": 81746,
+          "fromLane": 2,
+          "toLane": 1
+        },
+        {
+          "outgoingLinkId": 81746,
+          "fromLane": 2,
+          "toLane": 2
+        }
+      ],
+      "requester": {
+        "actorId": 122343,
+        "shardId": "cars",
+        "position": 32.36,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 88754,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "requesterLane": 0,
+      "blocker": {
+        "actorId": 122581,
+        "shardId": "cars",
+        "position": 32.36,
+        "velocity": 0,
+        "acceleration": 0,
+        "vehicleLength": 5,
+        "nextLinkId": 88754,
+        "maxAcceleration": 1.5,
+        "maxDeceleration": 4.5,
+        "minGap": 2.0,
+        "reactionTime": 1.0,
+        "sigma": 0.5,
+        "randomSeed": 42
+      },
+      "blockerLane": 1
+    }
+  ]
+}

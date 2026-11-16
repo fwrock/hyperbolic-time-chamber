@@ -74,22 +74,8 @@ object SimulationController {
     if (_status.get() != SimulationStatus.Idle)
       return Left(s"Cannot start: simulation is already ${_status.get()}")
 
-    if (settings.nonEmpty) SimulatorSettingsRegistry.setAll(settings)
-
-    withSystem {
-      sys =>
+    prepare(configFile, settings).flatMap { _ => withSystem { sys =>
         val configArg = configFile.filter(_.nonEmpty).orNull
-        // Actors created later (TrafficSignal, ...) call loadSimulationConfig() without a path and would not find the
-        // file this run was started from (REST mode has no HTC_SIMULATION_CONFIG_FILE). Register the chosen file's
-        // configuration, as PUT /config does, so every part of this run sees the same scenario.
-        if (configArg != null)
-          ApiConfigRegistry.set(core.util.SimulationUtil.loadSimulationConfig(configArg))
-        // Shard regions for this scenario's actor classTypes are normally registered once at
-        // boot (HyperbolicTimeChamber.start -> SimulationUtil.startShards), but in API mode
-        // boot happens before any scenario is chosen, so that call is deferred (see
-        // HyperbolicTimeChamber.scala) -- register them now, against the scenario actually
-        // being started, before PrepareSimulationEvent reaches SimulationManager.
-        core.util.SimulationUtil.startShards(sys, configArg)
         val proxy = DistributedUtil.createSingletonProxy(sys, SIMULATION_MANAGER_ACTOR_NAME)
         markLoading()
         val reportId = java.util.UUID.randomUUID().toString
@@ -105,6 +91,21 @@ object SimulationController {
               .getOrElse("") +
             (if (settings.nonEmpty) s", ${settings.size} setting(s) overridden" else "")
         )
+    } }
+  }
+
+  /** Installs local shard regions without starting the simulation. Cluster control calls this
+    * on every JVM after settings replication and before sending the singleton start event.
+    */
+  def prepare(configFile: Option[String] = None, settings: Map[String, String] = Map.empty): Either[String, Unit] = {
+    if (_status.get() != SimulationStatus.Idle)
+      return Left(s"Cannot prepare shards: simulation is already ${_status.get()}")
+    if (settings.nonEmpty) SimulatorSettingsRegistry.setAll(settings)
+    withSystem { sys =>
+      val configArg = configFile.filter(_.nonEmpty).orNull
+      if (configArg != null)
+        ApiConfigRegistry.set(core.util.SimulationUtil.loadSimulationConfig(configArg))
+      core.util.SimulationUtil.startShards(sys, configArg)
     }
   }
 

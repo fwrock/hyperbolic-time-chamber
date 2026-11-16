@@ -19,6 +19,17 @@ import org.scalatest.matchers.should.Matchers
   * velocity by `handleMicroLeaveLink` on every link exit.
   */
 class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
+  "queued admission" should "count continuation waits while keeping pre-departure delay out of trip waiting time" in {
+    val reported=scala.collection.mutable.ArrayBuffer.empty[Map[String,Any]]
+    val (handler,reporter)=newHandler(reported)
+    val state=newCarState()
+    handler.handleMicroEnterLink(enterLinkData(100L).copy(queuedWaitSeconds=3.0,initialVelocity=Some(0)),state)
+    reporter.sumoWaitingTimeSeconds shouldBe 0.0
+    handler.handleMicroEnterLink(enterLinkData(101L).copy(queuedWaitSeconds=2.5,initialVelocity=Some(0)),state)
+    reporter.sumoWaitingTimeSeconds shouldBe 2.5
+    state.microState.get.velocity shouldBe 0.0
+    intercept[IllegalArgumentException](handler.handleMicroEnterLink(enterLinkData(102L).copy(queuedWaitSeconds = -1),state))
+  }
 
   private def newCarState(): CarState =
     CarState(
@@ -118,6 +129,34 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
     handler.handleMicroEnterLink(enterLinkData(102L), state)
 
     state.microState.map(_.velocity) shouldBe Some(12.5)
+  }
+
+  it should "reflect imported physical parameters and the actual departure offset in car state and reporting" in {
+    val reported = scala.collection.mutable.ArrayBuffer.empty[Map[String, Any]]
+    val (handler, reporter) = newHandler(reported)
+    val state = newCarState().copy(microAcceleration = Some(1.5), microDeceleration = Some(3.7), size = 5.0,
+      microMinGap = Some(3.5), microReactionTime = Some(1.7), microMaxSpeed = Some(7.0),
+      microSpeedFactor = 1.2, microDesiredMaxSpeed = Some(5.0),microSigma=.5,microRandomSeed=9007199254740993L,
+      microLc2013=model.hybrid.entity.state.model.Lc2013Parameters(strategic=2,keepRight=0))
+    handler.handleMicroEnterLink(enterLinkData(100L).copy(initialPosition = 12.0), state)
+    state.microState.get.maxAcceleration shouldBe 1.5
+    state.microState.get.maxDeceleration shouldBe 3.7
+    state.microState.get.vehicleLength shouldBe 5.0
+    state.microState.get.minGap shouldBe 3.5
+    state.microState.get.reactionTime shouldBe 1.7
+    state.microState.get.desiredVelocity shouldBe 6.0
+    val restored = core.util.JsonUtil.fromJson[CarState](core.util.JsonUtil.toJson(state))
+    restored.microMinGap shouldBe Some(3.5)
+    restored.microReactionTime shouldBe Some(1.7)
+    restored.microMaxSpeed shouldBe Some(7.0)
+    restored.microSpeedFactor shouldBe 1.2
+    restored.microDesiredMaxSpeed shouldBe Some(5.0)
+    restored.microSigma shouldBe .5
+    restored.microRandomSeed shouldBe 9007199254740993L
+    restored.microLc2013.strategic shouldBe 2.0
+    restored.microLc2013.keepRight shouldBe 0.0
+    reporter.sumoIdealTravelTimeSeconds shouldBe (300.0 - 12.0) / 6.0 +- 1e-9
+    reporter.sumoDepartPos shouldBe 12.0
   }
 
   it should "report the same initial_velocity it stores on the car's micro state" in {

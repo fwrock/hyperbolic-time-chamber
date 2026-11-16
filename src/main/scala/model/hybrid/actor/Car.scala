@@ -136,7 +136,6 @@ class Car(
     sendMessageFn               = (id, shard, data, evType) => sendMessageTo(entityId = id, shardId = shard, data = data, eventType = evType),
     getCurrentNodeFn            = () => getCurrentNode,
     getNextLinkFn               = () => getNextLink,
-    getTripDestinationFn        = () => getTripDestination,
     setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick,
     setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
     onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks, state.journey.secondsPerTick),
@@ -286,11 +285,14 @@ class Car(
 
   override protected def onHorizonFinalization(horizon: Tick): Unit =
     if (state.status != Finished && state.status != model.hybrid.entity.state.enumeration.MovableStatusEnum.Parked &&
-      journeyReporter.sumoDepartTick.nonEmpty)
+      state.startTick <= horizon)
       model.hybrid.support.JourneyHorizonReporter.report("car", getEntityId,
         getTripOrigin.getOrElse(state.origin), getTripDestination.getOrElse(state.destination),
-        journeyReporter.sumoDepartTick.get, horizon, state.distance - getTripStartDistance,
-        state.currentPath.map(_._1), (data, label) => report(data, label), state.journey.secondsPerTick)
+        journeyReporter.sumoDepartTick.getOrElse(-1L), horizon, state.distance - getTripStartDistance,
+        Option.when(journeyReporter.sumoDepartTick.nonEmpty)(state.currentPath.map(_._1)).flatten,
+        (data, label) => report(data, label),
+        if (journeyReporter.sumoDepartTick.nonEmpty) state.journey.secondsPerTick else core.util.SimulationClock.current.secondsPerTick,
+        scheduledDeparture=Some(getTripStartTick.getOrElse(state.startTick)))
 
   override def actSpontaneous(event: SpontaneousEvent): Unit = {
     if (state == null || state.status == Parked) {
@@ -506,7 +508,26 @@ class Car(
   private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
     signalHandler.handleLinkAccess(data, state, eventTick = event.tick, eventSeq = event.seq)
 
+  override protected def mesoOriginAtEnd: Boolean =
+    state.journey.sumoDepartTick.isEmpty && state.mesoOriginLinkId.exists(id => state.currentPath.exists(_._1 == id))
+
   override protected def microEntryVelocity: Double = journeyReporter.sumoArrivalSpeed
+  override protected def microAcceleration: Option[Double] = state.microAcceleration
+  override protected def microMinGap: Option[Double] = state.microMinGap
+  override protected def microReactionTime: Option[Double] = state.microReactionTime
+  override protected def microMaxSpeed: Option[Double] = state.microMaxSpeed
+  override protected def microSpeedFactor: Double = state.microSpeedFactor
+  override protected def microDesiredMaxSpeed: Option[Double] = state.microDesiredMaxSpeed
+  override protected def microSigma: Double = state.microSigma
+  override protected def microRandomSeed: Long = state.microRandomSeed
+  override protected def microLc2013: model.hybrid.entity.state.model.Lc2013Parameters = state.microLc2013
+  override protected def microEntryLane: Option[Int] =
+    if (state.movableCurrentPathIsJunction) None else state.journey.pendingRoadLane
+  override protected def microDeceleration: Option[Double] = state.microDeceleration
+  override protected def microEntryPosition: Double =
+    if (state.journey.sumoDepartTick.isEmpty) state.microDepartPosition else 0.0
+  override protected def microArrivalPosition: Option[Double] =
+    if (!state.movableCurrentPathIsJunction && getNextLink == 0L) state.microArrivalPosition else None
   override protected def microEntryRemainderSeconds: Double =
     state.journey.entryRemainderAt(currentTick)
 
@@ -530,6 +551,8 @@ class Car(
   }
 
   private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
+    if (getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP && data.requestSeq != 0L &&
+      !isAwaitingReply(Movable.enterLinkAwaitKey(event.actorRefId),"EnterLinkData",data.requestSeq)) return
     consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
     microHandler.handleMicroEnterLink(data, state)
     emissionHandler.onMicroEnterLink(data.linkId, data.microTimeStep)

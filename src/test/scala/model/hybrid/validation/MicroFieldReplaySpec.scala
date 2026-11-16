@@ -52,4 +52,17 @@ class MicroFieldReplaySpec extends AnyFlatSpec with Matchers {
     MicroFieldReplay.replay(legacy) shouldBe MicroFieldReplay.replay(episode)
     intercept[IllegalArgumentException](MicroFieldReplay.replay(episode.copy(speedLimitKmh = Double.NaN)))
   }
+
+  it should "apply explicit shared physics and seeded imperfection without changing defaults" in {
+    val input=episode.copy(maxAcceleration=1.5,sigma=.5,randomSeed=42)
+    val restored=JsonUtil.fromJson[FieldReplayEpisode](JsonUtil.toJson(input))
+    restored shouldBe input
+    val first=MicroFieldReplay.replay(restored)
+    first shouldBe MicroFieldReplay.replay(input)
+    first(1).velocity should be <= 10.15
+    first(1).velocity should be > 10.0
+    first should not be MicroFieldReplay.replay(input.copy(randomSeed=43))
+    intercept[IllegalArgumentException](MicroFieldReplay.replay(input.copy(sigma=1.1)))
+    intercept[IllegalArgumentException](MicroFieldReplay.replay(input.copy(reactionTime=0)))
+  }
 }

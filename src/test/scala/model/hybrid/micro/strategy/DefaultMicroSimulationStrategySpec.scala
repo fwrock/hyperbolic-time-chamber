@@ -13,6 +13,45 @@ class DefaultMicroSimulationStrategySpec extends AnyFlatSpec with Matchers {
     DefaultMicroSimulationStrategy().executeSubTick(mutable.Map(0 -> lane), 0, tick,
       length, 50.0, 0.1, 10, mutable.Map.empty, signal)
 
+  "Per-vehicle MICRO parameters" should "cap a free vehicle independently of the road speed" in {
+    val lane = mutable.Queue(VehicleInLane(1,"cars",0,0,0,5,maxSpeed=Some(3)))
+    for (tick <- 1L to 5L) advance(lane,tick,length=1000).head.velocity should be <= 3.0
+    lane.head.velocity shouldBe 3.0 +- 1e-9
+  }
+
+  it should "apply the driver factor to road and desired limits while keeping the engine cap independent" in {
+    def cruise(factor: Double, maximum: Option[Double]=None, desired: Option[Double]=None): Double = {
+      val lane=mutable.Queue(VehicleInLane(1,"cars",0,0,0,5,speedFactor=factor,
+        maxSpeed=maximum,desiredMaxSpeed=desired))
+      for (tick <- 1L to 10L) advance(lane,tick,length=1000)
+      lane.head.velocity
+    }
+    cruise(.8) shouldBe .8*50/3.6 +- 1e-9
+    cruise(1.2) shouldBe 1.2*50/3.6 +- 1e-9
+    cruise(1.2,Some(7)) shouldBe 7.0 +- 1e-9
+    cruise(1.2,Some(7),Some(5)) shouldBe 6.0 +- 1e-9
+  }
+
+  it should "use each follower's gap and reaction time in actual Link physics" in {
+    def speed(gap: Double, tau: Double): Double = {
+      val lane = mutable.Queue(VehicleInLane(1,"cars",23,0,0,5),
+        VehicleInLane(2,"cars",10,3,0,5,minGap=gap,reactionTime=tau))
+      DefaultMicroSimulationStrategy().executeSubTick(mutable.Map(0->lane),0,1,100,50,.1,1,
+        mutable.Map.empty).find(_.vehicleId==2).get.velocity
+    }
+    speed(2,1) shouldBe 3.26 +- 1e-9
+    speed(2,2) should be < speed(2,1)
+    speed(6,1) should be < speed(2,1)
+  }
+
+  it should "preserve the physical red stop line for a vehicle with a larger gap" in {
+    val lane = mutable.Queue(VehicleInLane(1,"cars",65,10,0,5,minGap=5,reactionTime=1.5))
+    for (tick <- 1L to 100L)
+      advance(lane,tick,signal=Some(model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red))
+    lane.head.position shouldBe 100.0 +- 0.01
+    lane.head.velocity shouldBe 0.0 +- 0.01
+  }
+
   "MICRO boundary kinematics" should "keep a free vehicle's crossing speed and retire it at its first crossing sub-tick" in {
     val lane = mutable.Queue(VehicleInLane(1L, "cars", 99.5, 10.0, 0.0, 4.5))
     val update = advance(lane).head
@@ -37,6 +76,20 @@ class DefaultMicroSimulationStrategySpec extends AnyFlatSpec with Matchers {
     exit shouldBe defined
     exit.get.velocity should be >= 5.0
     exit.get.velocity should be <= 5.45
+  }
+
+  it should "integrate imported acceleration and end a partial road at the requested arrival position" in {
+    val lane = mutable.Queue(VehicleInLane(1L, "cars", 12.0, 0.0, 0.0, 5.0,
+      maxAcceleration = 1.5, entryPosition = 12.0, arrivalPosition = Some(30.0)))
+    advance(lane).head.velocity shouldBe 1.5 +- 1e-9
+    var exit: Option[MicroVehicleUpdate] = None
+    for (tick <- 2L to 20L if lane.nonEmpty) {
+      advance(lane, tick).find(_.reachedEnd).foreach(u => exit = Some(u))
+    }
+    exit shouldBe defined
+    exit.get.position shouldBe 30.0
+    exit.get.distanceTraveled shouldBe Some(18.0)
+    lane shouldBe empty
   }
 
   it should "start integrating entries after their entry tick regardless of same-tick mailbox order" in {

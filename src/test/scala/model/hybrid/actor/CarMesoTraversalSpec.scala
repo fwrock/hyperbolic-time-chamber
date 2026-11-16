@@ -70,6 +70,7 @@ class CarMesoTraversalSpec extends AnyFlatSpec with Matchers with BeforeAndAfter
         car ! SpontaneousEvent(wake, manager.ref)
         val enter = link.expectMsgType[ActorInteractionEvent]
         enter.data shouldBe a[EnterLinkData]
+        enter.data.asInstanceOf[EnterLinkData].nextLinkId shouldBe links.lift(index+1).map(_._1).getOrElse(0L)
         manager.receiveWhile(idle = 30.millis) { case _: FinishEvent => () }
         val enterReply = ActorInteractionEvent(wake, wake, linkId, "test.Link", "", "test.Link",
           EventTypeEnum.ReceiveEnterLinkInfo.toString,

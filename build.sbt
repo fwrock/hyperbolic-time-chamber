@@ -1,13 +1,10 @@
 import sbt.Keys.libraryDependencies
 import scala.collection.Seq
 
-ThisBuild / version := "3.2.0"
+ThisBuild / version := "3.9.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 
-// Pekko 2.0 upgrade (experimental): companion modules (management, http, connectors-kafka) are only
-// published as 2.0.0 milestones and the Kryo serializer targets Pekko 1.x, so sbt flags them as
-// "possibly binary incompatible". Downgraded to a warning while we validate at runtime.
 ThisBuild / evictionErrorLevel := Level.Warn
 
 ThisBuild / scalacOptions ++= Seq("-Wconf:msg=match may not be exhaustive:error")
@@ -63,9 +60,6 @@ lazy val root = (project in file("."))
   .settings(
     name := "hyperbolic-time-chamber",
     idePackagePrefix := Some("org.interscity.htc"),
-    // Pekko 2.0 (Artery) uses Agrona 2.x, which reads jdk.internal.misc.Unsafe. That package is not exported
-    // by java.base, so it must be exported to the unnamed module: via the jar manifest for `java -jar`
-    // (honoured by the JVM for executable jars) and via a forked JVM option for tests.
     assembly / packageOptions += Package.ManifestAttributes("Add-Exports" -> "java.base/jdk.internal.misc"),
     Test / fork := true,
     Test / javaOptions += "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",

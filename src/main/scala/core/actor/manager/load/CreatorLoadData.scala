@@ -200,7 +200,7 @@ class CreatorLoadData(
       "spatial assignment response does not cover its creation chunk")
     require(response.positions.values.forall(a => a != null && a.length == 2 && a.forall(_.isFinite)),
       "invalid spatial creation positions")
-    if (config.getBoolean("htc.load-balance-manager.enabled")) {
+    if (core.actor.manager.loadbalance.allocation.AllocationRuntime(context.system).enabled) {
       pendingChunks(response.batchId).foreach { creation =>
         val id = creation.actor.id.toString
         val published = SpatialShardIdRegistry.requirePublishedShardId(id,
@@ -330,16 +330,14 @@ class CreatorLoadData(
     * Uses a JVM-level cache in the companion object so all [[CreatorLoadData]] instances on the
     * same node share one proxy actor, instead of each creating their own.
     *
-    * Gate is config `htc.load-balance-manager.enabled` — valid on all cluster nodes, unlike
-    * [[ShardAllocatorRegistry]] which is only populated on the singleton host node.
+    * Use the routing mode captured when this JVM prepared its shards; later API edits cannot
+    * change a region's extractor. [[ShardAllocatorRegistry]] exists only on the singleton host.
     */
   private def getLoadBalanceProxy: Option[ActorRef] = {
     if (lbProxyChecked) return Option(loadBalanceProxy)
 
     lbProxyChecked = true
-    val lbEnabled =
-      try config.getBoolean("htc.load-balance-manager.enabled")
-      catch { case _: Exception => false }
+    val lbEnabled = core.actor.manager.loadbalance.allocation.AllocationRuntime(context.system).enabled
     if (lbEnabled) {
       val cached = CreatorLoadData.globalLbProxy.get()
       if (cached != null) {

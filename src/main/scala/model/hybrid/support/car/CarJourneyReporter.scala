@@ -86,6 +86,7 @@ class CarJourneyReporter(
   def reset(): Unit = {
     journeyFinishedReported         = false
     sumoDepartTick                  = None
+    journeyStateFn().mesoOriginActive = false
     sumoDepartSpeed                 = 0.0
     sumoArrivalSpeed                = 0.0
     sumoDepartLane                  = None
@@ -242,6 +243,8 @@ class CarJourneyReporter(
         "stopTime"          -> sumoStopTimeSeconds,
         "timeLoss"          -> timeLoss,
         "departDelay"       -> departDelay,
+        "scheduledDepart"   -> (plannedDepart.toDouble * secondsPerTick),
+        "actualDepart"      -> (if (sumoDepartTick.nonEmpty) depart.toDouble * secondsPerTick else -1.0),
         "rerouteNo"         -> sumoRerouteNo,
         "arrivalSpeed"      -> sumoArrivalSpeed,
         "departSpeed"       -> sumoDepartSpeed,

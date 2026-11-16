@@ -31,4 +31,31 @@ class LinkMicroSimulationHandlerSpec extends AnyFlatSpec with Matchers {
     data.averageSpeed shouldBe 25.0
     data.waitingTimeSeconds shouldBe 1.5
   }
+
+  it should "retain partial-road distance after physics has removed the completed lane vehicle" in {
+    var state = LinkState(startTick = 0L, from = 1L, to = 2L, length = 100.0,
+      lanes = 1, speedLimit = 72.0, capacity = 20.0, freeSpeed = 72.0,
+      simulationMode = model.hybrid.entity.state.enumeration.SimulationModeEnum.MICRO)
+      .initializeMicroLanes()
+    state.vehiclesByLane(0).enqueue(model.hybrid.entity.state.model.VehicleInLane(
+      9L, "cars", 29.5, 20.0, 0.0, 5.0, entryPosition = 12.0, arrivalPosition = Some(30.0)))
+    val sent = mutable.Buffer.empty[AnyRef]
+    val reporter = new LinkMetricsReporter((_, _) => (), () => "3", () => 6L, 60, 10,
+      () => state, _ => Some(2L), _ => 0.0, () => Nil, _ => ())
+    val handler = new LinkMicroSimulationHandler(
+      entityIdFn = () => "3", currentTickFn = () => 6L,
+      sendMessageFn = (_, _, data, _) => { sent += data; () },
+      getLinkStateFn = () => state, setLinkStateFn = s => state = s,
+      getVehicleEntryTickFn = _ => Some(2L), removeVehicleEntryTickFn = _ => (),
+      getVehicleWaitingSecondsFn = _ => 0.0, removeVehicleWaitingSecondsFn = _ => (),
+      vehicleWaitingSeconds = mutable.Map.empty, isMicroScheduledFn = () => false,
+      setMicroScheduledFn = _ => (), getSignalAtExitFn = () => None,
+      metricsReporter = reporter, logDebugFn = _ => ())
+    handler.handleGlobalTick(6L)
+    state.vehiclesByLane(0) shouldBe empty
+    val data = sent.collectFirst { case d: MicroLeaveLinkData => d }.get
+    data.finalPosition shouldBe 30.0
+    data.distanceTraveled shouldBe 18.0
+    data.averageSpeed shouldBe 4.5
+  }
 }
