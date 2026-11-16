@@ -22,12 +22,12 @@ val scalapbVersion = "0.11.11"
 // Apache Pekko
 val pekkoVersion = "2.0.0"
 val pekkoManagementVersion = "2.0.0-M1"
-val jacksonVersion = "2.22.4"
-val pekkoHttpVersion = "2.0.0-M2"
+val jacksonVersion = "2.23.0"
+val pekkoHttpVersion = "2.0.0"
 val pekkoCassandraPersistenceVersion="1.1.0"
 
 // Logs
-val logbackVersion = "1.5.32"
+val logbackVersion = "1.6.7"
 
 // Serialization
 val jacksonModuleVersion = "2.18.3"
@@ -40,17 +40,17 @@ val avroVersion = "1.12.0"
 val confluentAvroVersion = "7.7.2"
 
 // Parquet
-val parquetVersion = "1.18.1"
+val parquetVersion = "1.18.2"
 val avroVersion2 = "1.12.2"
 val snappyVersion = "1.1.10.12"
-val zstdVersion = "1.5.7-24"
+val zstdVersion = "1.5.7-28"
 val hadoopVersion = "3.5.0"
 
 // Connectors
 val kafkaConnectorsVersion = "2.0.0-M1"
 val jedisVersion = "8.0.2"
 val levelDBVersion = "1.8"
-val sqliteJdbcVersion = "3.53.4.0"
+val sqliteJdbcVersion = "3.54.1.0"
 
 // Prometheus Metrics
 val prometheusVersion = "0.16.0"
@@ -139,7 +139,7 @@ lazy val root = (project in file("."))
       "ch.qos.logback" % "logback-core" % logbackVersion,
       "org.slf4j" % "slf4j-api" % "2.0.20",
 
-      "com.typesafe" % "config" % "1.4.9",
+      "com.typesafe" % "config" % "1.4.10",
 
       // Observability
       "org.openjdk.jol" % "jol-core" % "0.17",
