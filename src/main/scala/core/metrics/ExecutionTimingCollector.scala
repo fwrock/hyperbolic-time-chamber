@@ -9,9 +9,11 @@ sealed trait ExecutionTimingMessage extends Serializable
 object ExecutionTimingCollector extends ExtensionId[ExecutionTimingCollectorExtension] {
   val Name = "execution-timing-collector"
   final case class Capture(replyTo: ActorRef) extends ExecutionTimingMessage
-  final case class Captured(processId: String, node: Int, rows: Vector[TimingSnapshot]) extends ExecutionTimingMessage
+  final case class Captured(processId: String, node: Int, rows: Vector[TimingSnapshot],
+    remoteTraffic: Vector[RemoteTrafficSnapshot] = Vector.empty) extends ExecutionTimingMessage
   private val processId = java.util.UUID.randomUUID().toString
-  def snapshot: Captured = Captured(processId, org.interscity.htc.core.cluster.NodeIdentity.selfStamp, ExecutionTimingMetrics.timers.snapshots)
+  def snapshot: Captured = Captured(processId, org.interscity.htc.core.cluster.NodeIdentity.selfStamp,
+    ExecutionTimingMetrics.timers.snapshots, RemoteTrafficMetrics.snapshot)
   override def createExtension(system: ExtendedActorSystem): ExecutionTimingCollectorExtension =
     new ExecutionTimingCollectorExtension(system)
 }

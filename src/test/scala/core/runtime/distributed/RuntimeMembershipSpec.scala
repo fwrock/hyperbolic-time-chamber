@@ -22,6 +22,7 @@ class RuntimeMembershipSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
 
   private val workerCount = 128
   private class Conservative(manager: ActorRef) extends ChannelClosedGlobalTimeManager(100L, false, manager) {
+    override protected lazy val nodeLocalScheduling: Boolean = false
     override def onStart(): Unit = ()
     override protected def expectedWorkers: Int = workerCount
     def ready: Boolean = recoveryFinished

@@ -10,9 +10,14 @@ import core.entity.event.control.loadbalance.{ RequestMigrationPauseEvent, Migra
 import core.runtime.EventOrder
 import core.runtime.accounting.*
 import core.runtime.conservative.*
+import core.runtime.conservative.partition.PartitionOwners
+import core.actor.manager.time.partition.NodeLocalTimeManager
 import core.types.Tick
 import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME}
-import org.apache.pekko.actor.{ActorRef, Props, Terminated}
+import org.apache.pekko.actor.{ActorRef, ExtendedActorSystem, Props, Terminated}
+import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
+import org.apache.pekko.routing.RoundRobinPool
+import org.apache.pekko.cluster.{Cluster, MemberStatus}
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.{StartSimulationTimeEvent, StopSimulationEvent}
@@ -57,7 +62,23 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   private var lastTickBroadcastNanos = 0L
 
   protected def simulationMetrics: SimulationMetricSet = SimulationMetrics
-  protected def expectedWorkers: Int = SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
+  protected lazy val nodeLocalScheduling: Boolean = {
+    TimeManagerSchedulingStrategy.fromConfig(config).useNodeLocal(directInteractions,
+      SimulatorSettingsRegistry.getBoolean("htc.load-balance-manager.enabled", config))
+  }
+  private lazy val nodeLocalNodeCount: Int = {
+    val requested = SimulatorSettingsRegistry.getInt("htc.time-manager.node-local.nodes", config)
+    require(requested >= 0, "node-local node count must be nonnegative")
+    if (requested > 0) requested
+    else {
+      val count = Cluster(context.system).state.members.count(_.status == MemberStatus.Up)
+      require(count > 0, "node-local automatic membership requires an Up cluster cohort")
+      count
+    }
+  }
+  protected def expectedWorkers: Int =
+    if (nodeLocalScheduling) nodeLocalNodeCount
+    else SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
   protected lazy val reportManagerRef: ActorRef = createSingletonProxy(REPORT_MANAGER_ACTOR_NAME)
   override protected def runtimeCoordinatorForActors: Option[ActorRef] = Some(self)
   protected lazy val directInteractions: Boolean = {
@@ -66,9 +87,30 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
     selected == "direct"
   }
   override protected def localTimeManagerProps(): Props =
-    if (directInteractions) DirectConservativeLocalTimeManager.props(duration, manager, self)
+    if (nodeLocalScheduling) {
+      require(directInteractions, "node-local-tick requires conservative-transport=direct")
+      val count = SimulatorSettingsRegistry.getInt("htc.time-manager.node-local.workers-per-node", config)
+      require(count > 0, "node-local worker count must be positive")
+      NodeLocalTimeManager.props(duration, manager, self, count)
+    } else if (directInteractions) DirectConservativeLocalTimeManager.props(duration, manager, self)
     else ChannelAwareLocalTimeManager.props(duration, manager, self)
-  override def onStart(): Unit = createTimeManagersPool()
+  override protected def createTimeManagersPool(): Unit = {
+    if (!nodeLocalScheduling) super.createTimeManagersPool()
+    else {
+      require(expectedWorkers > 0, "node-local node count must be positive")
+      require(!SimulatorSettingsRegistry.getBoolean("htc.load-balance-manager.enabled", config),
+        "node-local-tick requires live load balancing disabled")
+      timeManagersPool = context.actorOf(ClusterRouterPool(RoundRobinPool(0),
+        ClusterRouterPoolSettings(expectedWorkers, 1, allowLocalRoutees = true))
+        .props(localTimeManagerProps()), name = "node-local-time-managers")
+      simulationManager ! TimeManagerRegisterEvent(timeManagersPool, runtimeCoordinatorForActors)
+    }
+  }
+  override def onStart(): Unit = protect { createTimeManagersPool() }
+
+  private def physicalAddress(ref: ActorRef): org.apache.pekko.actor.Address =
+    if (ref.path.address.hasLocalScope) context.system.asInstanceOf[ExtendedActorSystem].provider.getDefaultAddress
+    else ref.path.address
 
   private def join(event: JoinRuntime): Unit = {
     val id = LogicalProcessId(event.identity.classType, event.identity.id)
@@ -79,7 +121,13 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       "new LP below conservative frontier")
     if (birth) require(event.initialWake.isEmpty && event.startTick == event.birth.get.tick, "invalid inert child enrollment")
     known.add(id)
-    val owner = membership(Math.floorMod(id.hashCode(), membership.size))
+    val owner = if (nodeLocalScheduling) {
+      require(event.birth.isEmpty, "node-local-tick does not support model actor births")
+      val local = membership.filter(ref => physicalAddress(ref) == physicalAddress(event.ref))
+      require(local.size == 1, s"expected one scheduler on LP node ${physicalAddress(event.ref)}")
+      local.head
+    } else membership(Math.floorMod(id.hashCode(), membership.size))
+    if (nodeLocalScheduling) membership.foreach(_ ! PartitionOwners(epoch, id, owner))
     owner ! RegisterConservativeProcess(epoch, self, event)
   }
   private def fail(error: Throwable): Unit = if (phase != Failed && phase != Finished) {
@@ -141,6 +189,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       self ! TickWindowReady(Long.MaxValue, 0L)
     case event: StartSimulationTimeEvent => startSimulation(event)
     case event: RequestMigrationPauseEvent => protect {
+      require(!nodeLocalScheduling, "node-local-tick does not support live migration")
       require((started || pendingStart.nonEmpty) && event.requester == sender() && event.shardIds.nonEmpty &&
         event.targetNodes.keySet == event.shardIds && event.requestId.nonEmpty, "invalid conservative migration pause request")
       if (Set(Stopping, Draining).contains(phase)) event.requester ! ConservativeMigrationDeclined(event.requestId)

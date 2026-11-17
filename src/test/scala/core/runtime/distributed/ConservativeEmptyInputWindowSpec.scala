@@ -21,6 +21,7 @@ class ConservativeEmptyInputWindowSpec extends AnyFlatSpec with Matchers with Be
   override def afterAll(): Unit = { system.terminate(); () }
 
   private class Coordinator(manager: ActorRef) extends ChannelClosedGlobalTimeManager(86400L, false, manager) {
+    override protected lazy val nodeLocalScheduling: Boolean = false
     override def onStart(): Unit = ()
     override protected def expectedWorkers: Int = 128
     def recovered: Boolean = recoveryFinished

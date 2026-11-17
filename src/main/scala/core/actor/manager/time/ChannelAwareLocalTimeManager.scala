@@ -38,6 +38,22 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private var sendingGrants = false
   protected def maxInFlight: Int = 32
   protected def directInteractions: Boolean = false
+  /** Optional scheduling adapters retain the same lifecycle and report barriers. */
+  protected def additionalWorkPending: Boolean = false
+  protected def additiveWakeups: Boolean = false
+  protected def selectRuntimeOwner(id: LogicalProcessId, membership: Vector[ActorRef]): ActorRef =
+    membership(Math.floorMod(id.hashCode(), membership.size))
+  protected def validAccountingOwner(ref: ActorRef, membership: Vector[ActorRef]): Boolean =
+    membership.contains(ref)
+  protected def forwardDirectCompletion(owner: ActorRef, completion: DirectWorkCompletion): Unit =
+    owner ! DirectAccounted(epoch, completion)
+  protected def conservativeEpoch: String = epoch
+  protected def conservativeMembers: Vector[ActorRef] = members
+  protected def progressConservative(): Unit = {
+    dispatchDueDirect()
+    completeBatch()
+    reportReady()
+  }
   private val directLedger = new DirectWorkLedger
   private val directRoots = mutable.Queue.empty[(Process, DirectExecute)]
   private val directRootSlots = mutable.Set.empty[DirectWorkId]
@@ -98,7 +114,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     context.actorOf(RuntimeBirthInitializer.props(self, coordinator, target, origin, data))
 
   private def nextToken(): Long = { token = Math.addExact(token, 1L); token }
-  private def owner(id: LogicalProcessId): ActorRef = members(Math.floorMod(id.hashCode(), members.size))
+  private def owner(id: LogicalProcessId): ActorRef = selectRuntimeOwner(id, members)
   private def checkEpoch(value: String): Unit = require(value == epoch && epoch.nonEmpty, "wrong conservative epoch")
   private def updateInput(process: Process, next: Option[EventOrder]): Unit = {
     process.next = next
@@ -167,7 +183,8 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       byHandle(handle) = process
       context.watch(join.ref)
       registerOwnedProcess(join.identity.copy(id = handle), join.initialWake, join.identity)
-      join.ref ! RuntimeJoined(epoch, coordinator, self, directConservative = directInteractions)
+      join.ref ! RuntimeJoined(epoch, coordinator, self, directConservative = directInteractions,
+        additiveWakeups = additiveWakeups)
     }
     case AuthorizeRuntimeBirth(run, target, origin) => protect {
       checkEpoch(run)
@@ -193,7 +210,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     }
     case event: DirectProcessed => protect {
       checkEpoch(event.epoch)
-      require(directInteractions && members.contains(event.accountingOwner), "invalid direct accounting owner")
+      require(directInteractions && validAccountingOwner(event.accountingOwner, members), "invalid direct accounting owner")
       if (!directClosedTick.exists(event.completion.work.tick <= _) && directTick.forall(_ <= event.completion.work.tick)) {
         val process = byRef.getOrElse(sender(), throw new IllegalArgumentException("unregistered direct callback"))
         require(event.completion.work.receiver == process.id, "completion from the wrong LP")
@@ -217,7 +234,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
         else {
           dispatchDueDirect()
           directForwarded += 1L
-          event.accountingOwner ! DirectAccounted(epoch, event.completion)
+          forwardDirectCompletion(event.accountingOwner, event.completion)
         }
         completeBatch()
       }
@@ -506,8 +523,15 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
 
   private def enrollDirect(process: Process, event: AnyRef, tick: Tick): Unit = {
     val work = DirectWork(DirectWorkId(process.id, process.incarnation, -nextToken()), None, process.id, tick)
+    dispatchDirectRoot(process.ref, DirectExecute(epoch, work, self, event))
+  }
+
+  /** Default workers enroll and dispatch locally; node partitions can own individual roots. */
+  protected def dispatchDirectRoot(target: ActorRef, delivery: DirectExecute): Unit = {
+    val process = byRef(target)
+    val work = delivery.work
     directLedger.enroll(work)
-    directRoots.enqueue(process -> DirectExecute(epoch, work, self, event))
+    directRoots.enqueue(process -> delivery)
     releaseDirectRoots()
   }
 
@@ -583,7 +607,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     grantExecution()
     completeBatch()
   }
-  private def completeRegistrationFences(): Unit = if (outgoing.isEmpty && accepting.isEmpty && reports.isEmpty) {
+  private def completeRegistrationFences(): Unit = if (outgoing.isEmpty && accepting.isEmpty && reports.isEmpty && !additionalWorkPending) {
     registrationFences.foreach { case (source, target) =>
       target ! core.entity.event.control.load.PostLoadRegistrationAckEvent(byRef(source).id.id.toString)
     }
@@ -592,7 +616,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private def completeBatch(): Unit = {
     completeRegistrationFences()
     if (batch.nonEmpty && !preparing && !sendingGrants && pendingExecution.isEmpty && executing.isEmpty &&
-      outgoing.isEmpty && accepting.isEmpty && reports.isEmpty && retiring.isEmpty && births.isEmpty &&
+      outgoing.isEmpty && accepting.isEmpty && reports.isEmpty && retiring.isEmpty && births.isEmpty && !additionalWorkPending &&
       (!directInteractions || (directLedger.isClosed && directRoots.isEmpty && directRootSlots.isEmpty))) {
       val round = batch.get.round
       batch = None
@@ -600,7 +624,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     } else reportReady()
   }
   private def reportReady(): Unit = if (readyRequest.nonEmpty && batch.isEmpty && outgoing.isEmpty &&
-    accepting.isEmpty && reports.isEmpty && births.isEmpty && (!directInteractions || directLedger.isClosed)) {
+    accepting.isEmpty && reports.isEmpty && births.isEmpty && !additionalWorkPending && (!directInteractions || directLedger.isClosed)) {
     val (round, target) = readyRequest.get
     readyRequest = None
     val next = (readyOrderedSchedules.map(_._3) ++ readyInputs.valuesIterator).minOption

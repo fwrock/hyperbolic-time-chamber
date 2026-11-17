@@ -31,6 +31,12 @@ object SimulatorSettingsRegistry {
 
   /** Catalog of all known settings exposed via the API. */
   val catalog: List[SettingDef] = List(
+    SettingDef("htc.time-manager.scheduling-strategy", "HTC_TIME_MANAGER_SCHEDULING_STRATEGY",
+      "Scheduling ownership strategy; auto selects node-local for direct conservative execution", "auto"),
+    SettingDef("htc.time-manager.node-local.nodes", "HTC_NODE_LOCAL_SCHEDULER_NODES",
+      "Fixed simulation JVM count for node-local-tick; zero freezes the Up cohort at startup", "0"),
+    SettingDef("htc.time-manager.node-local.workers-per-node", "HTC_NODE_LOCAL_SCHEDULER_WORKERS",
+      "Private tick schedule partitions per simulation JVM", "4"),
     SettingDef("htc.time-manager.conservative-transport", "HTC_CONSERVATIVE_TRANSPORT",
       "Conservative interaction transport, fixed before runtime startup", "direct"),
     SettingDef("htc.time-warp.max-ahead-ticks", "HTC_TIME_WARP_MAX_AHEAD_TICKS", "Optimistic tick window ahead of GVT, fixed at startup", "50"),
@@ -197,6 +203,7 @@ object SimulatorSettingsRegistry {
       "htc.report-manager.enabled-strategies" -> reporters,
       "htc.report-manager.parquet.compression" -> List("snappy", "zstd", "gzip", "uncompressed"),
       "htc.time-manager.conservative-transport" -> List("direct", "channel-closed"),
+      "htc.time-manager.scheduling-strategy" -> List("auto", "cluster-pool", "node-local-tick"),
       "htc.routing.cache-strategy" -> List("kafka", "inmemory", "accounted", "disabled"),
       "htc.mobility.load-policy.transit-trip-policy" -> List("reject", "walk"),
       "htc.snapshot-manager.migration.state-store" -> List("inmemory", "redis"),
@@ -214,7 +221,8 @@ object SimulatorSettingsRegistry {
   def isSecret(key: String): Boolean = secretMarkers.exists(key.toLowerCase.contains)
 
   def isStartupOnly(key: String): Boolean =
-    key == "htc.time-manager.conservative-transport" || startupOnlyPrefixes.exists(key.startsWith)
+    key == "htc.time-manager.conservative-transport" || key == "htc.time-manager.scheduling-strategy" ||
+      key.startsWith("htc.time-manager.node-local.") || startupOnlyPrefixes.exists(key.startsWith)
 
   def set(key: String, value: String): Unit = { overrides.put(key, value); version.incrementAndGet() }
   def setAll(settings: Map[String, String]): Unit = settings.foreach {

@@ -232,6 +232,8 @@ crash.log
 
 !scripts/scenario/benchmark_metrics.py
 !scripts/scenario/test_benchmark_metrics.py
+!scripts/scenario/benchmark_node_local_scheduler.py
+!scripts/scenario/test_benchmark_node_local_scheduler.py
 !scripts/scenario/run_comparison_study.py
 !scripts/scenario/build_comparison_report.py
 !scripts/scenario/test_comparison_report.py

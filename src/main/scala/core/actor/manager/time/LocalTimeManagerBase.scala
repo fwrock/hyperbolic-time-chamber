@@ -324,7 +324,7 @@ abstract class LocalTimeManagerBase(
     })
   }
 
-  private def releaseDispatch(actorId: Long, generation: Long): Boolean = {
+  protected def releaseDispatch(actorId: Long, generation: Long): Boolean = {
     if (generation != dispatchGeneration(actorId)) return false
     val removed = runningEvents.removeId(actorId)
     if (removed) inFlightTicks.remove(actorId)

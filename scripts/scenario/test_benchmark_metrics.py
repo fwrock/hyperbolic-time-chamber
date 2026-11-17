@@ -37,7 +37,7 @@ class BenchmarkMetricsTest(unittest.TestCase):
             return io.BytesIO(payload.encode())
         with tempfile.TemporaryDirectory() as directory, patch('benchmark_metrics.urllib.request.urlopen', side_effect=response):
             root = Path(directory)
-            monitor = ProcessMonitor(root, interval=.005, metrics_ports=[12345])
+            monitor = ProcessMonitor(root, interval=.005, metrics_ports=[12345], metrics_interval=.005)
             try:
                 self.assertTrue(ready.wait(2), 'metrics sampler never progressed')
                 self.assertGreater((root/'prometheus-samples.json').stat().st_size, len(payload))
@@ -48,6 +48,24 @@ class BenchmarkMetricsTest(unittest.TestCase):
             self.assertTrue(all(r['text']==payload and r['port']==12345 for r in records))
             self.assertEqual([r['seconds'] for r in records], sorted(r['seconds'] for r in records))
             self.assertTrue(json.loads((root/'process-samples.json').read_text()))
+
+    def test_process_sampling_continues_between_sparse_metrics_scrapes(self):
+        with tempfile.TemporaryDirectory() as directory, patch('benchmark_metrics.urllib.request.urlopen', return_value=io.BytesIO(b'metric 1\n')) as request:
+            monitor = ProcessMonitor(directory, interval=.005, metrics_ports=[12345], metrics_interval=10)
+            try:
+                threading.Event().wait(.08)
+            finally:
+                monitor.finish()
+            self.assertGreater(len(monitor.samples), 3)
+            self.assertEqual(request.call_count, 1)
+
+    def test_metrics_scrapes_can_be_disabled_without_disabling_process_samples(self):
+        with tempfile.TemporaryDirectory() as directory, patch('benchmark_metrics.urllib.request.urlopen') as request:
+            monitor = ProcessMonitor(directory, interval=.005, metrics_ports=[12345], metrics_interval=0)
+            monitor.finish()
+            request.assert_not_called()
+            self.assertTrue(monitor.samples)
+            self.assertEqual(json.loads((Path(directory)/'prometheus-samples.json').read_text()), [])
 
     def test_monitor_io_failure_is_reported_instead_of_accepting_missing_measurements(self):
         with tempfile.TemporaryDirectory() as directory:

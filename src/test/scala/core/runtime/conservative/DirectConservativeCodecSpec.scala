@@ -4,6 +4,7 @@ package core.runtime.conservative
 import core.entity.event.{ ActorInteractionEvent, EntityEnvelopeEvent, FinishEvent, SpontaneousEvent }
 import core.entity.event.control.report.ReportEvent
 import core.runtime.EventOrder
+import core.runtime.conservative.partition.*
 import core.runtime.accounting.{ CommittedReportBatchDelivery, LogicalProcessId, RuntimeFailure, RuntimeJoined }
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.ActorSystem
@@ -72,7 +73,18 @@ class DirectConservativeCodecSpec extends AnyFlatSpec with Matchers with BeforeA
         ),
         owner
       ),
-      RuntimeJoined("run", owner, owner, directConservative = true),
+      RuntimeJoined("run", owner, owner, directConservative = true, additiveWakeups = true),
+      PartitionOwners("run", receiver, owner),
+      PartitionCohort("run", Vector(owner)),
+      ConfigurePartition("run", Vector(owner)),
+      StoreWake("run", TickWake(10L, Identify(id = 2L, classType = "example.Link"))),
+      WakeStored("run", TickWake(10L, Identify(id = 2L))),
+      DrainPartition("run", 1L, 10L),
+      WakeClaimed("run", TickWake(10L, Identify(id = 2L))),
+      PartitionDrained("run", 1L),
+      StartPartitionRoot("run", owner, DirectExecute("run", root, owner,
+        SpontaneousEvent(10L, owner)), Some(TickWake(10L, Identify(id = 2L)))),
+      PartitionRootsSettled("run", Vector(root.id)),
       delivery,
       EntityEnvelopeEvent("2", delivery)
     )

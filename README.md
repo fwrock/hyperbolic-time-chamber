@@ -4,8 +4,10 @@
 
 **A distributed, event-driven multi-agent framework for urban mobility simulation and research**
 
-The next release is **3.2.0**, following 3.1.0. Release branch: `release/3.2.0`.
-The sbt version, assembled JAR and deployment images use the same release number.
+Release **3.10.0** makes node-local tick scheduling the default for direct conservative
+runs. Automatic selection preserves the existing pool for Time Warp, channel-closed
+transport and live rebalancing. See [scheduler configuration and supported scope](docs/NODE_LOCAL_TIME_MANAGER.md).
+This remains a prerelease with the existing Pekko companion dependency caveats.
 
 Built with Scala 3 and Apache Pekko, HTC implements a **hybrid micro-meso simulation model** where each link in the road network can independently operate in mesoscopic (aggregate flow) or microscopic (individual car-following) mode. Distributed execution and selective microscopic detail support urban mobility research; city-scale throughput and general traffic accuracy remain validation goals.
 
@@ -148,7 +150,7 @@ HTC_LOAD_EXCLUDE_CLASSES=Bus,BusStop,BusStation,Subway,SubwayStation,RailLink \
 HTC_LOAD_TRANSFORMS=org.interscity.htc.model.hybrid.support.MobilityLoadTransform \
 HTC_TRANSIT_TRIP_POLICY=walk \
 HTC_SIMULATION_CONFIG_FILE=/path/to/simulation.json \
-java -jar target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar
+java -jar target/scala-3.3.5/hyperbolic-time-chamber-3.10.0.jar
 ```
 
 The policy's HOCON key is `htc.mobility.load-policy.transit-trip-policy`.
@@ -316,11 +318,11 @@ Build the versioned JAR and Docker image locally:
 
 ```bash
 sbt test assembly
-docker build --build-arg HTC_VERSION=3.2.0 \
-  -t uxhabam/hyperbolic-time-chamber:3.2.0 .
+docker build --build-arg HTC_VERSION=3.10.0 \
+  -t uxhabam/hyperbolic-time-chamber:3.10.0 .
 ```
 
-The assembly is `target/scala-3.3.5/hyperbolic-time-chamber-3.2.0.jar`.
+The assembly is `target/scala-3.3.5/hyperbolic-time-chamber-3.10.0.jar`.
 `build-and-run.sh` reads the version from sbt and passes it to the Docker build.
 Compose and Kubernetes manifests reference `uxhabam/hyperbolic-time-chamber:3.2.0`;
 the VM Compose file also accepts an explicit `HTC_IMAGE` override. Registry pull
@@ -649,6 +651,7 @@ src/main/scala/
 | [Junction Geometry](docs/JUNCTION_GEOMETRY.md) | Fixed MICRO connectors, distance and turn-speed contract, and original geometry evidence |
 | [Work Recovery](docs/WORK_RECOVERY_2026_10_24.md) | Accepted implementation/build references, evidence locations and recovered milestone history |
 | [Distributed Time Warp Runtime](docs/DISTRIBUTED_OPTIMISTIC_RUNTIME.md) | Production LTM-owned accounting, rollback, GVT, commitment and supported scope |
+| [Node-local Tick Scheduling](docs/NODE_LOCAL_TIME_MANAGER.md) | Opt-in per-tick balanced local worker partitions, configuration, accounting and limitations |
 | [Multi-JVM Validation](docs/MULTI_JVM_POLICY_VALIDATION_2026_10_24.md) | Cross-process transport, transit startup fixes, policy parity and worker-loss acceptance |
 | [Bounded Optimistic Execution](docs/BOUNDED_OPTIMISTIC_EXECUTION.md) | Execution windows, event budgets and safe history collection |
 | [Progressive Optimistic Input](docs/PROGRESSIVE_OPTIMISTIC_RUNTIME.md) | Correlated JSON/SQLite enrollment windows and accepted-input bounds |

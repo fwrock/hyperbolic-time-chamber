@@ -4,7 +4,7 @@ ENV JDK_JAVA_OPTIONS="-XX:+UseCompactObjectHeaders"
 
 WORKDIR /app
 
-ARG HTC_VERSION=3.2.0
+ARG HTC_VERSION=3.10.0
 ARG SCALA_VERSION=3.3.5
 
 RUN mkdir -p /app/logs
