@@ -250,7 +250,7 @@ class Bus(
     currentTickFn          = () => currentTick,
     journeyReporter        = journeyReporter,
     onFinishSpontaneousFn  = nextTick => onFinishSpontaneous(nextTick),
-    scheduleEventFn        = tick => scheduleEvent(tick),
+    scheduleEventFn        = tick => scheduleSignalWake(tick, signalWaitNeedsReverify),
     onFinishDestructFn     = () => onFinishSpontaneous(None, destruct = true),
     leavingLinkFn          = () => leavingLink(),
     finishJourneyFn        = (reason, node) => finishJourney(reason, node),

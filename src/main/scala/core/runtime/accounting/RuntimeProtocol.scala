@@ -13,7 +13,7 @@ final case class LogicalProcessId(model: String, id: Long)
 final case class JoinRuntime(identity: Identify, ref: ActorRef, initialWake: Option[EventOrder], startTick: Long = 0L, incarnation: String = "",
   birth: Option[RuntimeBirthOrigin] = None) extends RuntimeCommand
 final case class RuntimeJoined(epoch: String, coordinator: ActorRef, owner: ActorRef, distributed: Boolean = false,
-  directConservative: Boolean = false) extends RuntimeCommand
+  directConservative: Boolean = false, additiveWakeups: Boolean = false) extends RuntimeCommand
 final case class SetRuntimeHorizon(horizon: Long) extends RuntimeCommand
 final case class SetOptimisticExecutionLimits(frontier: Long, ceiling: Long, limits: core.runtime.OptimisticExecutionLimits) extends RuntimeCommand
 final case class JoinRuntimeManager(ref: ActorRef) extends RuntimeCommand

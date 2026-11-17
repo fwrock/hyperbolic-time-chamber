@@ -78,6 +78,9 @@ abstract class GlobalTimeManagerBase(
 
   protected def createTimeManagersPool(): Unit = {
     val config = org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config)
+    require(!TimeManagerSchedulingStrategy.fromConfig(config).useNodeLocal(false,
+      SimulatorSettingsRegistry.getBoolean("htc.load-balance-manager.enabled", config)),
+      "node-local-tick is supported only by the direct conservative runtime")
     val totalInstances =
       SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
     val maxInstancesPerNode =

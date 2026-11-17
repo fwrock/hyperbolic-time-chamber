@@ -62,6 +62,7 @@ class DirectConservativeMigrationSpec extends AnyFlatSpec with Matchers with Bef
 
   private class Global(manager: ActorRef, reporter: ActorRef)
       extends ChannelClosedGlobalTimeManager(100L, false, manager) {
+    override protected lazy val nodeLocalScheduling: Boolean = false
     override protected lazy val directInteractions: Boolean = true
     override protected def expectedWorkers: Int = 1
     override protected lazy val simulationMetrics: SimulationMetricSet = new SimulationMetricSet(

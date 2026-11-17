@@ -107,7 +107,9 @@ def validate(args):
                     assert exit_event["travel_time_seconds"] > 0 and exit_event["average_speed"] > 0
                     for actual in (entry["link_length"], exit_event["distance_traveled"], exit_event["final_position"]):
                         assert math.isclose(actual, link["length"], abs_tol=1e-6), "MICRO link geometry"
-                    next_entry = exit_event["tick"] + 1
+                    # A confirmed MICRO crossing can enter the next road at the same tick;
+                    # the point Node still checks capacity but adds no artificial dwell.
+                    next_entry = exit_event["tick"]
                     continue
                 speed = 1.0 if entry["cars_in_link"] >= link["capacity"] else (
                     link["freeSpeed"] * (1.0 - entry["cars_in_link"] / link["capacity"]))

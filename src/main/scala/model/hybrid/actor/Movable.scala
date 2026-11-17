@@ -1,6 +1,8 @@
 package org.interscity.htc
 package model.hybrid.actor
 
+import core.types.Tick
+
 import core.actor.SimulationBaseActor
 import model.hybrid.entity.state.MovableState
 
@@ -324,6 +326,18 @@ abstract class Movable[T <: MovableState](
     }
   }
 
+  /** A verified admission needs no second wake-up at the same physical tick. Other policies
+    * retain their existing scheduling path, including red-phase re-verification.
+    */
+  protected final def scheduleSignalWake(tick: Tick, needsReverification: Boolean): Unit =
+    if (usesNodeLocalScheduling && tick == currentTick && !needsReverification) leavingLink()
+    else scheduleEvent(tick)
+
+  /** Continue a confirmed zero-delay boundary within tracked callback scope for node-local wakes. */
+  protected final def finishOrContinueSpontaneous(next: Option[Tick]): Unit =
+    if (usesNodeLocalScheduling && next.contains(currentTick)) enterLink()
+    else onFinishSpontaneous(next)
+
   protected def leavingLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, nextNodeId)) =>
@@ -350,7 +364,7 @@ abstract class Movable[T <: MovableState](
             }
             state.movableCurrentPath = None
             // MICRO already confirmed arrival; a point node adds no modeled dwell time.
-            onFinishSpontaneous(Some(currentTick))
+            finishOrContinueSpontaneous(Some(currentTick))
           case _ =>
             logWarn(s"${getEntityId} no edge label found for link $linkEdgeGraphId, scheduling tick+1")
             onFinishSpontaneous(Some(currentTick + 1))

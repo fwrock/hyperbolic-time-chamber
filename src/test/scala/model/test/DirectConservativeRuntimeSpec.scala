@@ -4,6 +4,7 @@ package model.test
 import core.actor.SimulationBaseActor
 import core.api.SimulatorSettingsRegistry
 import core.actor.manager.time.{ ChannelClosedGlobalTimeManager, DirectConservativeLocalTimeManager }
+import core.actor.manager.time.partition.NodeLocalTimeManager
 import core.entity.actor.properties.Properties
 import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
 import core.entity.event.control.load.InitializeEvent
@@ -46,6 +47,7 @@ class DirectConservativeRuntimeSpec extends AnyFlatSpec with Matchers with Befor
 
   private class Global(manager: ActorRef, reporter: ActorRef)
       extends ChannelClosedGlobalTimeManager(100L, false, manager) {
+    override protected lazy val nodeLocalScheduling: Boolean = false
     override protected def expectedWorkers: Int = 2
     override protected def simulationMetrics: SimulationMetricSet = new SimulationMetricSet(
       new CollectorRegistry()
@@ -59,14 +61,14 @@ class DirectConservativeRuntimeSpec extends AnyFlatSpec with Matchers with Befor
     override def onStart(): Unit = observer ! localTimeManagerProps().actorClass()
   }
 
-  "the conservative default" should "select direct workers without a configuration override" in {
+  "the conservative default" should "select node-local direct scheduling without a configuration override" in {
     SimulatorSettingsRegistry.catalog
       .find(_.configPath == "htc.time-manager.conservative-transport")
       .get
       .defaultValue shouldBe "direct"
     val observer = TestProbe()
     val global = system.actorOf(Props(new DefaultFactory(TestProbe().ref, observer.ref)))
-    observer.expectMsg(classOf[DirectConservativeLocalTimeManager])
+    observer.expectMsg(classOf[NodeLocalTimeManager])
     system.stop(global)
   }
 

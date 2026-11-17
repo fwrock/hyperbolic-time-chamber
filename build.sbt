@@ -1,7 +1,7 @@
 import sbt.Keys.libraryDependencies
 import scala.collection.Seq
 
-ThisBuild / version := "3.9.0"
+ThisBuild / version := "3.10.0"
 
 ThisBuild / scalaVersion := "3.3.5"
 

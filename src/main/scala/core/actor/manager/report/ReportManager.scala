@@ -261,6 +261,15 @@ object ReportManager {
       data = row.reportData ++ Map("process_id" -> snapshot.processId, "snapshot_timestamp_ms" -> System.currentTimeMillis()),
       label = "execution_timing_summary", node = snapshot.node, timestamp = System.nanoTime(),
       fromNode = 0, messageType = "", fromType = ""
+    ) } ++ snapshot.remoteTraffic.map { row => ReportEvent(
+      entityId = s"remote-traffic:${snapshot.processId}:${row.direction}:${row.category}",
+      tick = 0L, lamportTick = 0L,
+      data = Map("process_id" -> snapshot.processId, "direction" -> row.direction,
+        "category" -> row.category, "messages" -> row.messages, "serialized_bytes" -> row.bytes,
+        "scope" -> "process_cumulative_before_final_capture", "boundary" -> "artery_envelope",
+        "includes_startup" -> true, "includes_tcp_ip_headers" -> false),
+      label = "remote_transport_summary", node = snapshot.node, timestamp = System.nanoTime(),
+      fromNode = 0, messageType = "", fromType = ""
     ) }
 
   def props(

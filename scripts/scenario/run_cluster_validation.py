@@ -116,7 +116,8 @@ def run(args):
         cpu_ids = [int(v) for v in cpu_ids.split(",")]
         if len(cpu_ids) != 4 or len(set(cpu_ids)) != 4 or not set(cpu_ids) <= os.sched_getaffinity(0):
             raise ValueError("measurement requires four distinct available logical CPUs")
-    monitor = ProcessMonitor(root, started, metrics_ports=[args.base_port + 20 + i for i in range(args.nodes)]) if measuring else None
+    monitor = ProcessMonitor(root, started, metrics_ports=[args.base_port + 20 + i for i in range(args.nodes)],
+                             metrics_interval=getattr(args, "metrics_interval", 2.0)) if measuring else None
     completion_seconds = None
     measurement = None
     measurement_error = None
@@ -239,7 +240,7 @@ htc.report-manager.json.batch-size=1
     if measuring:
         result["measurement"] = dict(measurement or {}, completionSeconds=completion_seconds,
             deadlineExceeded=completion_seconds is None and time.monotonic()-started >= args.timeout,
-            sampleIntervalSeconds=.25, cpuIds=cpu_ids, totalMaxHeapGiB=4,
+            sampleIntervalSeconds=.25, metricsScrapeIntervalSeconds=getattr(args, "metrics_interval", 2.0), cpuIds=cpu_ids, totalMaxHeapGiB=4,
             runtime=parse_runtime("\n".join(runtime_logs)), error=measurement_error)
     if relay:
         result["relay"] = dict(connections=relay.connections, chunks=relay.chunks, bytes=relay.bytes)
@@ -263,6 +264,8 @@ def main():
     parser.add_argument("--kill-after", default="[ACCOUNTED-GVT] round=1 ")
     parser.add_argument("--extra-config", type=Path)
     parser.add_argument("--measure", action="store_true", help="Sample process resources before teardown")
+    parser.add_argument("--metrics-interval", type=float, default=2.0,
+                        help="Prometheus scrape interval in seconds (default 2; 0 disables HTTP scrapes, retains CPU/RSS sampling)")
     parser.add_argument("--cpu-ids", help="Four comma-separated logical CPUs for measured runs")
     args = parser.parse_args()
     if not (1024 <= args.base_port <= 65300) or args.delay_ms < 0 or args.timeout <= 0:

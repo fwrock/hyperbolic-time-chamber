@@ -215,7 +215,7 @@ class Bicycle(
     currentTickFn                = () => currentTick,
     journeyReporter              = journeyReporter,
     onFinishSpontaneousFn        = tick => onFinishSpontaneous(tick),
-    scheduleEventFn              = tick => scheduleEvent(tick),
+    scheduleEventFn              = tick => scheduleSignalWake(tick, signalWaitNeedsReverify),
     leavingLinkFn                = () => leavingLink(),
     selfDestructFn               = () => selfDestruct(),
     isPersonCentricFn            = () => isPersonCentric,

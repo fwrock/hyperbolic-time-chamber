@@ -97,6 +97,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   private var _spontaneousFinishSent     = false
   private var currentGeneration: Long = 0L
   private var scheduleRevision = 0L
+  private var additiveConservativeWakeups = false
   private var accountedCoordinator: Option[ActorRef] = Option(properties).flatMap(_.runtimeCoordinator)
   private var runtimeEpoch: Option[String] = None
   private var runtimeIncarnation = java.util.UUID.randomUUID().toString
@@ -130,6 +131,8 @@ abstract class SimulationBaseActor[T <: BaseState](
   private val initializationAcks = mutable.ArrayBuffer.empty[(ActorRef, AnyRef)]
   private val pendingCreationCallbacks = mutable.Queue.empty[(String, Long)]
   protected def usesAccountedRuntime: Boolean = accountedCoordinator.nonEmpty
+  /** Node-local wake-ups coalesce; zero-delay model continuations stay in their callback. */
+  protected final def usesNodeLocalScheduling: Boolean = additiveConservativeWakeups
   private def usesConservativeRuntime: Boolean = usesAccountedRuntime && !isTimeWarp
   private def runtimeAuthority: Option[ActorRef] =
     if (distributedRuntime) Some(currentTimeManager) else accountedCoordinator
@@ -1314,7 +1317,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     currentFromNode = 0
     currentMessageType = ""
     currentFromType = ""
-    if ((event.order.nonEmpty && event.scheduleRevision < scheduleRevision) ||
+    if ((!additiveConservativeWakeups && event.order.nonEmpty && event.scheduleRevision < scheduleRevision) ||
       (event.generation > 0L && event.generation <= currentGeneration)) {
       sendTimeManager(event.actorRef, FinishEvent(self, schedulingIdentity(), currentTick, timeManager = event.actorRef,
         generation = event.generation, discardedDispatch = true))
@@ -1678,7 +1681,9 @@ abstract class SimulationBaseActor[T <: BaseState](
         runtimeMigrationRequest.contains(requestId), "invalid conservative migration resume")
       runtimeMigrationRequest = None
       reportPlacement(currentTick, Some(requestId))
-    case RuntimeJoined(epoch, coordinator, owner, distributed, direct) =>
+    case RuntimeJoined(epoch, coordinator, owner, distributed, direct, additive) =>
+      require(!additive || (direct && !distributed), "additive wake-ups require direct conservative execution")
+      additiveConservativeWakeups = additive
       require(accountedCoordinator.contains(coordinator), "runtime registration changed coordinator")
       runtimeEpoch = Some(epoch)
       currentTimeManager = owner
