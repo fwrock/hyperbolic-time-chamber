@@ -41,7 +41,8 @@ class CarSignalHandler(
   private val isAwaitingReplyFn: (String, String, Long) => Boolean = (_, _, _) => false,
   private val consumeAwaitedReplyFn: String => Unit = _ => (),
   private val lookupNodeFn: Long => Option[(Long, String)] = id =>
-    CityMapUtil.nodesById.get(id).map(node => (node.id, node.classType))
+    CityMapUtil.nodesById.get(id).map(node => (node.id, node.classType)),
+  requestMessageFn: Option[(Long, String, AnyRef, String, String, String) => Unit] = None
 ) {
 
   /** Correlation key for the one outstanding `RequestLinkAccessData` -> `LinkAccessData` exchange
@@ -76,15 +77,16 @@ class CarSignalHandler(
           case Some((nodeEntityId, nodeClassType)) =>
             val linkId = getNextLinkFn()
             if (linkId != 0L) {
-              sendMessageFn(
+              sendRequest(
                 nodeEntityId,
                 nodeClassType,
                 RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported,
                   approachLinkId = state.currentPath.map(_._1).getOrElse(0L), approachLane = state.journey.lastMicroLane,
                   followingLinkId = state.bestRoute.flatMap(_.iterator.drop(1).nextOption()).map(_._1).getOrElse(0L)),
-                EventTypeEnum.RequestLinkAccess.toString
+                EventTypeEnum.RequestLinkAccess.toString,
+                linkAccessAwaitKey(linkId), "LinkAccessData"
               )
-              registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
+
               onFinishSpontaneousFn(None)
             } else {
               leavingLinkFn()
@@ -212,4 +214,12 @@ class CarSignalHandler(
       completeCapacityWait(state)
       consumeAwaitedReplyFn(linkAccessAwaitKey(linkId))
     }
+  private def sendRequest(target: Long, shard: String, data: AnyRef, event: String,
+    key: String, kind: String): Unit = requestMessageFn match {
+    case Some(send) => send(target, shard, data, event, key, kind)
+    case None =>
+      sendMessageFn(target, shard, data, event)
+      registerAwaitedReplyFn(key, kind)
+  }
+
 }

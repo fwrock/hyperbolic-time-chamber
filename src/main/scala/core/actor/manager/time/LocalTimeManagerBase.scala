@@ -229,10 +229,13 @@ abstract class LocalTimeManagerBase(
     }.toVector
   }
 
-  protected def dispatchConservativeSchedules(tick: Tick, microstep: Long): Unit = {
-    val ready = readyOrderedSchedules.collect {
-      case (`tick`, identity, order) if order.microstep == microstep => identity
-    }
+  protected def dispatchConservativeSchedules(tick: Tick, microstep: Long, allMicrosteps: Boolean = false): Unit = {
+    val ready =
+      if (allMicrosteps) scheduledActors.get(tick).toVector.flatMap(
+        _.iterator.filterNot(identity => runningEvents.containsId(identity.id)))
+      else readyOrderedSchedules.collect {
+        case (`tick`, identity, order) if order.microstep == microstep => identity
+      }
     ready.foreach { identity =>
       scheduledActors.get(tick).foreach(_.remove(identity))
       runningEvents.add(identity)

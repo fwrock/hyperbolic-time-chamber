@@ -139,8 +139,10 @@ class Car(
     setSignalWaitUntilTickFn    = tick => signalWaitUntilTick = tick,
     setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
     onSignalWaitFn              = waitTicks => emissionHandler.onSignalWait(waitTicks, state.journey.secondsPerTick),
-    isTimeWarpFn                = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isTimeWarpFn                = () => requiresReplyCorrelation,
     registerAwaitedReplyFn      = (key, kind) => registerAwaitedReply(key, kind),
+    requestMessageFn = Some((eid, shard, data, event, key, kind) =>
+      requestInteraction(eid, shard, data, event, key, kind)),
     isAwaitingReplyFn           = (key, kind, seq) => isAwaitingReply(key, kind, seq),
     consumeAwaitedReplyFn       = key => consumeAwaitedReply(key)
   )
@@ -159,7 +161,7 @@ class Car(
     getLinkEntryTickFn    = () => linkEntryTick,
     setMesoExitTickFn     = tick => mesoExitTick = tick,
     getTripDestinationFn  = () => getTripDestination,
-    isTimeWarpFn          = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isTimeWarpFn          = () => requiresReplyCorrelation,
     isAwaitingReplyFn     = (key, kind, seq) => isAwaitingReply(key, kind, seq),
     consumeAwaitedReplyFn = key => consumeAwaitedReply(key)
   )
@@ -551,7 +553,7 @@ class Car(
   }
 
   private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
-    if (getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP && data.requestSeq != 0L &&
+    if (requiresReplyCorrelation && data.requestSeq != 0L &&
       !isAwaitingReply(Movable.enterLinkAwaitKey(event.actorRefId),"EnterLinkData",data.requestSeq)) return
     consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
     microHandler.handleMicroEnterLink(data, state)

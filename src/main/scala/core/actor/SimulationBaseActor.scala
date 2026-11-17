@@ -104,6 +104,12 @@ abstract class SimulationBaseActor[T <: BaseState](
   private var conservativeRestore: Option[MigrationContextEvent] = None
   private var runtimeFrozen = false
   private var distributedRuntime = false
+  private var directConservative = false
+  private var directSequence = 0L
+  private var directClosedThrough: Option[Long] = None
+  private var directAcceptedTick = Long.MinValue
+  private var directScope: Option[DirectCallbackScope] = None
+  private val directCompleted = mutable.Map.empty[DirectWorkId, (DirectExecute, DirectProcessed)]
   private var runtimeHorizon = Long.MaxValue
   private var executionLimits: Option[SetOptimisticExecutionLimits] = None
   private case object ContinueOptimisticExecution
@@ -131,10 +137,17 @@ abstract class SimulationBaseActor[T <: BaseState](
   /** Reject model capabilities whose effects cannot participate in the runtime's cut. */
   protected def validateRuntimeCapabilities(): Unit = ()
 
-  private def sendTimeManager(target: ActorRef, event: AnyRef): Unit = accountedCoordinator match {
+  private def sendTimeManager(target: ActorRef, event: AnyRef): Unit = {
+    if (directScope.nonEmpty) {
+      require(target == currentTimeManager, "direct schedule sent to a foreign owner")
+      directScope.get.controls += event
+      return
+    }
+    accountedCoordinator match {
     case Some(_) if usesConservativeRuntime || distributedRuntime => target ! RouteControl(runtimeEpoch.get, target, event, math.max(currentTick, runtimeGvt))
     case Some(coordinator) => coordinator ! RouteControl(runtimeEpoch.get, target, event, math.max(currentTick, runtimeGvt))
     case None => target ! event
+    }
   }
 
   private def failRuntime(error: Throwable): Unit = {
@@ -153,7 +166,10 @@ abstract class SimulationBaseActor[T <: BaseState](
 
   private def nextEffectOrder(at: Tick): EventOrder = {
     effectOrdinal = Math.addExact(effectOrdinal, 1L)
-    logicalOrder.getOrElse(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong))
+    if (directConservative) {
+      directSequence = Math.addExact(directSequence, 1L)
+      EventOrder(at, 0L, s"$runtimeIncarnation:$directSequence")
+    } else logicalOrder.getOrElse(EventOrder.root(currentTick, getClass.getName, getEntityId.toLong))
       .child(at, effectOrdinal)
   }
 
@@ -298,22 +314,14 @@ abstract class SimulationBaseActor[T <: BaseState](
     outstandingAwaitedReplies.put(key, core.actor.AwaitedReply(kind = kind, sentAtTick = currentTick, sendSeq = sendSeq))
   }
 
-  /** Under [[isTimeWarp]], true iff an entry is registered for `key` with a matching `kind` AND
-    * `requestSeq` matches that entry's `sendSeq` -- i.e. this reply belongs to the CURRENTLY
-    * registered request instance for `key`, not one a rollback-then-resend already superseded.
-    *
-    * `requestSeq` is the identity token the reply payload itself must carry back (e.g.
-    * `LinkAccessData.requestSeq`/`LinkInfoData.requestSeq`, echoed by the receiver from the
-    * original request's `ActorInteractionEvent.seq`) -- see `AwaitedReply.sendSeq`'s doc for why
-    * `kind` alone isn't enough: a fresh `registerAwaitedReply` for the same `key` overwrites the
-    * prior entry (by design, see `outstandingAwaitedReplies`'s doc), so a `kind`-only check
-    * wrongly accepts a stale reply that still belongs to the request instance that overwrite just
-    * superseded. Under conservative mode this primitive is never consulted by call sites (they
-    * keep their existing `state.status`-only guard), so `false` here is never actually observed --
-    * returned only so this method is total rather than throwing.
+  /** Both direct conservative and Time Warp requests carry unique reply identities.
+    * Reference conservative sends retain their existing state guards and zero sequence.
     */
+  protected final def requiresReplyCorrelation: Boolean = isTimeWarp || directConservative
+
+  /** Check the current request instance without consuming its checkpointed obligation. */
   protected def isAwaitingReply(key: String, kind: String, requestSeq: Long): Boolean =
-    isTimeWarp && matchesAwaitedReply(key, kind, requestSeq)
+    requiresReplyCorrelation && matchesAwaitedReply(key, kind, requestSeq)
 
   protected def matchesAwaitedReply(key: String, kind: String, requestSeq: Long): Boolean =
     outstandingAwaitedReplies.get(key).exists(r => r.kind == kind && r.sendSeq == requestSeq)
@@ -690,6 +698,7 @@ abstract class SimulationBaseActor[T <: BaseState](
       conservativeRuntime = Option.when(usesConservativeRuntime) {
         require(runtimeMigrationRequest.nonEmpty && runtimeEpoch.nonEmpty && runtimeFrozen && !runtimeFailed,
           "conservative snapshot outside an authorized migration freeze")
+        require(directScope.isEmpty, "migration during a direct callback")
         require(initializationAcks.isEmpty && pendingCreationCallbacks.isEmpty && pendingDynamicInits.isEmpty,
           "conservative migration while initialization is pending")
         ConservativeMigrationCheckpoint(runtimeEpoch.get, runtimeIncarnation, runtimeMigrationRequest.get,
@@ -698,7 +707,8 @@ abstract class SimulationBaseActor[T <: BaseState](
           org.apache.pekko.serialization.Serialization.serializedActorPath(self),
           inputQueue.snapshot.map(ConservativeMigrationCodec.encode(context.system, _)),
           currentGeneration, scheduleRevision, _spontaneousFinishSent, effectOrdinal,
-          runtimeHorizon, retirementFence, finalizedHorizon, runtimeBirth)
+          runtimeHorizon, retirementFence, finalizedHorizon, runtimeBirth,
+          directConservative, directSequence, directClosedThrough)
       }
     )
   }
@@ -738,6 +748,11 @@ abstract class SimulationBaseActor[T <: BaseState](
       retirementFence = checkpoint.retirementFence
       finalizedHorizon = checkpoint.finalizedHorizon
       runtimeBirth = checkpoint.birth
+      directConservative = checkpoint.directConservative
+      directSequence = checkpoint.directSequence
+      directClosedThrough = checkpoint.directClosedThrough
+      directAcceptedTick = directClosedThrough.getOrElse(snapshot.currentTick)
+      require(directScope.isEmpty, "restoring inside a direct callback")
       runtimeFrozen = true
     }
     startTick = snapshot.startTick
@@ -1042,6 +1057,12 @@ abstract class SimulationBaseActor[T <: BaseState](
       if (replaySendSeqs.hasNext) replayLastSendSeq = replaySendSeqs.next()
       return
     }
+    if (directScope.nonEmpty) {
+      sendDirectInteraction(entityId, shardId, data, eventType, actorType, outgoingOrder)
+      return
+    }
+    require(!directConservative || !runtimeEpoch.isDefined || runtimeFrozen,
+      "direct model send outside an executing callback")
     lamportClock.increment()
     ActorMetrics.messagesSentFor(cachedSimpleName, eventType).inc()
     // Time Warp (docs/TIME_WARP_DESIGN.md §10): a fresh per-actor send identity, generated and
@@ -1049,7 +1070,8 @@ abstract class SimulationBaseActor[T <: BaseState](
     // zero field as zero bytes, so an always-incrementing seq would grow every conservative-mode
     // message's wire size for a field nothing conservative-mode ever reads -- exactly the class of
     // wire-size regression this codebase has a dedicated history of eliminating (see this file's
-    // git log). Conservative-mode messages keep seq=0, byte-identical to before this field existed.
+    // git log). Reference conservative messages keep seq=0; direct sends return above with
+    // their own tracked work sequence.
     val seq = if (isTimeWarp) {
       messageSendSeq += 1
       currentEventSentMessages += rollback.SentMessage(
@@ -1068,6 +1090,127 @@ abstract class SimulationBaseActor[T <: BaseState](
       sendMessageToPool(entityId, data, eventType, seq = seq, order = Some(outgoingOrder), receiverModel = Option(shardId).getOrElse(""))
     } else {
       sendMessageToShard(entityId, shardId, data, eventType, seq = seq, order = Some(outgoingOrder))
+    }
+  }
+
+  /** Send exactly one consistency-critical request and register its existing reply identity.
+    * The caller resolves its spontaneous event after consuming the response, or explicitly
+    * records a suspended model wait. Transport processing is acknowledged by the runtime.
+    */
+  protected final def requestInteraction(
+    entityId: Long, shardId: String, data: AnyRef, eventType: String,
+    replyKey: String, replyKind: String,
+    actorType: CreationTypeEnum = LoadBalancedDistributed
+  ): Unit = {
+    require(replyKey.nonEmpty && replyKind.nonEmpty, "request needs an explicit reply contract")
+    sendMessageTo(entityId, shardId, data, eventType, actorType)
+    registerAwaitedReply(replyKey, replyKind)
+  }
+
+  /** Answer a request through normal tracked transport, preserving the model's typed payload.
+    * Payloads that expose requestSeq must echo request.seq, including no-op responses.
+    */
+  protected final def replyInteraction(request: ActorInteractionEvent, data: AnyRef, eventType: String): Unit =
+    sendMessageTo(request.actorRefId, request.shardRefId, data, eventType,
+      CreationTypeEnum.valueOf(request.actorType))
+
+  private def sendDirectInteraction(target: Long, model: String, data: AnyRef, eventType: String,
+    actorType: CreationTypeEnum, order: EventOrder): Unit = {
+    val scope = directScope.get
+    require(model != null && model.nonEmpty, "direct interaction requires a typed destination")
+    val receiver = LogicalProcessId(StringUtil.getModelClassName(model), target)
+    directSequence = Math.addExact(directSequence, 1L)
+    messageSendSeq = directSequence
+    val work = DirectWork(DirectWorkId(LogicalProcessId(getClass.getName, getEntityId.toLong),
+      runtimeIncarnation, directSequence), Some(scope.delivery.work.id), receiver, currentTick)
+    require(currentTick == scope.delivery.work.tick, "direct send outside its current tick")
+    scope.children += work
+    lamportClock.increment()
+    ActorMetrics.messagesSentFor(cachedSimpleName, eventType).inc()
+    val event = ActorInteractionEvent(currentTick, getLamportClock, getEntityId.toLong, getShardId,
+      self.path.name, getClass.getName, eventType, data, properties.actorType.toString,
+      properties.resourceId, messageSendSeq, false, Some(order), runtimeEpoch.get, runtimeIncarnation)
+    val delivery = DirectExecute(runtimeEpoch.get, work, scope.delivery.accountingOwner, event)
+    if (data.isInstanceOf[RuntimeBirthData]) currentTimeManager ! DirectBirth(runtimeEpoch.get, receiver, delivery)
+    else deliverDirectInteraction(receiver, actorType, delivery)
+  }
+
+  /** Direct data transport hook; control effects still complete through the LP's owner. */
+  protected def deliverDirectInteraction(receiver: LogicalProcessId, actorType: CreationTypeEnum,
+    delivery: DirectExecute): Unit =
+    if (actorType == PoolDistributed) getActorPoolRef(receiver.id.toString) ! delivery
+    else getShardRef(IdUtil.format(receiver.model)) ! EntityEnvelopeEvent(receiver.id.toString, delivery)
+
+  /** Completion transport hook permits injected delayed channels in protocol regressions. */
+  protected def publishDirectCompletion(receipt: DirectProcessed): Unit = currentTimeManager ! receipt
+
+  private def isDirectBirth(event: AnyRef): Boolean = event match {
+    case interaction: ActorInteractionEvent => interaction.data.isInstanceOf[RuntimeBirthData]
+    case _ => false
+  }
+
+  private def executeDirect(delivery: DirectExecute): Unit = {
+    try {
+      require(directConservative && usesConservativeRuntime && runtimeEpoch.contains(delivery.epoch) &&
+        !runtimeFailed, "invalid direct execution")
+      require(directScope.isEmpty && delivery.work.receiver == LogicalProcessId(getClass.getName, getEntityId.toLong),
+        "direct work addressed the wrong logical process")
+      if (directClosedThrough.exists(delivery.work.tick <= _)) return
+      require(runtimeMigrationRequest.isEmpty, "direct execution during migration freeze")
+      if (delivery.work.tick < directAcceptedTick || delivery.work.tick < currentTick) return
+      directCompleted.get(delivery.work.id).foreach { case (previous, receipt) =>
+        require(previous == delivery, "conflicting duplicate direct delivery")
+        publishDirectCompletion(receipt)
+      }
+      if (directCompleted.contains(delivery.work.id)) return
+      require(delivery.work.tick <= runtimeHorizon, "direct input beyond the accepted horizon")
+      validateDirectInput(delivery)
+      if (delivery.work.tick > directAcceptedTick) {
+        directCompleted.clear()
+        directAcceptedTick = delivery.work.tick
+      }
+      val scope = new DirectCallbackScope(delivery)
+      directScope = Some(scope)
+      retirementFence = math.max(retirementFence, delivery.work.tick)
+      dispatchDirectInput(delivery)
+      if (!runtimeFailed) {
+        val receipt = DirectProcessed(delivery.epoch, delivery.accountingOwner,
+          scope.completion, scope.controls.toVector, scope.reports.toVector, nextConservativeInput,
+          outstandingAwaitedReplies.size, terminalIntent.nonEmpty)
+        directCompleted(delivery.work.id) = delivery -> receipt
+        publishDirectCompletion(receipt)
+      }
+      if (isDirectBirth(delivery.event)) unstashAll()
+    } catch { case scala.util.control.NonFatal(error) => failRuntime(error) }
+    finally directScope = None
+  }
+
+  /** Validate the root authority or the sending identity before entering model code. */
+  private def validateDirectInput(delivery: DirectExecute): Unit = {
+    delivery.event match {
+      case event: SpontaneousEvent => require(sender() == currentTimeManager && event.tick == delivery.work.tick &&
+        delivery.work.parent.isEmpty, "invalid direct spontaneous root")
+      case event: ActorInteractionEvent => require(event.tick == delivery.work.tick && !event.isAntiMessage &&
+        event.sourceEpoch == delivery.epoch && delivery.work.id.source == LogicalProcessId(event.actorClassType, event.actorRefId) &&
+        delivery.work.id.incarnation == event.sourceIncarnation, "invalid direct interaction identity")
+      case event: DirectQueuedInputs => require(sender() == currentTimeManager && event.tick == delivery.work.tick &&
+        delivery.work.parent.isEmpty, "invalid direct queued root")
+      case _ => throw new IllegalArgumentException("unsupported direct callback")
+    }
+  }
+
+  /** Startup drains accepted registrations; ordinary deliveries run one callback directly. */
+  private def dispatchDirectInput(delivery: DirectExecute): Unit = {
+    delivery.event match {
+      case event: SpontaneousEvent => handleSpontaneous(event)
+      case event: ActorInteractionEvent => handleInteractWith(event)
+      case event: DirectQueuedInputs =>
+        while (nextConservativeInput.exists(_.tick == event.tick) && !runtimeFailed) {
+          inputQueue.dequeue() match {
+            case input: SpontaneousEvent => handleSpontaneous(input)
+            case input: ActorInteractionEvent => handleInteractWith(input)
+          }
+        }
     }
   }
 
@@ -1498,11 +1641,13 @@ abstract class SimulationBaseActor[T <: BaseState](
       require(distributedRuntime && runtimeAuthority.contains(sender()) && runtimeFrozen && runtimeCommitRound == 0L,
         "execution horizon outside runtime startup")
       runtimeHorizon = horizon
-    case FreezeConservativeProcess(epoch, requestId) =>
+    case FreezeConservativeProcess(epoch, requestId, closedThrough) =>
       try {
         require(usesConservativeRuntime && sender() == currentTimeManager && runtimeEpoch.contains(epoch) &&
           runtimeFrozen && !runtimeFailed && initializationAcks.isEmpty && runtimeMigrationRequest.forall(_ == requestId),
           "invalid conservative migration freeze")
+        require(directScope.isEmpty, "migration during direct execution")
+        if (directConservative) directClosedThrough = closedThrough
         runtimeMigrationRequest = Some(requestId)
         sender() ! ConservativeProcessFrozen(epoch, requestId)
       } catch { case scala.util.control.NonFatal(error) => failRuntime(error) }
@@ -1533,11 +1678,14 @@ abstract class SimulationBaseActor[T <: BaseState](
         runtimeMigrationRequest.contains(requestId), "invalid conservative migration resume")
       runtimeMigrationRequest = None
       reportPlacement(currentTick, Some(requestId))
-    case RuntimeJoined(epoch, coordinator, owner, distributed) =>
+    case RuntimeJoined(epoch, coordinator, owner, distributed, direct) =>
       require(accountedCoordinator.contains(coordinator), "runtime registration changed coordinator")
       runtimeEpoch = Some(epoch)
       currentTimeManager = owner
       distributedRuntime = distributed
+      directConservative = direct
+      require(!direct || usesConservativeRuntime, "direct conservative enrollment under another policy")
+      if (direct) unstashAll()
       if (distributed) runtimeFrozen = true
       if (usesConservativeRuntime) {
         runtimeFrozen = true
@@ -1547,6 +1695,9 @@ abstract class SimulationBaseActor[T <: BaseState](
       initializationAcks.foreach { case (target, ack) => target ! ack }
       initializationAcks.clear()
       drainInputs()
+    case delivery: DirectExecute if runtimeEpoch.isEmpty || state == null => stash()
+    case delivery: DirectExecute if !runtimeBorn && !isDirectBirth(delivery.event) => stash()
+    case delivery: DirectExecute => executeDirect(delivery)
     case ConservativeDelivery(epoch, token, event) =>
       try {
         require(usesConservativeRuntime && runtimeEpoch.contains(epoch) && sender() == currentTimeManager,
@@ -1560,7 +1711,7 @@ abstract class SimulationBaseActor[T <: BaseState](
         acceptRuntimeInput(event)
         sender() ! ConservativeInputAccepted(epoch, token, nextConservativeInput)
       } catch { case scala.util.control.NonFatal(e) => failRuntime(e) }
-    case ExecuteConservativeBatch(round, tick, microstep) =>
+    case ExecuteConservativeBatch(round, tick, microstep, _) =>
       try {
         require(usesConservativeRuntime && sender() == currentTimeManager && !runtimeFailed,
           "invalid conservative execution grant")
@@ -2108,7 +2259,8 @@ abstract class SimulationBaseActor[T <: BaseState](
   private def reportToTarget(event: ReportEvent, target: ActorRef): Unit = {
     require(horizonReporting.forall(_ == event.tick), "horizon report has a different timestamp")
     if (isReplaying) return
-    if (usesConservativeRuntime && runtimeEpoch.nonEmpty) currentTimeManager ! PublishConservativeReport(target, event)
+    if (directScope.nonEmpty) directScope.get.reports += DirectReport(target, event)
+    else if (usesConservativeRuntime && runtimeEpoch.nonEmpty) currentTimeManager ! PublishConservativeReport(target, event)
     else if (isTimeWarp || usesConservativeRuntime) reportBuffer += BufferedReport(event, target, currentEventSeq)
     else {
       if (event.label != null) ActorMetrics.reportFlushed.labels(event.label).inc()

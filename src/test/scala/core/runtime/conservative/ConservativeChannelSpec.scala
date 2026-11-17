@@ -57,6 +57,7 @@ class ConservativeChannelSpec extends AnyFlatSpec with Matchers with BeforeAndAf
   }
 
   private class GTM(manager: ActorRef, sink: ActorRef) extends ChannelClosedGlobalTimeManager(1000L, false, manager) {
+    override protected lazy val directInteractions: Boolean = false
     val progressRegistry = new CollectorRegistry()
     val progressMetrics = new SimulationMetricSet(progressRegistry)
     override protected def simulationMetrics: SimulationMetricSet = progressMetrics
@@ -168,6 +169,9 @@ class ConservativeChannelSpec extends AnyFlatSpec with Matchers with BeforeAndAf
         mutable.Map(ReportTypeEnum.parquet -> sink.ref), timeManagers = mutable.Map(TimeManagerTypeEnum.DISCRETE_EVENT -> workers.head),
         runtimeCoordinator = Some(gtm)))
       creator.expectMsgType[InitializeEntityAckEvent]
+      val placement = sink.expectMsgType[CommittedReportDelivery]
+      placement.event.label shouldBe "actor_placement"
+      sink.send(placement.ackTo, DeliveryAccepted(placement.epoch, placement.token))
       ref
     }
     lp(receiver, 0L, 0L, "")

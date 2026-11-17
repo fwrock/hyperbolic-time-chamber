@@ -83,14 +83,15 @@ abstract class Movable[T <: MovableState](
     state.movablePendingRouteQuery = Some(
       model.hybrid.entity.state.PendingRouteQuery(workerId, originNodeId, destinationNodeId)
     )
-    sendMessageTo(
+    requestInteraction(
       entityId = workerId,
       shardId = AccountedRoutingConfig.ActorClassType,
       data = RouteQueryData(originNodeId, destinationNodeId, maxExpansions),
       eventType = EventTypeEnum.RouteQuery.toString,
-      actorType = LoadBalancedDistributed
+      actorType = LoadBalancedDistributed,
+      replyKey = Movable.routeAwaitKey(workerId),
+      replyKind = "RouteQuery"
     )
-    registerAwaitedReply(Movable.routeAwaitKey(workerId), "RouteQuery")
     onFinishSpontaneous(None)
     true
   }
@@ -265,13 +266,7 @@ abstract class Movable[T <: MovableState](
             state.movableLinkExitReported = false
             waitingTicksCounter = 0
 
-            // registerAwaitedReply must run AFTER sendMessageTo: it captures this actor's
-            // messageSendSeq as the request's identity token (AwaitedReply.sendSeq), which must
-            // equal the seq sendMessageTo just embedded on the wire for THIS send -- registering
-            // first would capture the PRIOR send's seq instead, breaking isAwaitingReply's identity
-            // check for every request after the first. See CarSignalHandler.requestSignalState for
-            // the same ordering.
-            sendMessageTo(
+            requestInteraction(
               entityId = entityId,
               shardId = shardId,
               data = EnterLinkData(
@@ -297,9 +292,10 @@ abstract class Movable[T <: MovableState](
                 mesoOriginAtEnd = mesoOriginAtEnd
               ),
               EventTypeEnum.EnterLink.toString,
-              actorType = LoadBalancedDistributed
+              actorType = LoadBalancedDistributed,
+              replyKey = Movable.enterLinkAwaitKey(entityId),
+              replyKind = "EnterLinkData"
             )
-            registerAwaitedReply(Movable.enterLinkAwaitKey(entityId), "EnterLinkData")
             onFinishSpontaneous(None)
 
           case None =>
@@ -333,27 +329,19 @@ abstract class Movable[T <: MovableState](
       case Some((linkEdgeGraphId, nextNodeId)) =>
         resolveLink(linkEdgeGraphId) match {
           case Some((entityId, shardId)) =>
-            // See enterLink's identical comment: registerAwaitedReply must run AFTER
-            // sendMessageTo so its captured sendSeq matches the seq this send just put on the wire.
-            sendMessageTo(
-              entityId = entityId,
-              shardId = shardId,
-              data = LeaveLinkData(
-                actorType = state.actorType,
-                actorSize = state.size,
-                actorCreationType = LoadBalancedDistributed
-              ),
-              EventTypeEnum.LeaveLink.toString,
-              actorType = LoadBalancedDistributed
+            val leave = LeaveLinkData(
+              actorType = state.actorType,
+              actorSize = state.size,
+              actorCreationType = LoadBalancedDistributed
             )
             if (!state.movableLinkExitReported) {
-              // MESO distance and final completion depend on the leave reply. Starting the
-              // next link here lets that delayed reply clear the next link's timing state.
-              registerAwaitedReply(Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
+              requestInteraction(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString,
+                Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
               state.movableCurrentPath = None
               onFinishSpontaneous(None)
               return
             }
+            sendMessageTo(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString)
             if (state.movableBestRoute.forall(_.isEmpty)) {
               state.movableCurrentPath = None
               onFinish(nextNodeId)

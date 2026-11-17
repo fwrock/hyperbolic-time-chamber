@@ -28,7 +28,11 @@ def process_sample(pid):
 
 
 class ProcessMonitor:
-    def __init__(self, output, started=None, interval=.25, metrics_ports=()):
+    def __init__(self, output, started=None, interval=.25, metrics_ports=(), metrics_interval=2.0):
+        if interval <= 0 or metrics_interval < 0 or not math.isfinite(interval) or not math.isfinite(metrics_interval):
+            raise ValueError('sampling intervals must be finite; process interval positive and metrics interval nonnegative')
+        self.metrics_interval = metrics_interval
+        self.next_scrape = 0.0
         self.output = Path(output)
         self.started = started if started is not None else time.monotonic()
         self.interval, self.ports = interval, tuple(metrics_ports)
@@ -57,7 +61,11 @@ class ProcessMonitor:
                 try:
                     while not self.stop_event.is_set():
                         self.samples.append(self.sample())
-                        for port in self.ports:
+                        now = time.monotonic()
+                        scrape = self.metrics_interval > 0 and now >= self.next_scrape
+                        if scrape:
+                            self.next_scrape = now + self.metrics_interval
+                        for port in self.ports if scrape else ():
                             at = time.monotonic()-self.started
                             try:
                                 with urllib.request.urlopen(f'http://127.0.0.1:{port}/metrics', timeout=.04) as response:

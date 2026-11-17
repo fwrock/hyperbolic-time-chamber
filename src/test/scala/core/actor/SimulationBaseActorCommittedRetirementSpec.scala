@@ -27,6 +27,16 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   private implicit val system: ActorSystem = ActorSystem("SimulationBaseActorCommittedRetirementSpec",
     ConfigFactory.parseString("pekko.actor.provider = local\npekko.actor.fail-mixed-versions = off").withFallback(ConfigFactory.load()))
   override def afterAll(): Unit = { system.terminate(); () }
+  // These probes emulate the runtime owner; startup placement is not a modeled result.
+  private def runtimeProbe(): TestProbe = {
+    val probe = TestProbe()
+    probe.ignoreMsg {
+      case report: PublishCommittedReport if report.event.label == "actor_placement" => true
+      case _ => false
+    }
+    probe
+  }
+
   private class LP(props: Properties, rejectCapability: Boolean = false, classifyReplyAsSuperseded: Boolean = false,
     awaitSpontaneous: Boolean = false, finishOnEveryInput: Boolean = true) extends SimulationBaseActor[RetirementState](props) {
     def ready: Boolean = recoveryFinished
@@ -59,8 +69,8 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
 
   for (futureInputFirst <- Seq(false, true)) {
   "a queued dispatch invalidated by rollback" should s"release its slot before the restored wake (future input ahead: $futureInputFirst)" in {
-    val coordinator = TestProbe()
-    val manager = TestProbe()
+    val coordinator = runtimeProbe()
+    val manager = runtimeProbe()
     val creator = TestProbe()
     val lp = TestActorRef(new SchedulingLP(Properties(entityId = "104", actorType = CreationTypeEnum.PoolDistributed,
       runtimeCoordinator = Some(coordinator.ref), reporters = mutable.Map.empty,
@@ -112,8 +122,8 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
     "accounted spontaneous completion" should
       (if (waitForReply) "retain a registered wait until its reply resolves the dispatch"
        else "fail a missing completion without inventing another wake") in {
-      val coordinator = TestProbe()
-      val manager = TestProbe()
+      val coordinator = runtimeProbe()
+      val manager = runtimeProbe()
       val creator = TestProbe()
       val lp = TestActorRef(new LP(Properties(entityId = "103", actorType = CreationTypeEnum.PoolDistributed,
         runtimeCoordinator = Some(coordinator.ref), reporters = mutable.Map.empty,
@@ -145,8 +155,8 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   }
 
   "an accounted straggler" should "retain a reply classified against the speculative suffix" in {
-    val coordinator = TestProbe()
-    val manager = TestProbe()
+    val coordinator = runtimeProbe()
+    val manager = runtimeProbe()
     val creator = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "102", actorType = CreationTypeEnum.PoolDistributed,
       runtimeCoordinator = Some(coordinator.ref), reporters = mutable.Map.empty,
@@ -167,7 +177,7 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   }
 
   "model capability validation" should "fail before registering or acknowledging an unsupported LP" in {
-    val coordinator = TestProbe()
+    val coordinator = runtimeProbe()
     val creator = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "101", runtimeCoordinator = Some(coordinator.ref)),
       rejectCapability = true))
@@ -180,8 +190,8 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   }
 
   "an accounted delivery to an LP with no model state" should "fail the run instead of acknowledging and dropping the input" in {
-    val coordinator = TestProbe()
-    val manager = TestProbe()
+    val coordinator = runtimeProbe()
+    val manager = runtimeProbe()
     val creator = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "100", actorType = CreationTypeEnum.PoolDistributed,
       runtimeCoordinator = Some(coordinator.ref), reporters = mutable.Map.empty,
@@ -205,8 +215,8 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   }
 
   "a speculative terminal LP" should "survive cancellation at GVT and retire only after corrected output commits" in {
-    val coordinator = TestProbe()
-    val manager = TestProbe()
+    val coordinator = runtimeProbe()
+    val manager = runtimeProbe()
     val sink = TestProbe()
     val creator = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "100", actorType = CreationTypeEnum.PoolDistributed,
@@ -262,8 +272,8 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   }
 
   it should "reject a retirement command while its terminal event is still at GVT" in {
-    val coordinator = TestProbe()
-    val manager = TestProbe()
+    val coordinator = runtimeProbe()
+    val manager = runtimeProbe()
     val creator = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "105", actorType = CreationTypeEnum.PoolDistributed,
       runtimeCoordinator = Some(coordinator.ref), reporters = mutable.Map.empty,
@@ -296,9 +306,13 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   }
 
   "a bounded distributed LP" should "apply tick/event budgets, accept cancellation at GVT and reclaim only strictly committed identities" in {
-    val global = TestProbe()
-    val owner = TestProbe()
-    owner.ignoreMsg { case _: core.runtime.distributed.OptimisticProcessIdle => true; case _ => false }
+    val global = runtimeProbe()
+    val owner = runtimeProbe()
+    owner.ignoreMsg {
+      case _: core.runtime.distributed.OptimisticProcessIdle => true
+      case report: PublishCommittedReport if report.event.label == "actor_placement" => true
+      case _ => false
+    }
     val creator = TestProbe()
     val sink = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "108", actorType = CreationTypeEnum.PoolDistributed,
@@ -356,9 +370,13 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   }
 
   "a distributed LP" should "retain pre-start input beyond its finite horizon without executing or publishing it" in {
-    val global = TestProbe()
-    val owner = TestProbe()
-    owner.ignoreMsg { case _: core.runtime.distributed.OptimisticProcessIdle => true; case _ => false }
+    val global = runtimeProbe()
+    val owner = runtimeProbe()
+    owner.ignoreMsg {
+      case _: core.runtime.distributed.OptimisticProcessIdle => true
+      case report: PublishCommittedReport if report.event.label == "actor_placement" => true
+      case _ => false
+    }
     val creator = TestProbe()
     val sink = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "107", actorType = CreationTypeEnum.PoolDistributed,
@@ -394,8 +412,8 @@ class SimulationBaseActorCommittedRetirementSpec extends AnyFlatSpec with Matche
   }
 
   "a speculative terminal LP" should "retain later speculative history after its terminal decision has committed" in {
-    val coordinator = TestProbe()
-    val manager = TestProbe()
+    val coordinator = runtimeProbe()
+    val manager = runtimeProbe()
     val creator = TestProbe()
     val sink = TestProbe()
     val lp = TestActorRef(new LP(Properties(entityId = "106", actorType = CreationTypeEnum.PoolDistributed,

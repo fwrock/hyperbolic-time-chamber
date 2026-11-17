@@ -82,6 +82,12 @@ class BoundedOptimisticRuntimeSpec extends AnyFlatSpec with Matchers with Before
     val manager = TestProbe()
     val flush = TestProbe()
     val sink = TestProbe()
+    sink.ignoreMsg {
+      case delivery: CommittedReportDelivery if delivery.event.label == "actor_placement" =>
+        sink.send(delivery.ackTo, DeliveryAccepted(delivery.epoch, delivery.token))
+        true
+      case _ => false
+    }
     val observed = TestProbe()
     val creator = TestProbe()
     val global = TestActorRef(new GTM(manager.ref, flush.ref, observed.ref, limits), s"gtm-$sequence")

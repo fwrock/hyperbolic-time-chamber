@@ -204,7 +204,7 @@ class Bicycle(
     setMesoExitTickFn        = t => mesoExitTick = t,
     getTripDestinationFn     = () => getTripDestination,
     logDebugFn               = msg => logDebug(msg),
-    isTimeWarpFn             = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isTimeWarpFn             = () => requiresReplyCorrelation,
     isAwaitingReplyFn        = (key, kind, seq) => isAwaitingReply(key, kind, seq),
     consumeAwaitedReplyFn    = key => consumeAwaitedReply(key)
   )
@@ -228,8 +228,10 @@ class Bicycle(
     onFinishPrivateVehicleFn     = node => onFinishPrivateVehicle(node),
     setSignalWaitUntilTickFn     = t => signalWaitUntilTick = t,
     setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
-    isTimeWarpFn                 = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isTimeWarpFn                 = () => requiresReplyCorrelation,
     registerAwaitedReplyFn       = (key, kind) => registerAwaitedReply(key, kind),
+    requestMessageFn = Some((eid, shard, data, event, key, kind) =>
+      requestInteraction(eid, shard, data, event, key, kind)),
     isAwaitingReplyFn            = (key, kind, seq) => isAwaitingReply(key, kind, seq),
     consumeAwaitedReplyFn        = key => consumeAwaitedReply(key)
   )

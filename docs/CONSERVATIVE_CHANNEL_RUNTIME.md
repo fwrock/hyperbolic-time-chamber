@@ -6,6 +6,11 @@ factory, `ConservativeGlobalTimeManager.props`, constructs
 old `SelectiveBarrier` class remains for compatibility tests; direct construction
 of that class does not obtain the new guarantees.
 
+This document describes the explicitly selected `htc.time-manager.conservative-transport=channel-closed`
+reference. The default [`direct` transport](CONSERVATIVE_DIRECT_RUNTIME.md)
+uses `DirectConservativeLocalTimeManager` workers, tracked callback obligations and
+arrival-order execution within a closed tick instead of stable global causal batches.
+
 See [the validation record](CONSERVATIVE_CHANNEL_VALIDATION_2026_10_23.md) for the
 487-test build and simulator results. The later
 [distributed validation](DISTRIBUTED_OPTIMISTIC_VALIDATION_2026_10_23.md) fixes the

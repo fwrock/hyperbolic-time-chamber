@@ -259,9 +259,9 @@ class Person(
           s"eventTick=${event.tick} eventSeq=${event.seq} vehicleId=${d.vehicleId} " +
             s"tripExecution=${state.tripExecution.getClass.getSimpleName}"
         )
-        val isTimeWarpMode = getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP
+        val correlateReply = requiresReplyCorrelation
         val awaitKey = privateVehicleHandler.vehicleTripAwaitKey(d.vehicleId)
-        if (isTimeWarpMode && !isAwaitingReply(awaitKey, "TripCompletedData", d.requestSeq)) {
+        if (correlateReply && !isAwaitingReply(awaitKey, "TripCompletedData", d.requestSeq)) {
           // #timewarp-trace
           core.actor.trace.TimeWarpTrace.trace(
             getEntityId.toString,
@@ -383,14 +383,15 @@ class Person(
       state = newState.copy(
         pendingRoutingDecision = Some(PendingPersonRoutingDecision(workerId, kind.toString))
       )
-      sendMessageTo(
+      requestInteraction(
         entityId = workerId,
         shardId = AccountedRoutingConfig.ActorClassType,
         data = query,
         eventType = model.hybrid.entity.state.enumeration.EventTypeEnum.ModeDecisionQuery.toString,
-        actorType = org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+        actorType = org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed,
+        replyKey = routingAwaitKey(workerId),
+        replyKind = "ModeDecisionQuery"
       )
-      registerAwaitedReply(routingAwaitKey(workerId), "ModeDecisionQuery")
       onFinishSpontaneous(None)
 
     case PlanStepResult.Finished(newState) =>

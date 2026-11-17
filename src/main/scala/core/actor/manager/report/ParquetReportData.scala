@@ -67,7 +67,18 @@ class ParquetReportData(
       |  ]
       |}""".stripMargin
 
-  private val SCHEMA = new Schema.Parser().parse(SCHEMA_JSON)
+  private val SCHEMA = {
+    val original = new Schema.Parser().parse(SCHEMA_JSON)
+    val extended = Schema.createRecord(original.getName, original.getDoc, original.getNamespace, false)
+    val fields = new java.util.ArrayList[Schema.Field]()
+    original.getFields.forEach(field => fields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal())))
+    fields.add(new Schema.Field("capacity_data_v1", Schema.createUnion(
+      Schema.create(Schema.Type.NULL), ParquetCapacityPayload.schema), null, Schema.Field.NULL_DEFAULT_VALUE))
+    extended.setFields(fields)
+    extended
+  }
+  private val payloadEncoding = config.getString("htc.report-manager.parquet.payload-encoding")
+  require(Set("json", "typed-capacity-v1").contains(payloadEncoding), "unsupported Parquet payload encoding")
 
   private val prefix =
     try config.getString("htc.report-manager.parquet.prefix")
@@ -185,7 +196,9 @@ class ParquetReportData(
           record.put("event_type", event.label)
           record.put("simulation_id", sid)
           record.put("scenario_id", scenarioId)
-          record.put("data", JsonUtil.toJson(event.data))
+          val typed = if (payloadEncoding == "typed-capacity-v1") ParquetCapacityPayload.encode(event.label, event.data) else None
+          record.put("capacity_data_v1", typed.orNull)
+          record.put("data", if (typed.nonEmpty) null else JsonUtil.toJson(event.data))
           // Distributed-run context: reporting node and message-origin node (null when there is none).
           record.put("node", Option(core.cluster.NodeIdentity.originLabel(event.node)).filter(_.nonEmpty).orNull)
           record.put("from_node", Option(core.cluster.NodeIdentity.originLabel(event.fromNode)).filter(_.nonEmpty).orNull)

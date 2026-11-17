@@ -50,6 +50,7 @@ class ConservativeMigrationRuntimeSpec extends AnyFlatSpec with Matchers with Be
   } finally LoadBalanceTestIsolation.release()
 
   private class GTM(manager: ActorRef, reports: ActorRef, count: Int = 1) extends ChannelClosedGlobalTimeManager(100L, false, manager) {
+    override protected lazy val directInteractions: Boolean = false
     override def onStart(): Unit = ()
     override protected def expectedWorkers: Int = count
     override protected lazy val reportManagerRef: ActorRef = reports

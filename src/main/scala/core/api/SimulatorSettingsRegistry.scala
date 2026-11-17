@@ -31,6 +31,8 @@ object SimulatorSettingsRegistry {
 
   /** Catalog of all known settings exposed via the API. */
   val catalog: List[SettingDef] = List(
+    SettingDef("htc.time-manager.conservative-transport", "HTC_CONSERVATIVE_TRANSPORT",
+      "Conservative interaction transport, fixed before runtime startup", "direct"),
     SettingDef("htc.time-warp.max-ahead-ticks", "HTC_TIME_WARP_MAX_AHEAD_TICKS", "Optimistic tick window ahead of GVT, fixed at startup", "50"),
     SettingDef("htc.time-warp.input-window-ticks", "HTC_TIME_WARP_INPUT_WINDOW_TICKS", "Maximum tick span for progressive optimistic input enrollment", "1000"),
     SettingDef("htc.time-warp.max-uncommitted-events", "HTC_TIME_WARP_MAX_UNCOMMITTED_EVENTS", "Speculative events per LP above GVT; frontier work may exceed this budget", "256"),
@@ -194,6 +196,7 @@ object SimulatorSettingsRegistry {
       "htc.report-manager.default-strategy" -> reporters,
       "htc.report-manager.enabled-strategies" -> reporters,
       "htc.report-manager.parquet.compression" -> List("snappy", "zstd", "gzip", "uncompressed"),
+      "htc.time-manager.conservative-transport" -> List("direct", "channel-closed"),
       "htc.routing.cache-strategy" -> List("kafka", "inmemory", "accounted", "disabled"),
       "htc.mobility.load-policy.transit-trip-policy" -> List("reject", "walk"),
       "htc.snapshot-manager.migration.state-store" -> List("inmemory", "redis"),
@@ -210,7 +213,8 @@ object SimulatorSettingsRegistry {
 
   def isSecret(key: String): Boolean = secretMarkers.exists(key.toLowerCase.contains)
 
-  def isStartupOnly(key: String): Boolean = startupOnlyPrefixes.exists(key.startsWith)
+  def isStartupOnly(key: String): Boolean =
+    key == "htc.time-manager.conservative-transport" || startupOnlyPrefixes.exists(key.startsWith)
 
   def set(key: String, value: String): Unit = { overrides.put(key, value); version.incrementAndGet() }
   def setAll(settings: Map[String, String]): Unit = settings.foreach {

@@ -33,6 +33,12 @@ abstract class ReportData(
     case CommittedReportDelivery(epoch, token, event, ackTo) =>
       try { onCommittedReport(event); ackTo ! DeliveryAccepted(epoch, token) }
       catch { case scala.util.control.NonFatal(e) => ackTo ! RuntimeFailure(s"report write failed: ${e.getMessage}") }
+    case CommittedReportBatchDelivery(epoch, token, events, ackTo) =>
+      try {
+        require(events.nonEmpty, "empty committed report batch")
+        events.foreach(onCommittedReport)
+        ackTo ! DeliveryAccepted(epoch, token)
+      } catch { case scala.util.control.NonFatal(e) => ackTo ! RuntimeFailure(s"report batch write failed: ${e.getMessage}") }
     case FlushRuntimeReports(round, replyTo) =>
       implicit val ec: scala.concurrent.ExecutionContext = context.dispatcher
       val flush = try flushCommittedReports() catch { case scala.util.control.NonFatal(e) => Future.failed(e) }

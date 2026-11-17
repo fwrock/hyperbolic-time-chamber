@@ -37,7 +37,29 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private var sendingDeliveries = false
   private var sendingGrants = false
   protected def maxInFlight: Int = 32
+  protected def directInteractions: Boolean = false
+  private val directLedger = new DirectWorkLedger
+  private val directRoots = mutable.Queue.empty[(Process, DirectExecute)]
+  private val directRootSlots = mutable.Set.empty[DirectWorkId]
+  private val directProcessed = mutable.Map.empty[DirectWorkId, DirectProcessed]
+  private val directBirths = mutable.Map.empty[LogicalProcessId, DirectExecute]
+  private var directTick: Option[Long] = None
+  private var directClosedTick: Option[Long] = None
+  private var directBootstrap = false
+  private var directCallbacks = 0L
+  private var directChildren = 0L
+  private var directForwarded = 0L
   private val reports = mutable.Set.empty[Long]
+  private case object FlushDirectReports
+  private var directReportFlushScheduled = false
+  private lazy val directReportBatcher = new CommittedReportBatcher(
+    config.getInt("htc.report-manager.delivery-batch-size"),
+    () => { val id = nextToken(); reports.add(id); id },
+    (target, id, events) => {
+      if (events.size == 1) target ! CommittedReportDelivery(epoch, id, events.head, self)
+      else target ! CommittedReportBatchDelivery(epoch, id, events, self)
+    }
+  )
   private val registrationFences = mutable.Map.empty[ActorRef, ActorRef]
   private val sinks = mutable.Set.empty[ActorRef]
   private var members = Vector.empty[ActorRef]
@@ -145,7 +167,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       byHandle(handle) = process
       context.watch(join.ref)
       registerOwnedProcess(join.identity.copy(id = handle), join.initialWake, join.identity)
-      join.ref ! RuntimeJoined(epoch, coordinator, self)
+      join.ref ! RuntimeJoined(epoch, coordinator, self, directConservative = directInteractions)
     }
     case AuthorizeRuntimeBirth(run, target, origin) => protect {
       checkEpoch(run)
@@ -162,7 +184,69 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       context.unwatch(sender())
       sender() ! StopRuntimeBirthInitializer
       unborn.remove(target).get.foreach { case (event, source) => input(processes(target), event, source) }
+      directBirths.remove(target).foreach(processes(target).ref ! _)
       completeBatch()
+    }
+    case FlushDirectReports => protect {
+      directReportFlushScheduled = false
+      directReportBatcher.flush()
+    }
+    case event: DirectProcessed => protect {
+      checkEpoch(event.epoch)
+      require(directInteractions && members.contains(event.accountingOwner), "invalid direct accounting owner")
+      if (!directClosedTick.exists(event.completion.work.tick <= _) && directTick.forall(_ <= event.completion.work.tick)) {
+        val process = byRef.getOrElse(sender(), throw new IllegalArgumentException("unregistered direct callback"))
+        require(event.completion.work.receiver == process.id, "completion from the wrong LP")
+        directProcessed.get(event.completion.work.id) match {
+          case Some(previous) => require(previous == event, "conflicting direct callback effects")
+          case None =>
+            event.completion.children.foreach(child => require(child.id.source == process.id &&
+              child.id.incarnation == process.incarnation, "foreign child source incarnation"))
+            event.controls.foreach(applyScheduleControl(process, _))
+            event.reports.foreach(publishDirectReport)
+            updateInput(process, event.next)
+            process.blocked = event.blocked
+            process.terminal = event.terminal
+            if (event.blocked > 0) blockedProcesses.add(process.ref) else blockedProcesses.remove(process.ref)
+            if (event.terminal) terminalProcesses.add(process.ref) else terminalProcesses.remove(process.ref)
+            directProcessed(event.completion.work.id) = event
+            directCallbacks += 1L
+            directChildren += event.completion.children.size
+        }
+        if (event.accountingOwner == self) accountDirect(event.completion)
+        else {
+          dispatchDueDirect()
+          directForwarded += 1L
+          event.accountingOwner ! DirectAccounted(epoch, event.completion)
+        }
+        completeBatch()
+      }
+    }
+    case DirectAccounted(run, completion) => protect {
+      checkEpoch(run)
+      require(directInteractions && owner(completion.work.receiver) == sender(), "foreign direct completion owner")
+      if (!directClosedTick.exists(completion.work.tick <= _) && directTick.forall(_ <= completion.work.tick))
+        accountDirect(completion)
+    }
+    case DirectBirth(run, target, delivery) if directInteractions && byRef.contains(sender()) => protect {
+      checkEpoch(run)
+      require(delivery.work.id.source == byRef(sender()).id, "foreign direct birth source")
+      owner(target).tell(DirectBirth(run, target, delivery), self)
+    }
+    case DirectBirth(run, target, delivery) => protect {
+      checkEpoch(run)
+      require(directInteractions && owner(target) == self && members.contains(sender()), "unowned direct birth")
+      require(delivery.work.receiver == target && delivery.event.isInstanceOf[core.entity.event.ActorInteractionEvent],
+        "invalid direct birth envelope")
+      require(!processes.contains(target) && !births.contains(target), "duplicate direct birth")
+      val event = delivery.event.asInstanceOf[core.entity.event.ActorInteractionEvent]
+      val data = event.data.asInstanceOf[RuntimeBirthData]
+      val origin = RuntimeBirthOrigin(LogicalProcessId(event.actorClassType, event.actorRefId),
+        event.order.get.key, event.tick, event.order.get.microstep)
+      births(target) = (origin, data, None)
+      unborn(target) = mutable.ArrayBuffer.empty
+      directBirths(target) = delivery
+      coordinator ! RequestRuntimeBirth(epoch, target, origin)
     }
     case RouteInteraction(run, target, event) => protect {
       checkEpoch(run)
@@ -232,19 +316,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       require(target == self, "schedule control sent to wrong owner")
       require(!hasStarted || executing.contains(sender()), "schedule update outside an authorized batch")
       val source = byRef.getOrElse(sender(), throw new IllegalArgumentException("unregistered schedule source"))
-      def identity(value: Identify): Identify = {
-        require(value.id == source.id.id, "schedule identity mismatch")
-        value.copy(id = source.handle, classType = source.id.model)
-      }
-      val local = control match {
-        case e: FinishEvent => e.copy(identify = identity(e.identify))
-        case e: ScheduleEvent => e.copy(identify = Some(identity(e.identify.get)))
-        case _ => throw new IllegalArgumentException("unsupported conservative schedule control")
-      }
-      local match {
-        case e: FinishEvent => finishEvent(e)
-        case e: ScheduleEvent => scheduleEvent(e)
-      }
+      applyScheduleControl(source, control)
     }
     case CollectConservativeReady(round) => protect {
       require(sender() == coordinator && batch.isEmpty && migration.isEmpty, "frontier requested during execution/migration")
@@ -254,13 +326,22 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     }
     case event: ExecuteConservativeBatch => protect {
       require(sender() == coordinator && batch.isEmpty && outgoing.isEmpty && migration.isEmpty, "overlapping conservative batches/migration")
+      if (directInteractions) {
+        if (!directTick.contains(event.tick)) {
+          require(directRoots.isEmpty && directRootSlots.isEmpty, "direct dispatch still in flight")
+          directLedger.begin(event.tick)
+          directProcessed.filterInPlace((_, receipt) => receipt.completion.work.tick >= event.tick)
+          directTick = Some(event.tick)
+        }
+      }
+      directBootstrap = directInteractions && event.initializationOnly
       batch = Some(event)
       preparing = true
       retireCommittedTerminals(event.round)
       localTickOffset = event.tick
       hasStarted = true
       dispatching = true
-      dispatchConservativeSchedules(event.tick, event.microstep)
+      if (!directBootstrap) dispatchConservativeSchedules(event.tick, event.microstep, directInteractions)
       dispatching = false
       executePreparedBatch()
     }
@@ -310,8 +391,8 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       completeStop()
     }
     case event: StopConservativeRuntime => protect {
-      require(sender() == coordinator && batch.isEmpty && outgoing.isEmpty && accepting.isEmpty && reports.isEmpty,
-        "stop before worker channels drained")
+      require(sender() == coordinator && batch.isEmpty && outgoing.isEmpty && accepting.isEmpty && reports.isEmpty &&
+        (!directInteractions || directLedger.isClosed), "stop before worker channels drained")
       stopping = Some(event)
       retirements = byRef.keySet.toSet
       require(event.finalHorizon.isEmpty || event.truncated, "horizon finalization without truncation")
@@ -330,8 +411,10 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     case e: FreezeConservativeMigration => protect {
       checkEpoch(e.epoch)
       require(sender() == coordinator && migration.isEmpty && batch.isEmpty && outgoing.isEmpty && accepting.isEmpty &&
-        reports.isEmpty && births.isEmpty && stopping.isEmpty, "migration outside a closed conservative batch")
+        reports.isEmpty && births.isEmpty && stopping.isEmpty && (!directInteractions || directLedger.isClosed),
+        "migration outside a closed conservative batch")
       migration = Some(e)
+      if (directInteractions) directClosedTick = directTick
       retireCommittedTerminals(e.round)
       completeMigrationFreeze()
     }
@@ -400,6 +483,54 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     conservative.orElse(super.handleEvent)
   }
 
+
+  private def applyScheduleControl(source: Process, control: AnyRef): Unit = {
+    def identity(value: Identify): Identify = {
+      require(value.id == source.id.id, "schedule identity mismatch")
+      value.copy(id = source.handle, classType = source.id.model)
+    }
+    control match {
+      case e: FinishEvent => finishEvent(e.copy(identify = identity(e.identify)))
+      case e: ScheduleEvent => scheduleEvent(e.copy(identify = Some(identity(e.identify.get))))
+      case _ => throw new IllegalArgumentException("unsupported conservative schedule control")
+    }
+  }
+
+  private def publishDirectReport(report: DirectReport): Unit = {
+    directReportBatcher.add(report.target, report.event)
+    if (directReportBatcher.nonEmpty && !directReportFlushScheduled) {
+      directReportFlushScheduled = true
+      self ! FlushDirectReports
+    }
+  }
+
+  private def enrollDirect(process: Process, event: AnyRef, tick: Tick): Unit = {
+    val work = DirectWork(DirectWorkId(process.id, process.incarnation, -nextToken()), None, process.id, tick)
+    directLedger.enroll(work)
+    directRoots.enqueue(process -> DirectExecute(epoch, work, self, event))
+    releaseDirectRoots()
+  }
+
+  private def releaseDirectRoots(): Unit = {
+    while (directRoots.nonEmpty && directRootSlots.size < maxInFlight) {
+      val (process, delivery) = directRoots.dequeue()
+      directRootSlots.add(delivery.work.id)
+      process.ref ! delivery
+    }
+  }
+
+  private def dispatchDueDirect(): Unit =
+    if (directTick.contains(localTickOffset) && !directBootstrap && hasStarted && stopping.isEmpty && migration.isEmpty)
+      dispatchConservativeSchedules(localTickOffset, 0L, true)
+
+  private def accountDirect(completion: DirectWorkCompletion): Unit = {
+    directLedger.complete(completion)
+    directRootSlots.remove(completion.work.id)
+    releaseDirectRoots()
+    dispatchDueDirect()
+    completeBatch()
+  }
+
   private def protect(body: => Unit): Unit = try body catch { case NonFatal(e) => fail(e) }
   private def completeMigrationResume(): Unit = migrationResumeTarget.foreach { target =>
     if (pendingMigrationPlacements.isEmpty && reports.isEmpty) {
@@ -422,7 +553,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
           frozenProcesses(process.id) = FrozenProcess(process, process.ref,
             org.apache.pekko.serialization.Serialization.serializedActorPath(process.ref), target)
           pendingMigrationAcks.add(process.ref)
-          process.ref ! FreezeConservativeProcess(epoch, request.requestId)
+          process.ref ! FreezeConservativeProcess(epoch, request.requestId, if (directInteractions) directTick else None)
         }
       }
     }
@@ -435,6 +566,17 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private def executePreparedBatch(): Unit = if (preparing && !dispatching && !accepting.valuesIterator.exists(_.source.isEmpty)) {
     val stage = batch.get
     preparing = false
+    if (directInteractions) {
+      readyInputs.toVector.foreach { case (ref, order) =>
+        if (order.tick == stage.tick) {
+          updateInput(byRef(ref), None)
+          enrollDirect(byRef(ref), DirectQueuedInputs(stage.tick), stage.tick)
+        }
+      }
+      releaseDirectRoots()
+      completeBatch()
+      return
+    }
     pendingExecution ++= readyInputs.iterator.collect {
       case (ref, order) if order.tick == stage.tick && order.microstep == stage.microstep => order -> ref
     }.toVector.sortBy(_._1).map(_._2)
@@ -450,20 +592,24 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private def completeBatch(): Unit = {
     completeRegistrationFences()
     if (batch.nonEmpty && !preparing && !sendingGrants && pendingExecution.isEmpty && executing.isEmpty &&
-      outgoing.isEmpty && accepting.isEmpty && reports.isEmpty && retiring.isEmpty && births.isEmpty) {
+      outgoing.isEmpty && accepting.isEmpty && reports.isEmpty && retiring.isEmpty && births.isEmpty &&
+      (!directInteractions || (directLedger.isClosed && directRoots.isEmpty && directRootSlots.isEmpty))) {
       val round = batch.get.round
       batch = None
       coordinator ! ConservativeBatchComplete(round)
     } else reportReady()
   }
   private def reportReady(): Unit = if (readyRequest.nonEmpty && batch.isEmpty && outgoing.isEmpty &&
-    accepting.isEmpty && reports.isEmpty && births.isEmpty) {
+    accepting.isEmpty && reports.isEmpty && births.isEmpty && (!directInteractions || directLedger.isClosed)) {
     val (round, target) = readyRequest.get
     readyRequest = None
     val next = (readyOrderedSchedules.map(_._3) ++ readyInputs.valuesIterator).minOption
-    target ! ConservativeReady(round, next, blockedProcesses.size + runningEvents.size)
+    target ! ConservativeReady(round, next, blockedProcesses.size + runningEvents.size,
+      if (directInteractions) readyInputs.valuesIterator.map(_.tick).minOption else None)
   }
   private def completeStop(): Unit = if (stopping.nonEmpty && retirements.isEmpty && reports.isEmpty) {
+    if (directInteractions)
+      logInfo(s"[DIRECT-ACCOUNTING] callbacks=$directCallbacks children=$directChildren forwarded=$directForwarded pending=${directLedger.pendingCount}")
     logInfo(s"[CONSERVATIVE-ACCOUNTING] round=${stopping.get.round} transfers=$transfers receipts=$receipts outgoing=${outgoing.size} accepting=${accepting.size} crossOwnerTransfers=$crossOwnerTransfers")
     coordinator ! ConservativeRuntimeStopped(stopping.get.round, sinks.toSet)
   }
@@ -506,7 +652,8 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   }
 
   override protected def sendSpontaneousEvent(tick: Tick, identity: Identify): Unit =
-    input(byHandle(identity.id), prepareOwnedDispatch(tick, identity), None)
+    if (directInteractions) enrollDirect(byHandle(identity.id), prepareOwnedDispatch(tick, identity), tick)
+    else input(byHandle(identity.id), prepareOwnedDispatch(tick, identity), None)
   override protected def startSimulation(event: StartSimulationTimeEvent): Unit = {
     startTime = System.currentTimeMillis()
     initialTick = event.startTick

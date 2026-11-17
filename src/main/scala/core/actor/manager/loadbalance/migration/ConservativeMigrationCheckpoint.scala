@@ -19,5 +19,8 @@ case class ConservativeMigrationCheckpoint(
   horizon: Long,
   retirementFence: Long,
   finalizedHorizon: Option[Long],
-  birth: Option[RuntimeBirthOrigin]
+  birth: Option[RuntimeBirthOrigin],
+  directConservative: Boolean = false,
+  directSequence: Long = 0L,
+  directClosedThrough: Option[Long] = None
 )

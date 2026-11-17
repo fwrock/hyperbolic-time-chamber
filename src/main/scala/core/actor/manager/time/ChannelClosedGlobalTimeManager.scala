@@ -36,6 +36,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   private var started = false
   private var round = 0L
   private var lastStage: Option[(Long, Long)] = None
+  private var directInitialized = false
   private var horizon = Long.MaxValue - 1L
   private var truncated = false
   private enum Phase { case Loading, Collecting, Executing, WaitingInput, Paused, FreezingMigration, Migrating, ResumingMigration, Stopping, Draining, Failed, Finished }
@@ -59,7 +60,14 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
   protected def expectedWorkers: Int = SimulatorSettingsRegistry.getInt("htc.time-manager.total-instances", config)
   protected lazy val reportManagerRef: ActorRef = createSingletonProxy(REPORT_MANAGER_ACTOR_NAME)
   override protected def runtimeCoordinatorForActors: Option[ActorRef] = Some(self)
-  override protected def localTimeManagerProps(): Props = ChannelAwareLocalTimeManager.props(duration, manager, self)
+  protected lazy val directInteractions: Boolean = {
+    val selected = SimulatorSettingsRegistry.getString("htc.time-manager.conservative-transport", config)
+    require(Set("channel-closed", "direct").contains(selected), "unknown conservative transport")
+    selected == "direct"
+  }
+  override protected def localTimeManagerProps(): Props =
+    if (directInteractions) DirectConservativeLocalTimeManager.props(duration, manager, self)
+    else ChannelAwareLocalTimeManager.props(duration, manager, self)
   override def onStart(): Unit = createTimeManagersPool()
 
   private def join(event: JoinRuntime): Unit = {
@@ -276,7 +284,9 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       workers.foreach(_ ! StopConservativeRuntime(round, truncated, Option.when(truncated)(horizon)))
     } else {
       val order = next.get
-      val stage = order.tick -> order.microstep
+      val initialize = directInteractions && !directInitialized && ready.valuesIterator.exists(_.queuedTick.contains(order.tick))
+      directInitialized = true
+      val stage = order.tick -> (if (directInteractions) round else order.microstep)
       require(lastStage.forall(s => Ordering.Tuple2[Long, Long].lt(s, stage)), s"conservative frontier regression: $lastStage -> $stage")
       lastStage = Some(stage)
       localTickOffset = order.tick
@@ -295,7 +305,7 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       }
       phase = Executing
       pending = workers.toSet
-      workers.foreach(_ ! ExecuteConservativeBatch(round, order.tick, order.microstep))
+      workers.foreach(_ ! ExecuteConservativeBatch(round, order.tick, if (directInteractions) 0L else order.microstep, initialize))
     }
   }
 

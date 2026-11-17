@@ -84,6 +84,7 @@ class RuntimeBirthFamilySpec extends AnyFlatSpec with Matchers with BeforeAndAft
     }
   }
   private class ConservativeGTM(manager: ActorRef, sink: ActorRef) extends ChannelClosedGlobalTimeManager(100L, false, manager) {
+    override protected lazy val directInteractions: Boolean = false
     def ready: Boolean = recoveryFinished
     override def onStart(): Unit = ()
     override protected def expectedWorkers: Int = 2
@@ -148,7 +149,9 @@ class RuntimeBirthFamilySpec extends AnyFlatSpec with Matchers with BeforeAndAft
     effects.within(20.seconds) {
       while (!drained) effects.expectMsgType[AnyRef] match {
         case delivery: CommittedReportDelivery =>
-          reports += delivery.event.data.asInstanceOf[Map[String, Any]]
+          if (delivery.event.label == "family-result")
+            reports += delivery.event.data.asInstanceOf[Map[String, Any]]
+          else delivery.event.label shouldBe "actor_placement"
           effects.send(delivery.ackTo, DeliveryAccepted(delivery.epoch, delivery.token))
         case drain: DrainRuntimeReports =>
           effects.send(global, RuntimeReportsFlushed(drain.round)); drained = true

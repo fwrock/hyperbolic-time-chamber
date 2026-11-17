@@ -39,7 +39,8 @@ class BicycleSignalHandler(
   isTimeWarpFn: () => Boolean = () => false,
   registerAwaitedReplyFn: (String, String) => Unit = (_, _) => (),
   isAwaitingReplyFn: (String, String, Long) => Boolean = (_, _, _) => false,
-  consumeAwaitedReplyFn: String => Unit = _ => ()
+  consumeAwaitedReplyFn: String => Unit = _ => (),
+  requestMessageFn: Option[(Long, String, AnyRef, String, String, String) => Unit] = None
 ) {
 
   /** See CarSignalHandler.linkAccessAwaitKey. */
@@ -69,13 +70,14 @@ class BicycleSignalHandler(
             case Some(node) =>
               getNextLinkFn() match {
                 case linkId if linkId != 0L =>
-                  sendMessageFn(
+                  sendRequest(
                     node.id,
                     node.classType,
                     RequestLinkAccessData(targetLinkId = linkId, signalAlreadyCleared = state.movableLinkExitReported, approachLinkId = state.currentPath.map(_._1).getOrElse(0L)),
-                    EventTypeEnum.RequestLinkAccess.toString
-                  )
-                registerAwaitedReplyFn(linkAccessAwaitKey(linkId), "LinkAccessData")
+                    EventTypeEnum.RequestLinkAccess.toString,
+                linkAccessAwaitKey(linkId), "LinkAccessData"
+              )
+
                 onFinishSpontaneousFn(None)
                 case 0L =>
                   leavingLinkFn()
@@ -164,4 +166,12 @@ class BicycleSignalHandler(
         }
       }
     }
+  private def sendRequest(target: Long, shard: String, data: AnyRef, event: String,
+    key: String, kind: String): Unit = requestMessageFn match {
+    case Some(send) => send(target, shard, data, event, key, kind)
+    case None =>
+      sendMessageFn(target, shard, data, event)
+      registerAwaitedReplyFn(key, kind)
+  }
+
 }

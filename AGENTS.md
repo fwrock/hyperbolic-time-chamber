@@ -212,6 +212,16 @@ Rules of thumb:
   needs its barrier and, for independent same-tick arrivals, complete channel/frontier accounting;
   do not add ad hoc model round-trips through the Time Manager.
 
+The default `htc.time-manager.conservative-transport=direct` policy accepts independent
+same-tick arrival order. Base-actor callback scopes automatically track direct sends and
+atomically declare children on completion. Use `requestInteraction` for business reply
+dependencies and `replyInteraction` for responses; never send runtime ACKs from model code.
+The LP's own LTM applies schedule/report effects before forwarding completion to the
+chain's accounting owner. Preserve startup registration, fresh tick-closure summaries,
+progressive input, retirement and migration fences. The explicitly selected `channel-closed` reference transport
+retains stable causal batches and remains the reference for existing frozen campaigns.
+See `docs/CONSERVATIVE_DIRECT_RUNTIME.md`; this selection does not change Time Warp.
+
 Common bugs to check for when reviewing a diff against this discipline:
 - A fire-and-forget path where `onFinishSpontaneous` got moved into a reply handler for no
   reason — unnecessary coupling/wait that doesn't need to exist.

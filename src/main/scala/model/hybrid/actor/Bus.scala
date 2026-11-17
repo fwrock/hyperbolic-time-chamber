@@ -239,7 +239,7 @@ class Bus(
     setMesoExitTickFn    = tick => mesoExitTick = tick,
     restoreRouteIfMissingFn = ctx => restoreRouteIfMissing(ctx),
     logDebugFn           = msg => logDebug(msg),
-    isTimeWarpFn         = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isTimeWarpFn         = () => requiresReplyCorrelation,
     isAwaitingReplyFn    = (key, kind, seq) => isAwaitingReply(key, kind, seq),
     consumeAwaitedReplyFn = key => consumeAwaitedReply(key)
   )
@@ -262,8 +262,10 @@ class Bus(
     setSignalWaitUntilTickFn = tick => signalWaitUntilTick = tick,
     setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
     restoreRouteIfMissingFn = ctx => restoreRouteIfMissing(ctx),
-    isTimeWarpFn           = () => getCurrentTimeManagerType == core.enumeration.TimeManagerTypeEnum.TIME_WARP,
+    isTimeWarpFn           = () => requiresReplyCorrelation,
     registerAwaitedReplyFn = (key, kind) => registerAwaitedReply(key, kind),
+    requestMessageFn = Some((eid, shard, data, event, key, kind) =>
+      requestInteraction(eid, shard, data, event, key, kind)),
     isAwaitingReplyFn      = (key, kind, seq) => isAwaitingReply(key, kind, seq),
     consumeAwaitedReplyFn  = key => consumeAwaitedReply(key)
   )

@@ -53,13 +53,7 @@ class RoutingService(private val properties: Properties)
           }.toList)
         }
       }
-      sendMessageTo(
-        entityId = event.actorRefId,
-        shardId = event.actorClassType,
-        data = RouteReplyData(event.seq, result),
-        eventType = EventTypeEnum.RouteReply.toString,
-        actorType = LoadBalancedDistributed
-      )
+      replyInteraction(event, RouteReplyData(event.seq, result), EventTypeEnum.RouteReply.toString)
 
     case query: ModeDecisionQueryData =>
       require(query.context.currentTick == event.tick,
@@ -71,13 +65,7 @@ class RoutingService(private val properties: Properties)
           case None => Left(NoViableJourney(s"unknown strategyId ${query.request.strategyId}"))
         }
       }
-      sendMessageTo(
-        entityId = event.actorRefId,
-        shardId = event.actorClassType,
-        data = ModeDecisionReplyData(event.seq, result),
-        eventType = EventTypeEnum.ModeDecisionReply.toString,
-        actorType = LoadBalancedDistributed
-      )
+      replyInteraction(event, ModeDecisionReplyData(event.seq, result), EventTypeEnum.ModeDecisionReply.toString)
 
     case other =>
       logWarn(s"RoutingService ignored ${other.getClass.getSimpleName}")

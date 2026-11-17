@@ -12,7 +12,8 @@ sealed trait RuntimeCommand
 final case class LogicalProcessId(model: String, id: Long)
 final case class JoinRuntime(identity: Identify, ref: ActorRef, initialWake: Option[EventOrder], startTick: Long = 0L, incarnation: String = "",
   birth: Option[RuntimeBirthOrigin] = None) extends RuntimeCommand
-final case class RuntimeJoined(epoch: String, coordinator: ActorRef, owner: ActorRef, distributed: Boolean = false) extends RuntimeCommand
+final case class RuntimeJoined(epoch: String, coordinator: ActorRef, owner: ActorRef, distributed: Boolean = false,
+  directConservative: Boolean = false) extends RuntimeCommand
 final case class SetRuntimeHorizon(horizon: Long) extends RuntimeCommand
 final case class SetOptimisticExecutionLimits(frontier: Long, ceiling: Long, limits: core.runtime.OptimisticExecutionLimits) extends RuntimeCommand
 final case class JoinRuntimeManager(ref: ActorRef) extends RuntimeCommand
@@ -46,6 +47,8 @@ final case class RuntimeFailure(reason: String) extends RuntimeCommand
 final case class RuntimeStopManagers(round: Long) extends RuntimeCommand
 final case class PublishCommittedReport(target: ActorRef, event: ReportEvent) extends RuntimeCommand
 final case class CommittedReportDelivery(epoch: String, token: Long, event: ReportEvent, ackTo: ActorRef) extends RuntimeCommand
+/** One receipt covers acceptance of every report in this bounded envelope. */
+final case class CommittedReportBatchDelivery(epoch: String, token: Long, events: Vector[ReportEvent], ackTo: ActorRef) extends RuntimeCommand
 final case class BeginRuntimeCreation(key: String, tick: Long) extends RuntimeCommand
 final case class EndRuntimeCreation(key: String) extends RuntimeCommand
 final case class DrainRuntimeReports(round: Long, replyTo: ActorRef, targets: Set[ActorRef] = Set.empty) extends RuntimeCommand

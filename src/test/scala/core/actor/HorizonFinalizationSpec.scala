@@ -47,6 +47,11 @@ class HorizonFinalizationSpec extends AnyFlatSpec with Matchers with BeforeAndAf
   private def rig(policy: String, illegalEffect: Boolean = false, waiting: Boolean = false): Rig = {
     identity += 1L
     val global = TestProbe(); val owner = TestProbe(); val sink = TestProbe(); val creator = TestProbe()
+    owner.ignoreMsg {
+      case report: PublishCommittedReport if report.event.label == "actor_placement" => true
+      case _: PublishConservativePlacement => true
+      case _ => false
+    }
     val props = Properties(entityId = identity.toString, actorType = CreationTypeEnum.PoolDistributed,
       runtimeCoordinator = Some(global.ref), defaultTimeManagerType = policy,
       timeManagers = mutable.Map(policy -> owner.ref), reporters = mutable.Map(ReportTypeEnum.parquet -> sink.ref))
