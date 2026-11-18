@@ -224,6 +224,13 @@ exact implementation of every SUMO discrete Krauss detail.
 
 ## Remaining work and proposed acceptance gates
 
+The [empirical validation campaign plan](MICRO_EMPIRICAL_VALIDATION_PLAN.md)
+defines the proposed progression from retained conditional replay to independent
+following, signalized queue and autonomous segment/corridor evaluation. It
+specifies data feasibility, calibration separation, production actor execution
+and decisions required before freezing a new protocol; it does not alter the
+historical protocols or declare empirical acceptance.
+
 The table separates the accepted bounded spillback gate from remaining work.
 Before changing traffic physics again, freeze a new protocol and reserve
 fresh validation cases; inspected v1/v2 results may be used as development data.

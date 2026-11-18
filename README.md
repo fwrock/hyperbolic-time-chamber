@@ -646,6 +646,9 @@ src/main/scala/
 | [Applied Load-Balancing Literature](docs/LOAD_BALANCING_LITERATURE.md) | Mobility, spatial simulation and PDES papers mapped to HTC strategies, with matching limits and source-access notes |
 | [Distributed Allocation Validation](docs/DISTRIBUTED_ALLOCATION_VALIDATION_2026_10_25.md) | Separate-JVM allocation ownership, migration and restore evidence, reproduction commands and remaining limits |
 | [MICRO Validation Status](docs/MICRO_VALIDATION_STATUS.md) | Consolidated implementation, four scientific priorities, current results, configuration, limits and next acceptance gates |
+| [MICRO Empirical Validation Plan](docs/MICRO_EMPIRICAL_VALIDATION_PLAN.md) | Proposed held-out following, queue and autonomous corridor campaign: data feasibility, calibration separation, acceptance gates and milestones |
+| [MESO Empirical Validation Plan](docs/MESO_EMPIRICAL_VALIDATION_PLAN.md) | Segment-to-corridor field campaign, parameter/data audits, calibration, held-out gates and development preflight |
+| [MESO VTRC Methodology Assessment](docs/MESO_VTRC_22_R7_REVIEW.md) | Zhao/Appiah VTRC 22-R7 procedure, empirical case limitations and adaptation to native HTC |
 | [MICRO Cross-Link Following](docs/MICRO_CROSS_LINK_FOLLOWING.md) | Leader observations, checkpoint/replay contract, v2 ablations, fresh demand results and reproduction |
 | [MICRO Scientific Validation](docs/MICRO_SCIENTIFIC_VALIDATION.md) | Original v1 clock/convergence study, measurement definitions and retained field pilot |
 | [Junction Geometry](docs/JUNCTION_GEOMETRY.md) | Fixed MICRO connectors, distance and turn-speed contract, and original geometry evidence |

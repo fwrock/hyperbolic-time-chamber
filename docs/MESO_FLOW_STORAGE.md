@@ -1,5 +1,9 @@
 # Separate MESO flow and storage
 
+For the proposed field-data campaign, see the [MESO empirical validation plan](MESO_EMPIRICAL_VALIDATION_PLAN.md)
+and [VTRC methodology assessment](MESO_VTRC_22_R7_REVIEW.md). The operational
+checks below do not establish independent empirical acceptance.
+
 This optional Car MESO feature preserves HTC's existing occupancy/density speed function.
 It adds admission and discharge limits; it does not replace travel with MATSim QSim queues.
 Existing inputs without `mesoCapacity` retain their previous behavior.
