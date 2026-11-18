@@ -2,9 +2,13 @@
 
 Data: 18/11/2026. Estado: **plano de execução; validação empírica completa pendente**.
 
+Atualização de execução: a [reconstrução e os primeiros incrementos nativos](MICRO_RECONSTRUCTION_AND_SNAPSHOT_2026_11_18.md)
+já entregam auditorias de G01, snapshot inicial exato e publicação por faixa/endereço de G02.
+Esses itens permanecem parcialmente abertos; as extensões completas abaixo não foram concluídas.
+
 Este documento transforma a avaliação da campanha em trabalho verificável. Distingue
 funcionalidades ausentes, capacidades existentes ainda não validadas e problemas de
-dados ou método. As extensões descritas abaixo **não estão implementadas**. A referência
+dados ou método. As extensões completas abaixo **ainda não estão concluídas**. A referência
 dos resultados executados é o [registro da campanha](MICRO_COMPLETE_EMPIRICAL_CAMPAIGN.md).
 
 ## 1. Veredito e escopo da afirmação

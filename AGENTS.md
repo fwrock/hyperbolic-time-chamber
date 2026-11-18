@@ -115,6 +115,10 @@ sendMessageTo(entityId = targetId, shardId = shardId, data = someData, eventType
 
 ### Cross-link MICRO following
 
+- Boundary publication also carries immutable per-lane rear/front observations and optional
+  checkpointed Node subscriber identities. Normalize full sender shard names through StringUtil.
+  This publication capability does not enable multilane longitudinal consumption: keep the
+  single-lane lookahead/spillback guards until lane-path selection and candidate-lane safety exist.
 - `downstreamLookahead` requires single-lane MICRO and one physics step per runtime tick, matching the scenario clock and observed downstream Links. Keep `downstreamConnectors` consistent with Node `junctionMovements`; trim road lengths before adding connector distance. `stopLineGapM` is explicit and defaults to zero.
 - Subscriptions and immutable occupancy publications use ordinary `sendMessageTo` transport without awaiting a reply. Receiving an observation must not republish or schedule work. Keep subscription IDs, requested IDs, publication sequence and observation history in `LinkState`.
 - Physics at tick t uses a snapshot strictly before t. Retain two distinct tick cohorts and the latest publication sequence within each; current-tick arrivals must not replace the start-of-step view.
@@ -307,6 +311,12 @@ pool broadcast reaches remote routees that have not been created yet. See
 - Meso: vehicles traverse links at average speed (LinkInfoData enter/leave)
 - Active MICRO path: simplified Krauss car-following with per-Link disabled, MOBIL or native LC2013-style lane changing, including strategic route preparation. Link batches physics and sends the final `MicroUpdateData` or `MicroLeaveLinkData` per vehicle. Existing native inputs keep disabled lane changing.
 - Opt-in Car `microEntry` queues preserve exact entry positions and reserve space for conflicting short-road lane maneuvers. Keep pending sender/request identity and payload in `LinkState`; retry through ordinary Link physics ticks and acknowledge actual admission time. A real queue stop clears carried speed/remainder. This option does not support retained upstream spillback footprints. See `docs/TRAFFIC_CONTROL.md` and the separate native-control v5 acceptance; scientific v1/v2 results retain their original scope.
+- Optional `microEntry.initialSnapshotTick` restores Car positions without legacy clamping at
+  that tick, in either spatial arrival order. Validate physical nonoverlap, finite positive
+  lengths and lane bounds; reject invalid snapshots rather than moving or delaying measured
+  Cars. Snapshot entries carry no remainder and cannot be restored late. Ordinary entry rules
+  resume outside the snapshot tick; there is no cohort reply barrier. Existing speed caps and
+  queued-entry/spillback restrictions remain. See `docs/MICRO_RECONSTRUCTION_AND_SNAPSHOT_2026_11_18.md`.
 - Per-Car `microMinGap`, `microReactionTime` and `microMaxSpeed` optionally override native MICRO defaults. Carry them in every `EnterLinkData`, lane vehicle and pending entry checkpoint. Lane-change safety uses each affected follower; signal stop lines keep their physical position. Source imports and reserved v6 operational checks are documented in `docs/TRAFFIC_CONTROL.md`.
 - Per-Car `microSpeedFactor` (default 1) scales road/desired limits; optional `microDesiredMaxSpeed` is applied before scaling, while the technical `microMaxSpeed` cap stays independent. Admission, turn braking and physics share `MicroSpeed.limit`. Remainder transfer validates the driver-adjusted step. Source-factor pairing and separate v7 acceptance are documented in `docs/TRAFFIC_CONTROL.md`.
 - Optional Car `microSigma` (default 0) and `microRandomSeed` (default 0) enable bounded per-physics-step dawdling. Draws are stateless vehicle/physical-step functions; never consume a shared mutable RNG or actor-local sequence. Carry fields in entry/pending/lane checkpoints. Source import is explicit and rejects unsupported positive-sigma sample cadence; v8 checks native replay, not SUMO sample equivalence.

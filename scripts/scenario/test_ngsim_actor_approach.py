@@ -10,6 +10,33 @@ from ngsim_actor_approach import generate
 
 
 class ActorApproachCoverage(unittest.TestCase):
+    def test_physical_stop_offset_is_written_without_changing_signal_onset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            row = dict(vehicle_id='1',frame_id='600',global_time='61000',section_id='1',
+                       direction='2',lane_id='1',movement='1',local_y='10',v_vel='2',
+                       v_length='15',v_class='2')
+            (root/'page-000.json').write_text(json.dumps([row]))
+            signal = root/'signal.txt'
+            signal.write_text('BG_Thru\tBY_Thru\tBR_Thru\n0\t10\t20\n700\t710\t720\n')
+            args = Namespace(output=root/'output',raw=root,signal=signal,boundary_m=50.,
+                speed_limit_kmh=50.,start_frame=600,end_frame=650,stop_line_gap_m=4.,
+                policy='discrete-event')
+            generate(args)
+            links = json.loads((args.output/'data/links_0.json').read_text())
+            self.assertEqual(links[0]['data']['content']['stopLineGapM'],4.)
+            metadata = json.loads((args.output/'scenario_metadata.json').read_text())
+            self.assertEqual(metadata['assumptions']['signal_stop_position_m'],46.)
+            program = json.loads((args.output/'data/traffic_signals_0.json').read_text())[0]['data']['content']['program']
+            self.assertEqual(program['stages'][0]['green'],[])
+            (root/'page-000.json').write_text(json.dumps([row,
+                dict(row,vehicle_id='2',frame_id='610',global_time='62000')]))
+            args.output = root/'strict-output'
+            args.require_observed_boundary_arrivals = True
+            with self.assertRaisesRegex(ValueError,'Internal track births'):
+                generate(args)
+            self.assertFalse(args.output.exists())
+
     def test_unknown_initial_lane_cannot_be_shifted_to_a_later_known_observation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

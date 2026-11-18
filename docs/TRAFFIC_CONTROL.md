@@ -4,6 +4,28 @@ Protocol and acceptance JSON files referenced below are retained local experimen
 
 Traffic control belongs in actor input JSON, independently of any converter. Existing files keep their legacy signal windows and disabled lane changing. The options below appear inside `data.content`; `TrafficSignal`, `Link` and `Node` schemas describe the fields.
 
+## Measured initial snapshots (opt-in)
+
+`LinkState.microEntry` accepts `{"enabled":true,"initialSnapshotTick":0}` to restore
+nonoverlapping initial Car positions at that simulation tick. Position is supplied by
+`CarState.microDepartPosition`; optional `microDepartSpeed` and `microDepartLane` supply
+speed in m/s and zero-based native lane. Existing speed caps still apply, and the ACK
+reports actual admission state. Check ACKs when claiming matched empirical initialization.
+
+At the configured tick, occupancy is checked ahead and behind each requested position.
+Spatial arrival order cannot clamp a valid initial position behind another initial Car.
+Overlaps fail with an input diagnostic; they are not queued or shifted to fit. Desired
+minimum gap is distinct from physical nonoverlap in a measured snapshot. No boundary
+remainder is accepted, and restoration cannot be deferred to another tick. Ordinary
+admission rules resume for requests outside the snapshot tick. No cohort reply barrier
+or new Time Manager exchange is introduced. Omitted `initialSnapshotTick` preserves
+legacy behavior, including legacy position clamping when queued entry is disabled.
+
+This option requires queued entry, keeps its existing Car-only scope and does not
+enable the unsupported admission/spillback combination. See the
+[reconstruction and engineering checks](MICRO_RECONSTRUCTION_AND_SNAPSHOT_2026_11_18.md)
+for both spatial orders, cold codecs and conservative/Time Warp actor runs in one/two JVMs.
+
 ## Lane changing on a Link
 
 ```json

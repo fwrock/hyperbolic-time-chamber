@@ -1,0 +1,41 @@
+{
+  "status": "FROZEN_DEVELOPMENT_SENSITIVITY_BEFORE_EXECUTION",
+  "hypothesis": "Separate stop-line geometry from behavioral delay; no traffic parameter fitting.",
+  "source_audit_sha256": "6df3fe40ec27c909cf261eb32e655d790229f69d020bae54e95d9cd477293ad7",
+  "engine_sha256": "f53ac8e0fa4d4f4155aa0ea96dfb4c2448c1921ce222cec367642d484ea2835b",
+  "cases": [
+    {
+      "name": "photo-center-de",
+      "signal_stop_station_m": 38.88033436133561,
+      "photo_offset_m": 0.0,
+      "policy": "discrete-event",
+      "base_port": 26800
+    },
+    {
+      "name": "photo-upstream-de",
+      "signal_stop_station_m": 38.11833436133561,
+      "photo_offset_m": -0.762,
+      "policy": "discrete-event",
+      "base_port": 26900
+    },
+    {
+      "name": "photo-downstream-de",
+      "signal_stop_station_m": 39.642334361335614,
+      "photo_offset_m": 0.762,
+      "policy": "discrete-event",
+      "base_port": 27000
+    },
+    {
+      "name": "photo-center-tw",
+      "signal_stop_station_m": 38.88033436133561,
+      "photo_offset_m": 0.0,
+      "policy": "time-warp",
+      "base_port": 27100
+    }
+  ],
+  "limitations": [
+    "Photo accuracy is not a stop-line confidence interval; offsets are a fixed sensitivity envelope, not statistical confidence.",
+    "Two internal track births and downstream empty sink remain explicit development assumptions.",
+    "The per-lane photo stations are approximated by one common through-lane stop station in this bounded experiment."
+  ]
+}

@@ -172,13 +172,19 @@ class LinkVehicleFlowHandler(
     state.pendingMicroEntries.foreach { pending =>
       val fresh = getLinkStateFn()
       val lane = MicroEntryAdmission.lane(fresh,pending.data)
-      MicroEntryAdmission.reason(fresh,pending.data,lane) match {
+      val snapshot = fresh.microEntry.initialSnapshotTick.contains(pending.requestedTick)
+      require(!snapshot || currentTickFn() == pending.requestedTick,
+        "initial MICRO snapshot cannot be restored at a later tick")
+      val reason = if (snapshot) MicroEntryAdmission.snapshotReason(fresh,pending.data,lane)
+        else MicroEntryAdmission.reason(fresh,pending.data,lane)
+      require(!snapshot || reason.isEmpty, s"invalid initial MICRO snapshot: ${reason.getOrElse("")}")
+      reason match {
         case None =>
           fresh.pendingMicroEntries = fresh.pendingMicroEntries.filterNot(_.actorId == pending.actorId)
           val delayed = currentTickFn() > pending.requestedTick
           admitMicroEntry(pending.actorId,pending.shardId,pending.requestedTick,pending.requestSeq,
             if (delayed) pending.data.copy(initialVelocity=0.0,initialRemainderSeconds=0.0) else pending.data,
-            Some(lane))
+            Some(lane), preserveSnapshotPosition=snapshot)
         case Some(reason) =>
           if (pending.requestedTick == currentTickFn())
             reportFn(Map("vehicle_id" -> pending.actorId,"link_id" -> entityIdFn(),
@@ -189,7 +195,8 @@ class LinkVehicleFlowHandler(
   }
 
   private def admitMicroEntry(actorId: Long, shardId: String, requestedTick: Tick, requestSeq: Long,
-                             data: EnterLinkData, selectedLane: Option[Int] = None): Unit = {
+                             data: EnterLinkData, selectedLane: Option[Int] = None,
+                             preserveSnapshotPosition: Boolean = false): Unit = {
     val admissionTick = if (getLinkStateFn().microEntry.enabled) currentTickFn() else requestedTick
 
     metricsReporter.onVehicleLoaded(isMicro = true)
@@ -221,7 +228,8 @@ class LinkVehicleFlowHandler(
       .map(v => v.position - v.vehicleLength - data.minGap.getOrElse(2.0)).minOption.getOrElse(state.length)
     require(!state.downstreamSpillback || availablePosition >= -1e-9,
       "MICRO spillback entry has no physical room; origin injection or handoff requires admission")
-    val entryPosition = math.max(0.0, math.min(requestedPosition, availablePosition))
+    val entryPosition = if (preserveSnapshotPosition) requestedPosition
+      else math.max(0.0, math.min(requestedPosition, availablePosition))
     val vehicle = VehicleInLane(
       actorId         = actorId,
       shardId         = shardId,

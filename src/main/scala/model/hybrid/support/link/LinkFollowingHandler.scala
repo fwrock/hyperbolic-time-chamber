@@ -2,9 +2,10 @@ package org.interscity.htc
 package model.hybrid.support.link
 
 import core.types.Tick
+import core.util.{StringPool, StringUtil}
 import model.hybrid.entity.event.data.link.{MicroBoundaryUpdateData, SubscribeMicroBoundaryData}
 import model.hybrid.entity.state.LinkState
-import model.hybrid.entity.state.model.{MicroBoundaryHistory, MicroBoundarySnapshot, MicroBoundaryVehicle, VehicleInLane}
+import model.hybrid.entity.state.model.{MicroBoundaryHistory, MicroBoundarySnapshot, MicroBoundaryVehicle, MicroBoundarySubscriber, MicroLaneBoundary, VehicleInLane}
 import model.hybrid.entity.state.enumeration.EventTypeEnum
 
 class LinkFollowingHandler(
@@ -24,26 +25,49 @@ class LinkFollowingHandler(
     }
   }
 
-  def subscribe(subscriber: Long): Unit = {
+  /** Register a logical destination in checkpointed state and publish its initial observation. */
+  def subscribe(subscriber: Long, shardId: String = "hybrid.actor.Link"): Unit = {
     val following = stateFn().following
-    following.subscribers = (subscriber :: following.subscribers).distinct.sorted
-    sendSnapshot(List(subscriber))
+    val canonicalShard = StringPool.intern(StringUtil.getModelClassNameWithoutPackage(shardId))
+    val destination = MicroBoundarySubscriber(subscriber, canonicalShard)
+    if (canonicalShard == "hybrid.actor.Link")
+      following.subscribers = (subscriber :: following.subscribers).distinct.sorted
+    else
+      following.otherSubscribers = (destination :: following.otherSubscribers).distinct
+        .sortBy(s => (s.shardId, s.id))
+    sendSnapshot(List(destination))
   }
 
-  def publish(): Unit =
-    if (stateFn().following.subscribers.nonEmpty) sendSnapshot(stateFn().following.subscribers)
+  /** Publication does not schedule work or await replies from its observers. */
+  def publish(): Unit = {
+    val following = stateFn().following
+    val destinations = following.subscribers.map(MicroBoundarySubscriber(_, "hybrid.actor.Link")) ++
+      following.otherSubscribers
+    if (destinations.nonEmpty) sendSnapshot(destinations.distinct.sortBy(s => (s.shardId, s.id)))
+  }
 
-  private def sendSnapshot(subscribers: List[Long]): Unit = {
+  /** Preserve the legacy aggregate and its capability flag while adding explicit lane occupancy. */
+  private def sendSnapshot(subscribers: List[MicroBoundarySubscriber]): Unit = {
     val state = stateFn()
     state.following.sequence += 1L
     val nearest = state.vehiclesByLane.valuesIterator.flatMap(_.iterator)
       .minByOption(v => (v.rearPosition, v.actorId))
       .map(v => MicroBoundaryVehicle(v.actorId, v.position, v.velocity, v.vehicleLength))
+    def observed(v: VehicleInLane) = MicroBoundaryVehicle(v.actorId, v.position, v.velocity,
+      v.vehicleLength, v.nextLinkId, v.pendingExitTick.nonEmpty)
+    val perLane = if (state.isMicroMode && state.microTicksPerGlobalTick == 1)
+      (0 until state.lanes).toList.map { lane =>
+        val vehicles = state.vehiclesByLane.get(lane).toList.flatMap(_.toList)
+        MicroLaneBoundary(lane,
+          vehicles.minByOption(v => (v.rearPosition, v.actorId)).map(observed),
+          vehicles.maxByOption(v => (v.position, -v.actorId)).map(observed))
+      }
+    else Nil
     val snapshot = MicroBoundarySnapshot(entityIdFn(), currentTickFn(), state.following.sequence,
       state.length, nearest, supported = state.isMicroMode && state.lanes == 1 && state.microTicksPerGlobalTick == 1,
-      stepSeconds = state.microTimeStep)
+      stepSeconds = state.microTimeStep, laneCount = state.lanes, laneBoundaries = perLane)
     subscribers.foreach { target =>
-      sendFn(target, "hybrid.actor.Link", MicroBoundaryUpdateData(snapshot), EventTypeEnum.MicroBoundaryUpdate.toString)
+      sendFn(target.id, target.shardId, MicroBoundaryUpdateData(snapshot), EventTypeEnum.MicroBoundaryUpdate.toString)
     }
   }
 

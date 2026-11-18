@@ -1,5 +1,10 @@
 # MICRO implementation and validation status
 
+The [executed reconstruction/snapshot increment](MICRO_RECONSTRUCTION_AND_SNAPSHOT_2026_11_18.md)
+adds exact initial snapshot admission and per-lane publication groundwork, with geometry
+diagnostics and new actor checks. The remaining field discrepancy and full junction /
+multilane capabilities stay open; earlier scientific gates are unchanged.
+
 The [2026-11-18 complete empirical campaign ledger](MICRO_COMPLETE_EMPIRICAL_CAMPAIGN.md)
 tracks the current autonomous-field work and implementation gaps. It records measured
 Peachtree signal recovery and a four-vehicle actor integration experiment under both

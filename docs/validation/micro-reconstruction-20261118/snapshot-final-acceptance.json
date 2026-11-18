@@ -1,0 +1,172 @@
+[
+  {
+    "run": "/home/dean/workspace/phd/htc-platform/experiments/micro-reconstruction-20261118/final-default-regression",
+    "jar_sha256": "986d64f67cefa94745232562432bb7a471638a59659f1db68a649eea553bb8d4",
+    "nodes": 1,
+    "policy": "discrete-event",
+    "checks": {
+      "engine_completed": true,
+      "no_engine_errors": true,
+      "exact_admissions": true,
+      "three_censored_journeys": true,
+      "no_road_exit": true,
+      "all_subjects_sampled": true,
+      "exact_sampling_ticks": true,
+      "downstream_stays_at_stop": true,
+      "upstream_front_respects_downstream_tail": true,
+      "committed_physical_events_equal": true
+    },
+    "passed": true,
+    "physical_events": 160,
+    "position_ranges": {
+      "101": [
+        35.026,
+        46.05002438371657
+      ],
+      "102": [
+        20.026,
+        37.17127048559708
+      ],
+      "103": [
+        3.0,
+        3.0
+      ]
+    }
+  },
+  {
+    "run": "/home/dean/workspace/phd/htc-platform/experiments/micro-reconstruction-20261118/final-snapshot-de",
+    "jar_sha256": "986d64f67cefa94745232562432bb7a471638a59659f1db68a649eea553bb8d4",
+    "nodes": 1,
+    "policy": "discrete-event",
+    "checks": {
+      "engine_completed": true,
+      "no_engine_errors": true,
+      "exact_admissions": true,
+      "three_censored_journeys": true,
+      "no_road_exit": true,
+      "all_subjects_sampled": true,
+      "exact_sampling_ticks": true,
+      "downstream_stays_at_stop": true,
+      "upstream_front_respects_downstream_tail": true,
+      "committed_physical_events_equal": true
+    },
+    "passed": true,
+    "physical_events": 161,
+    "position_ranges": {
+      "101": [
+        35.026,
+        46.05002438371657
+      ],
+      "102": [
+        20.026,
+        37.30070438545609
+      ],
+      "103": [
+        3.0,
+        3.0
+      ]
+    }
+  },
+  {
+    "run": "/home/dean/workspace/phd/htc-platform/experiments/micro-reconstruction-20261118/final-snapshot-tw",
+    "jar_sha256": "986d64f67cefa94745232562432bb7a471638a59659f1db68a649eea553bb8d4",
+    "nodes": 1,
+    "policy": "time-warp",
+    "checks": {
+      "engine_completed": true,
+      "no_engine_errors": true,
+      "exact_admissions": true,
+      "three_censored_journeys": true,
+      "no_road_exit": true,
+      "all_subjects_sampled": true,
+      "exact_sampling_ticks": true,
+      "downstream_stays_at_stop": true,
+      "upstream_front_respects_downstream_tail": true,
+      "committed_physical_events_equal": true
+    },
+    "passed": true,
+    "physical_events": 161,
+    "position_ranges": {
+      "101": [
+        35.026,
+        46.05002438371657
+      ],
+      "102": [
+        20.026,
+        37.30070438545609
+      ],
+      "103": [
+        3.0,
+        3.0
+      ]
+    }
+  },
+  {
+    "run": "/home/dean/workspace/phd/htc-platform/experiments/micro-reconstruction-20261118/final-snapshot-de-2jvm",
+    "jar_sha256": "986d64f67cefa94745232562432bb7a471638a59659f1db68a649eea553bb8d4",
+    "nodes": 2,
+    "policy": "discrete-event",
+    "checks": {
+      "engine_completed": true,
+      "no_engine_errors": true,
+      "exact_admissions": true,
+      "three_censored_journeys": true,
+      "no_road_exit": true,
+      "all_subjects_sampled": true,
+      "exact_sampling_ticks": true,
+      "downstream_stays_at_stop": true,
+      "upstream_front_respects_downstream_tail": true,
+      "committed_physical_events_equal": true
+    },
+    "passed": true,
+    "physical_events": 161,
+    "position_ranges": {
+      "101": [
+        35.026,
+        46.05002438371657
+      ],
+      "102": [
+        20.026,
+        37.30070438545609
+      ],
+      "103": [
+        3.0,
+        3.0
+      ]
+    }
+  },
+  {
+    "run": "/home/dean/workspace/phd/htc-platform/experiments/micro-reconstruction-20261118/final-snapshot-tw-2jvm",
+    "jar_sha256": "986d64f67cefa94745232562432bb7a471638a59659f1db68a649eea553bb8d4",
+    "nodes": 2,
+    "policy": "time-warp",
+    "checks": {
+      "engine_completed": true,
+      "no_engine_errors": true,
+      "exact_admissions": true,
+      "three_censored_journeys": true,
+      "no_road_exit": true,
+      "all_subjects_sampled": true,
+      "exact_sampling_ticks": true,
+      "downstream_stays_at_stop": true,
+      "upstream_front_respects_downstream_tail": true,
+      "committed_physical_events_equal": true
+    },
+    "passed": true,
+    "physical_events": 161,
+    "position_ranges": {
+      "101": [
+        35.026,
+        46.05002438371657
+      ],
+      "102": [
+        20.026,
+        37.30070438545609
+      ],
+      "103": [
+        3.0,
+        3.0
+      ]
+    }
+  }
+]

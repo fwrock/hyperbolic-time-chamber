@@ -88,6 +88,8 @@ class Link(
 
   override protected def internStateStrings(s: LinkState): LinkState =
     s.copy(
+      following = s.following.copy(otherSubscribers = s.following.otherSubscribers.map(p =>
+        p.copy(shardId = StringPool.intern(p.shardId)))),
       from = s.from,
       to   = s.to,
       pendingMicroEntries = s.pendingMicroEntries.map(p => p.copy(shardId=core.util.StringPool.intern(p.shardId))),
@@ -318,7 +320,7 @@ class Link(
     event.data match {
       case d: EnterLinkData        => handleEnterLink(event, d)
       case d: LeaveLinkData        => handleLeaveLink(event, d)
-      case _: SubscribeMicroBoundaryData => followingHandler.subscribe(event.actorRefId)
+      case _: SubscribeMicroBoundaryData => followingHandler.subscribe(event.actorRefId, event.shardRefId)
       case d: MicroBoundaryUpdateData => followingHandler.receive(event.actorRefId, d.snapshot)
       case d: LinkSignalStateData =>
         // The tick-t MICRO batch integrates (t-1, t]; a phase effective at t governs the next interval.

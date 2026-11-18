@@ -1,0 +1,37 @@
+{
+  "status": "ENGINEERING_FINAL_INPUT_VALIDATION_CHECK",
+  "jar_sha256": "986d64f67cefa94745232562432bb7a471638a59659f1db68a649eea553bb8d4",
+  "cases": [
+    [
+      "final-default-regression",
+      "boundary-fixture-staged-de",
+      1,
+      29100
+    ],
+    [
+      "final-snapshot-de",
+      "boundary-fixture-snapshot-de",
+      1,
+      29200
+    ],
+    [
+      "final-snapshot-tw",
+      "boundary-fixture-snapshot-tw",
+      1,
+      29300
+    ],
+    [
+      "final-snapshot-de-2jvm",
+      "boundary-fixture-snapshot-de",
+      2,
+      29400
+    ],
+    [
+      "final-snapshot-tw-2jvm",
+      "boundary-fixture-snapshot-tw",
+      2,
+      29500
+    ]
+  ],
+  "change": "Reject invalid snapshot lengths/lanes; valid-input physical expectations unchanged."
+}

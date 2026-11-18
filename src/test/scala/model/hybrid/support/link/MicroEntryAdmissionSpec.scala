@@ -13,12 +13,13 @@ import scala.collection.mutable
 
 class MicroEntryAdmissionSpec extends AnyFlatSpec with Matchers {
   private class Road(length: Double, lanes: Int, speed: Double, connections: List[LaneConnection]=Nil,
-                     enabled: Boolean=true, laneModel: LaneChangingModel=LaneChangingModel.Mobil) {
+                     enabled: Boolean=true, laneModel: LaneChangingModel=LaneChangingModel.Mobil,
+                     snapshotTick: Option[Long]=None) {
     var tick=0L
     var state=LinkState(0,from=1,to=2,length=length,lanes=lanes,speedLimit=speed,capacity=100,freeSpeed=speed,
       simulationMode=SimulationModeEnum.MICRO,microTicksPerGlobalTick=1,
       laneChanging=LaneChangingConfig(model=laneModel),laneConnections=connections,
-      microEntry=MicroEntryConfig(enabled=enabled)).initializeMicroLanes()
+      microEntry=MicroEntryConfig(enabled=enabled,initialSnapshotTick=snapshotTick)).initializeMicroLanes()
     var scheduled=false
     val entryTicks=mutable.Map.empty[Long,Long]
     val waiting=mutable.Map.empty[Long,Double]
@@ -71,6 +72,54 @@ class MicroEntryAdmissionSpec extends AnyFlatSpec with Matchers {
     ack.requestSeq shouldBe 17L
     road.entryTicks(2) shouldBe road.tick
     road.state.pendingMicroEntries shouldBe empty
+  }
+
+  it should "restore a measured initial snapshot in either spatial arrival order" in {
+    for (order <- List(List(1L,2L),List(2L,1L))) {
+      val road=new Road(100,1,50,snapshotTick=Some(0L))
+      order.foreach { id =>
+        road.enter(id,0,pos=if (id==1) 20 else 35,velocity=if (id==1) 3 else 4,seq=17+id)
+      }
+      road.acknowledgements(1).head.initialPosition shouldBe 20.0
+      road.acknowledgements(2).head.initialPosition shouldBe 35.0
+      road.acknowledgements(1).head.initialVelocity shouldBe Some(3.0)
+      road.acknowledgements(2).head.initialVelocity shouldBe Some(4.0)
+      road.acknowledgements(1).head.requestSeq shouldBe 18L
+      road.acknowledgements(2).head.requestSeq shouldBe 19L
+      road.state.pendingMicroEntries shouldBe empty
+      road.state.vehiclesByLane(0).map(_.actorId).toList shouldBe List(2L,1L)
+    }
+  }
+
+  it should "reject overlapping snapshots instead of moving or delaying measured vehicles" in {
+    val road=new Road(100,1,50,snapshotTick=Some(0L))
+    road.enter(1,0,pos=20)
+    intercept[IllegalArgumentException](road.enter(2,0,pos=22))
+    road.acknowledgements(2) shouldBe empty
+    road.state.totalVehiclesInMicro shouldBe 1
+    road.state.vehiclesByLane(0).head.position shouldBe 20.0
+  }
+
+  it should "reject invalid measured lengths before admitting a snapshot vehicle" in {
+    for (length <- List(0.0,-1.0,Double.NaN,Double.PositiveInfinity)) {
+      val road=new Road(100,1,50,snapshotTick=Some(0L))
+      intercept[IllegalArgumentException] {
+        road.flow.handleEnterLinkMicro(road.event(1),EnterLinkData(ActorTypeEnum.Car,
+          LoadBalancedDistributed,length,initialPosition=20,preferredLane=Some(0)))
+      }
+      road.state.totalVehiclesInMicro shouldBe 0
+      road.acknowledgements(1) shouldBe empty
+    }
+  }
+
+  it should "keep ordinary queue rules after the configured initial snapshot tick" in {
+    val road=new Road(100,1,50,snapshotTick=Some(0L))
+    road.enter(1,0,pos=20)
+    road.tick=1L
+    road.enter(2,0,pos=35)
+    road.acknowledgements(2) shouldBe empty
+    road.state.pendingMicroEntries.map(_.actorId) shouldBe List(2L)
+    intercept[IllegalArgumentException](MicroEntryConfig(initialSnapshotTick=Some(0L)))
   }
 
   it should "retain the old clamped-position behavior when disabled explicitly" in {

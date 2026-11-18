@@ -4,10 +4,17 @@ package model.hybrid.entity.state.model
 import core.types.Tick
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 
-case class MicroBoundaryVehicle(id: Long, position: Double, velocity: Double, length: Double)
+case class MicroBoundaryVehicle(id: Long, position: Double, velocity: Double, length: Double,
+                                nextLinkId: Long = 0L, pendingExit: Boolean = false)
 case class MicroBoundarySnapshot(linkId: Long, tick: Tick, sequence: Long, length: Double,
                                  vehicle: Option[MicroBoundaryVehicle], supported: Boolean = true,
-                                 stepSeconds: Double = 0.1)
+                                 stepSeconds: Double = 0.1, laneCount: Int = 1,
+                                 @JsonDeserialize(contentAs = classOf[MicroLaneBoundary])
+                                 laneBoundaries: List[MicroLaneBoundary] = Nil) {
+  require(laneCount > 0, "invalid MICRO boundary lane count")
+  require(laneBoundaries.isEmpty || laneBoundaries.map(_.laneId).sorted == (0 until laneCount).toList,
+    "MICRO boundary requires exactly one observation per lane")
+}
 
 case class MicroBoundaryHistory(var snapshots: List[MicroBoundarySnapshot] = Nil) {
   def accept(snapshot: MicroBoundarySnapshot): Unit = {
@@ -23,5 +30,7 @@ case class MicroFollowingState(
   var requested: List[Long] = Nil,
   var sequence: Long = 0L,
   @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[MicroBoundaryHistory])
-  var observations: Map[Long, MicroBoundaryHistory] = Map.empty
+  var observations: Map[Long, MicroBoundaryHistory] = Map.empty,
+  @JsonDeserialize(contentAs = classOf[MicroBoundarySubscriber])
+  var otherSubscribers: List[MicroBoundarySubscriber] = Nil
 )

@@ -4,6 +4,12 @@ For the consolidated implementation status and remaining work, start with
 [MICRO validation status](MICRO_VALIDATION_STATUS.md). This page specifies the
 following protocol and its accepted v2 measurements.
 
+The [2026-11-18 reconstruction and snapshot increment](MICRO_RECONSTRUCTION_AND_SNAPSHOT_2026_11_18.md)
+adds immutable per-lane rear/front publication and checkpointed Node subscriber addresses.
+The legacy aggregate and capability flag are preserved. This is publication groundwork;
+the longitudinal consumer below still requires single-lane observations. An absent
+`laneBoundaries` list in a legacy payload means unavailable lane detail, not empty lanes.
+
 The opt-in `LinkState.downstreamLookahead` keeps a following vehicle constrained
 by its leader after the leader's front bumper enters another Link. Without this
 observation, the approach's front vehicle sees free road as soon as its leader

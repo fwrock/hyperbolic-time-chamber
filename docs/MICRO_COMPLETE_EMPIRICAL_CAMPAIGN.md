@@ -1,6 +1,11 @@
 # Complete microscopic empirical campaign
 
 Status, 2026-11-18: **in progress; complete empirical validity has not been established**.
+
+The [executed reconstruction and snapshot increment](MICRO_RECONSTRUCTION_AND_SNAPSHOT_2026_11_18.md)
+records the subsequent geometry sensitivity, track-birth audit, native exact initial
+snapshot option and per-lane publication groundwork. G01/G02 remain partially complete;
+general junction control and multilane spillback are still outstanding.
 The requested deliverable covers autonomous microscopic traffic, not only conditional
 following. The earlier prospective Peachtree component study was inconclusive and
 does not complete this campaign. Its protocol and results remain frozen.
@@ -9,7 +14,8 @@ The [implementation gaps and evaluation requirements (Portuguese)](MICRO_EMPIRIC
 define the E01–E06 evaluation stages and G01–G07 implementation backlog, including
 code ownership boundaries, dependencies, architectural contracts and acceptance checks.
 They distinguish missing mechanisms from existing capabilities that still need field
-evaluation; the proposed mechanisms remain unimplemented.
+evaluation; outstanding full mechanisms remain unimplemented and partial deliveries
+are tracked separately in the executed increment above.
 
 ## Coverage and outstanding work
 

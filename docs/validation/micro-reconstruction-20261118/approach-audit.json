@@ -1,0 +1,511 @@
+{
+  "status": "DEVELOPMENT_AUDIT_NOT_EMPIRICAL_ACCEPTANCE",
+  "provenance": {
+    "recording_origin": 1163030300,
+    "sources": [
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-000.json",
+        "sha256": "63da7d5d2717db9c0217621a8022114c005c2d5b5743c17605eb35e07eb71724"
+      },
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-001.json",
+        "sha256": "ffb85528764166419e3cfc4d69ac92710c4afb2242c4dbae707b11dc417e01d8"
+      },
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-002.json",
+        "sha256": "3f5010287739333fcaacd60ecc94945599cd7a111a7f0601a344c19f4c8aa2b6"
+      },
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-003.json",
+        "sha256": "1db421fa8e36294f5fa3be67e8cbbc42df4b2a3294b9eef0fa1dbca50eccaaac"
+      },
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-004.json",
+        "sha256": "7989bca7b434e99d5269019940fb4c168ac3c8f2ae69baf1bb4fb6568ffa0c2e"
+      },
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-005.json",
+        "sha256": "5f0799afd41ba36413632cb8a0308ee83f006c9fce4466d5881d0c876c42b10e"
+      },
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-006.json",
+        "sha256": "42bc25d344719fe6443e1e63078734c3b483edf45d59151177e81e2d52bf78c0"
+      },
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-007.json",
+        "sha256": "592d27bb3b5f4d111541aa844dca91273934e7c8628365659c3ddcee5b901aa7"
+      },
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-008.json",
+        "sha256": "5f01dc63489496c8606eb61a5dd25e90096519015f987e970da0099eb89db23e"
+      },
+      {
+        "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-empirical-v3-20261118/heldout/page-009.json",
+        "sha256": "0c316cf3be0d93170c207f1567c84b050cb52d28f5bbec9bcad440d2a244d5dd"
+      }
+    ],
+    "unique_rows": 457412
+  },
+  "window": {
+    "start_frame": 600,
+    "end_frame": 1600
+  },
+  "registration": {
+    "world_center_ft": [
+      2230529.193912483,
+      1375644.4507163877
+    ],
+    "coefficients": [
+      [
+        0.9945316473551741,
+        0.09890077179755549
+      ],
+      [
+        -0.08105234621883747,
+        1.001200657890654
+      ],
+      [
+        15.43112267007815,
+        112.33862316254259
+      ]
+    ],
+    "samples": 18678,
+    "vehicles": 137,
+    "residual_rmse_m": [
+      0.023220356645235713,
+      0.14294951355157626
+    ],
+    "residual_max_abs_m": [
+      0.3682642630675076,
+      0.8932352698806574
+    ],
+    "interpretation": "Coordinate registration within this recording and approach, not a surveyed map or behavioral fit"
+  },
+  "geometry_source": {
+    "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-reconstruction-20261118/photo-stopbar.json",
+    "sha256": "1ba14077bc9f8d88b83e2dcc5b84958195c77ce81894647e005caf21635fd603"
+  },
+  "photo_stop_bar_local_endpoints_ft": [
+    [
+      -0.5044752520486178,
+      126.22516065315655
+    ],
+    [
+      28.39773178091556,
+      128.34238254186766
+    ]
+  ],
+  "lane_stop_stations": [
+    {
+      "source_lane": "1",
+      "median_lateral_ft": 12.953,
+      "photo_stop_station_m": 38.773907825144434
+    },
+    {
+      "source_lane": "2",
+      "median_lateral_ft": 22.486,
+      "photo_stop_station_m": 38.98676089752679
+    },
+    {
+      "source_lane": "11",
+      "median_lateral_ft": 3.786,
+      "photo_stop_station_m": 38.56922681029821
+    }
+  ],
+  "geometry_uncertainty": {
+    "source_ortho_relative_accuracy_ft": 2.5,
+    "source_ortho_relative_accuracy_m": 0.762,
+    "pixel_size_ft": 0.25,
+    "digitization_note": "Partly occluded paint; the source accuracy is not a measured stop-bar confidence interval. Use bounded geometry sensitivity and retain the approximation."
+  },
+  "inventory": [
+    {
+      "vehicle": 75,
+      "first_approach_frame": 600,
+      "entry_classification": "initial_snapshot",
+      "initial_lane": "2",
+      "initial_position_m": 38.991235200000006,
+      "source_class": "3",
+      "source_track_first_frame": 443,
+      "source_track_rows": 2377,
+      "declared_total_frames": 2377,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "2": 613
+      },
+      "approach_samples": 613
+    },
+    {
+      "vehicle": 95,
+      "first_approach_frame": 600,
+      "entry_classification": "initial_snapshot",
+      "initial_lane": "1",
+      "initial_position_m": 24.1886232,
+      "source_class": "2",
+      "source_track_first_frame": 577,
+      "source_track_rows": 2191,
+      "declared_total_frames": 2191,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "1": 604
+      },
+      "approach_samples": 604
+    },
+    {
+      "vehicle": 222,
+      "first_approach_frame": 1210,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "1",
+      "initial_position_m": 28.0467816,
+      "source_class": "3",
+      "source_track_first_frame": 1210,
+      "source_track_rows": 464,
+      "declared_total_frames": 464,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "1": 33
+      },
+      "approach_samples": 33
+    },
+    {
+      "vehicle": 224,
+      "first_approach_frame": 1216,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "2",
+      "initial_position_m": 23.468990400000003,
+      "source_class": "2",
+      "source_track_first_frame": 1216,
+      "source_track_rows": 61,
+      "declared_total_frames": 61,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "2": 43
+      },
+      "approach_samples": 43
+    },
+    {
+      "vehicle": 234,
+      "first_approach_frame": 1300,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "11",
+      "initial_position_m": 40.1022312,
+      "source_class": "2",
+      "source_track_first_frame": 1300,
+      "source_track_rows": 49,
+      "declared_total_frames": 49,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "11": 12,
+        "0": 1
+      },
+      "approach_samples": 13
+    },
+    {
+      "vehicle": 236,
+      "first_approach_frame": 1331,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "11",
+      "initial_position_m": 39.0671304,
+      "source_class": "2",
+      "source_track_first_frame": 1331,
+      "source_track_rows": 35,
+      "declared_total_frames": 35,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "11": 7,
+        "0": 1
+      },
+      "approach_samples": 8
+    },
+    {
+      "vehicle": 240,
+      "first_approach_frame": 1381,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "1",
+      "initial_position_m": 25.0054872,
+      "source_class": "2",
+      "source_track_first_frame": 1381,
+      "source_track_rows": 1160,
+      "declared_total_frames": 1160,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "1": 15
+      },
+      "approach_samples": 15
+    },
+    {
+      "vehicle": 245,
+      "first_approach_frame": 1411,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "1",
+      "initial_position_m": 25.136856,
+      "source_class": "2",
+      "source_track_first_frame": 1411,
+      "source_track_rows": 873,
+      "declared_total_frames": 873,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "1": 15
+      },
+      "approach_samples": 15
+    },
+    {
+      "vehicle": 247,
+      "first_approach_frame": 1431,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "1",
+      "initial_position_m": 25.760172,
+      "source_class": "3",
+      "source_track_first_frame": 1431,
+      "source_track_rows": 1331,
+      "declared_total_frames": 1331,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "1": 14
+      },
+      "approach_samples": 14
+    },
+    {
+      "vehicle": 252,
+      "first_approach_frame": 1469,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "2",
+      "initial_position_m": 27.4344384,
+      "source_class": "2",
+      "source_track_first_frame": 1469,
+      "source_track_rows": 1350,
+      "declared_total_frames": 1350,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "2": 11
+      },
+      "approach_samples": 11
+    },
+    {
+      "vehicle": 253,
+      "first_approach_frame": 1514,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "1",
+      "initial_position_m": 28.646932800000002,
+      "source_class": "3",
+      "source_track_first_frame": 1514,
+      "source_track_rows": 1329,
+      "declared_total_frames": 1329,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "1": 10
+      },
+      "approach_samples": 10
+    },
+    {
+      "vehicle": 254,
+      "first_approach_frame": 1534,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "1",
+      "initial_position_m": 30.0298104,
+      "source_class": "2",
+      "source_track_first_frame": 1534,
+      "source_track_rows": 769,
+      "declared_total_frames": 769,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "1": 9
+      },
+      "approach_samples": 9
+    },
+    {
+      "vehicle": 256,
+      "first_approach_frame": 1552,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "1",
+      "initial_position_m": 28.526232000000004,
+      "source_class": "2",
+      "source_track_first_frame": 1552,
+      "source_track_rows": 2143,
+      "declared_total_frames": 2143,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "1": 49
+      },
+      "approach_samples": 49
+    },
+    {
+      "vehicle": 1681,
+      "first_approach_frame": 1348,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "11",
+      "initial_position_m": 32.0744088,
+      "source_class": "2",
+      "source_track_first_frame": 1348,
+      "source_track_rows": 65,
+      "declared_total_frames": 65,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "11": 20,
+        "0": 1
+      },
+      "approach_samples": 21
+    },
+    {
+      "vehicle": 1689,
+      "first_approach_frame": 1579,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "1",
+      "initial_position_m": 25.1865384,
+      "source_class": "2",
+      "source_track_first_frame": 1579,
+      "source_track_rows": 2161,
+      "declared_total_frames": 2161,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "1": 22
+      },
+      "approach_samples": 22
+    },
+    {
+      "vehicle": 1708,
+      "first_approach_frame": 1326,
+      "entry_classification": "track_begins_inside_approach_not_verified_boundary_arrival",
+      "initial_lane": "2",
+      "initial_position_m": 26.5209528,
+      "source_class": "2",
+      "source_track_first_frame": 1326,
+      "source_track_rows": 1415,
+      "declared_total_frames": 1415,
+      "track_frame_gaps": 0,
+      "lane_counts": {
+        "2": 12
+      },
+      "approach_samples": 12
+    }
+  ],
+  "entry_counts": {
+    "initial_snapshot": 2,
+    "track_begins_inside_approach_not_verified_boundary_arrival": 14
+  },
+  "domain_at_start": [
+    {
+      "vehicle_id": "75",
+      "section_id": "1",
+      "int_id": "0",
+      "direction": "2",
+      "movement": "1",
+      "lane_id": "2",
+      "local_y": "127.924"
+    },
+    {
+      "vehicle_id": "95",
+      "section_id": "1",
+      "int_id": "0",
+      "direction": "2",
+      "movement": "1",
+      "lane_id": "1",
+      "local_y": "79.359"
+    }
+  ],
+  "observed_green_frame": 1143,
+  "departures": [
+    {
+      "vehicle": 75,
+      "position_before_green_m": 38.838835200000005,
+      "annotated_speed_before_green_mps": 0.0,
+      "sustained_motion": [
+        {
+          "threshold_mps": 0.1,
+          "consecutive_frames": 5,
+          "first_frame": 1199,
+          "seconds_after_green": 5.6000000000000005
+        },
+        {
+          "threshold_mps": 0.5,
+          "consecutive_frames": 5,
+          "first_frame": 1200,
+          "seconds_after_green": 5.7
+        },
+        {
+          "threshold_mps": 1.0,
+          "consecutive_frames": 5,
+          "first_frame": 1201,
+          "seconds_after_green": 5.800000000000001
+        }
+      ]
+    },
+    {
+      "vehicle": 95,
+      "position_before_green_m": 38.076835200000005,
+      "annotated_speed_before_green_mps": 0.0,
+      "sustained_motion": [
+        {
+          "threshold_mps": 0.1,
+          "consecutive_frames": 5,
+          "first_frame": 1191,
+          "seconds_after_green": 4.800000000000001
+        },
+        {
+          "threshold_mps": 0.5,
+          "consecutive_frames": 5,
+          "first_frame": 1192,
+          "seconds_after_green": 4.9
+        },
+        {
+          "threshold_mps": 1.0,
+          "consecutive_frames": 5,
+          "first_frame": 1193,
+          "seconds_after_green": 5.0
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Photo stop bar is manually interpreted, not surveyed; source photo accuracy is retained.",
+    "Affine residual is registration consistency, not independent ground-truth map accuracy.",
+    "Track births inside the domain must not silently be relabeled as upstream arrivals.",
+    "Annotated-speed departure thresholds are descriptive sensitivity, not calibrated startup delay."
+  ],
+  "other_recording_registration": {
+    "recording_origin": 1163018600,
+    "registration": {
+      "world_center_ft": [
+        2230529.6843411364,
+        1375634.3633449373
+      ],
+      "coefficients": [
+        [
+          0.995530635912148,
+          0.09538556267943452
+        ],
+        [
+          -0.08129053946911254,
+          1.000283504114917
+        ],
+        [
+          16.745786265166174,
+          85.00690352875317
+        ]
+      ],
+      "samples": 17301,
+      "vehicles": 98,
+      "residual_rmse_m": [
+        0.0120048563778697,
+        0.12231656484897732
+      ],
+      "residual_max_abs_m": [
+        0.16328467659870124,
+        0.9409869963113309
+      ],
+      "interpretation": "Coordinate registration within this recording and approach, not a surveyed map or behavioral fit"
+    },
+    "same_world_stop_bar_local_endpoints_ft": [
+      [
+        -0.5164665747215871,
+        108.97476654951848
+      ],
+      [
+        28.41488977133254,
+        110.99073523913589
+      ]
+    ],
+    "mean_longitudinal_offset_from_primary_m": -5.273351110330766,
+    "interpretation": "Local coordinate origins are recording-specific; do not transfer a local station between sessions"
+  }
+}

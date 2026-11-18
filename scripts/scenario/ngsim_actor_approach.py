@@ -7,6 +7,7 @@ The supplied road boundary and speed cap are explicit assumptions until surveyed
 import argparse
 import hashlib
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -26,7 +27,10 @@ def generate(args):
     output = args.output.resolve()
     if output.exists():
         raise FileExistsError(output)
-    if args.boundary_m <= 0 or args.speed_limit_kmh <= 0 or args.start_frame >= args.end_frame:
+    stop_gap = getattr(args, 'stop_line_gap_m', 0.)
+    if (not all(math.isfinite(v) for v in [args.boundary_m, args.speed_limit_kmh, stop_gap])
+            or args.boundary_m <= 0 or args.speed_limit_kmh <= 0
+            or not 0 <= stop_gap < args.boundary_m or args.start_frame >= args.end_frame):
         raise ValueError('Invalid physical bounds')
     rows, sources = [], []
     for path in sorted(args.raw.glob('page-*.json')):
@@ -48,6 +52,16 @@ def generate(args):
         raise ValueError('Unsupported entry lane/bay: cannot silently exclude or delay approach vehicles')
     if any(row['movement'] != '1' for group in trajectories.values() for row in group):
         raise ValueError('This development approach only covers through movements')
+    previous_frame = {}
+    for row in rows:
+        identity, frame = int(row['vehicle_id']), int(row['frame_id'])
+        if identity in first and frame < int(first[identity]['frame_id']):
+            previous_frame[identity] = max(frame, previous_frame.get(identity, frame))
+    unverified = [identity for identity, row in first.items()
+                  if int(row['frame_id']) > args.start_frame
+                  and previous_frame.get(identity) != int(row['frame_id'])-1]
+    if getattr(args, 'require_observed_boundary_arrivals', False) and unverified:
+        raise ValueError(f'Internal track births or observation gaps are not verified boundary arrivals: {sorted(unverified)}')
     signal = compile_program({701: read_changes(args.signal)['Thru']},
         [dict(origin=701, nodeId=2, incomingLinkId=11, outgoingLinkId=12, laneIds=[])],
         args.start_frame, args.end_frame)
@@ -66,6 +80,9 @@ def generate(args):
             microEntry=dict(enabled=True))
         if identity == 11:
             state['signalControls'] = [dict(targetLinkId=12, laneIds=[])]
+            state['stopLineGapM'] = stop_gap
+            if getattr(args, 'initial_snapshot', False):
+                state['microEntry']['initialSnapshotTick'] = 0
         actors.append(actor('Link', identity, state, {
             'from_node': dict(id=source, classType='hybrid.actor.Node'),
             'to_node': dict(id=target, classType='hybrid.actor.Node')}))
@@ -85,6 +102,8 @@ def generate(args):
             microDepartLane=2 - int(row['lane_id']))))
         subjects.append(dict(source_vehicle=identity, native_vehicle=native, source_class=row['v_class'],
             frame=frame, position_m=position, speed_mps=speed, lane=2-int(row['lane_id']),
+            entry_provenance=('initial_snapshot' if frame == args.start_frame else
+                'unverified_track_birth_or_gap' if identity in unverified else 'observed_track_transition'),
             initial_snapshot=frame == args.start_frame))
     data = output / 'data'
     counts = shard_and_write_actors(actors, data)
@@ -104,9 +123,12 @@ def generate(args):
         start_frame=args.start_frame, end_frame=args.end_frame, subjects=subjects, sources=sources,
         signal_source=dict(path=str(args.signal.resolve()), sha256=hashlib.sha256(args.signal.read_bytes()).hexdigest()),
         assumptions=dict(boundary_m=args.boundary_m, speed_limit_kmh=args.speed_limit_kmh,
+            stop_line_gap_m=stop_gap, signal_stop_position_m=args.boundary_m-stop_gap,
+            native_initial_snapshot=getattr(args, 'initial_snapshot', False),
             geometry='Explicit approach boundary, NOT a verified surveyed stop line',
             downstream='Uncongested 300 m sink; no finite junction or conflicting traffic',
             source_class='Measured lengths; all vehicles use native Car dynamics',
+            unverified_internal_track_births=sorted(unverified),
             lane_changing='Disabled; native lane initialization from source lane IDs',
             control='Observed northbound through aspects, not inferred from departures'))
     (output / 'scenario_metadata.json').write_text(json.dumps(manifest, indent=2)+'\n')
@@ -126,7 +148,13 @@ def main():
     parser.add_argument('--end-frame', type=int, default=1600)
     parser.add_argument('--boundary-m', type=float, required=True)
     parser.add_argument('--speed-limit-kmh', type=float, required=True)
+    parser.add_argument('--stop-line-gap-m', type=float, default=0.,
+                        help='Explicit physical stop offset from the approach boundary; no behavioral delay')
     parser.add_argument('--policy', choices=['discrete-event', 'time-warp'], default='discrete-event')
+    parser.add_argument('--require-observed-boundary-arrivals', action='store_true',
+                        help='Refuse internal track births; cannot silently label them upstream demand')
+    parser.add_argument('--initial-snapshot', action='store_true',
+                        help='Opt in to exact nonoverlapping initial positions; requires the new engine support')
     generate(parser.parse_args())
 
 

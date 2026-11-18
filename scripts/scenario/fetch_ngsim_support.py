@@ -12,7 +12,8 @@ from pathlib import Path
 
 URL = ('https://data.transportation.gov/api/views/8ect-6jqj/files/'
        '7244a8b5-077f-4851-bc06-3cfc7a75f0b0?download=true&filename=Peachtree-Street-Atlanta-GA.zip')
-MEMBERS = ['cad-diagram', 'data-analysis', 'gis-files', 'signal-timing', 'tube-data']
+DEFAULT_MEMBERS = ['cad-diagram', 'data-analysis', 'gis-files', 'signal-timing', 'tube-data']
+MEMBERS = DEFAULT_MEMBERS + ['aerial-ortho-photos']
 
 
 class RangeSource:
@@ -49,6 +50,15 @@ class RangeSource:
             return payload
 
 
+def read_range_chunks(source, begin, length, chunk_size=8_000_000):
+    """Bound each response while preserving every byte of a larger nested support ZIP."""
+    if begin < 0 or length <= 0 or not 0 < chunk_size <= 8_000_000:
+        raise ValueError('Invalid support member range')
+    end = begin + length
+    return b''.join(source.get(f'bytes={offset}-{min(offset+chunk_size, end)-1}')
+                    for offset in range(begin, end, chunk_size))
+
+
 def fetch(output, selected):
     if output.exists():
         raise FileExistsError(output)
@@ -70,14 +80,14 @@ def fetch(output, selected):
     for suffix in selected:
         name = f'peachtree-street-{suffix}.zip'
         info = archive.getinfo(name)
-        if info.compress_type != zipfile.ZIP_STORED or info.file_size > 8_000_000:
+        if info.compress_type != zipfile.ZIP_STORED or info.file_size > 32_000_000:
             raise ValueError('Unexpected nested support member encoding')
         header = source.get(f'bytes={info.header_offset}-{info.header_offset+29}')
         if header[:4] != b'PK\x03\x04':
             raise ValueError('Invalid nested member local header')
         namesize, extrasize = struct.unpack_from('<HH', header, 26)
         begin = info.header_offset+30+namesize+extrasize
-        payload = source.get(f'bytes={begin}-{begin+info.compress_size-1}')
+        payload = read_range_chunks(source, begin, info.compress_size)
         if zipfile.crc32(payload) != info.CRC:
             raise ValueError('Support member CRC mismatch')
         nested = zipfile.ZipFile(io.BytesIO(payload))
@@ -107,7 +117,7 @@ def fetch(output, selected):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--members', choices=MEMBERS, nargs='+', default=MEMBERS)
+    parser.add_argument('--members', choices=MEMBERS, nargs='+', default=DEFAULT_MEMBERS)
     args = parser.parse_args()
     fetch(args.output, args.members)
 

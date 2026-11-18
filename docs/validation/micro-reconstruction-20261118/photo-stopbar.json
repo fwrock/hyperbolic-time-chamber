@@ -1,0 +1,57 @@
+{
+  "status": "PHOTO_INTERPRETED_DEVELOPMENT_GEOMETRY_NOT_SURVEYED",
+  "feature": "Northbound painted stop bar upstream of 10th St crosswalk",
+  "method": "Manual interpretation from the georeferenced official ortho; parts are occluded by vehicles. No trajectory error was minimized.",
+  "image": {
+    "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-reconstruction-20261118/aerial-support/support/peachtree-street-aerial-ortho-photos/aerial-ortho-photos/Atlanta-Peachtree.tif",
+    "sha256": "3c21f81cd61fdb6fb7ae1f39cce1921ddd8a6d4c1497a0991eb9d9ec865e907f",
+    "size": [
+      2823,
+      12167
+    ]
+  },
+  "world_file": {
+    "path": "/home/dean/workspace/phd/htc-platform/experiments/micro-reconstruction-20261118/aerial-support/support/peachtree-street-aerial-ortho-photos/aerial-ortho-photos/Atlanta-Peachtree.tfw",
+    "sha256": "c0a669334c0385eb47eb7b51f866ad2ae57b99fa56390bb15e762e33b59832a3",
+    "coefficients": [
+      0.25,
+      0.0,
+      0.0,
+      -0.25,
+      2230270.17,
+      1378306.78
+    ],
+    "coordinate_units": "US survey feet according to NGSIM source metadata"
+  },
+  "source_pixel_centers": [
+    [
+      977,
+      10588
+    ],
+    [
+      1093,
+      10591
+    ]
+  ],
+  "stop_bar_world_endpoints_ft": [
+    [
+      2230514.42,
+      1375659.78
+    ],
+    [
+      2230543.42,
+      1375659.03
+    ]
+  ],
+  "uncertainty": {
+    "source_ortho_relative_accuracy_ft": 2.5,
+    "source_ortho_relative_accuracy_m": 0.762,
+    "pixel_size_ft": 0.25,
+    "digitization_note": "Partly occluded paint; the source accuracy is not a measured stop-bar confidence interval. Use bounded geometry sensitivity and retain the approximation."
+  },
+  "source_metadata": "experiments/micro-empirical-v3-20261118/peachtree-metadata.txt, aerial imagery description",
+  "assumptions": [
+    "Static photo alignment with the recorded road configuration must be reviewed; this is not a surveyed stop line.",
+    "Local coordinates require a separate registration for each recording origin."
+  ]
+}

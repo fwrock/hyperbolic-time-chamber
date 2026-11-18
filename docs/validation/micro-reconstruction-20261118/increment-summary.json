@@ -1,0 +1,26 @@
+{
+  "status": "FIRST_EXECUTED_INCREMENT_NOT_COMPLETE_EMPIRICAL_VALIDATION",
+  "scala_tests": 41,
+  "python_tests": 21,
+  "final_engine_sha256": "986d64f67cefa94745232562432bb7a471638a59659f1db68a649eea553bb8d4",
+  "native_final_acceptance_cases": 5,
+  "all_final_cases_passed": true,
+  "baseline_rmse_m": 5.081562159563717,
+  "photo_center_rmse_m": 1.7429519788759071,
+  "remaining_crossing_errors_s": [
+    -5.1,
+    -4.4
+  ],
+  "unverified_inside_approach_track_births": 14,
+  "implemented": [
+    "Opt-in exact initial snapshot admission",
+    "Immutable per-lane boundary publication and Link/Node subscriber addressing",
+    "Geometry, track-coverage and release diagnostic tooling"
+  ],
+  "outstanding": [
+    "Complete audited lane graph and boundary demand",
+    "Lane-path consumption and candidate-lane downstream safety",
+    "General junction conflict priority and gap acceptance",
+    "Multilane spillback and admission/footprint handoff"
+  ]
+}

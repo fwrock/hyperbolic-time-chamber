@@ -1,0 +1,435 @@
+{
+  "protocol": {
+    "status": "EXPOSED_DATA_DIAGNOSTIC_NOT_A_NEW_HELDOUT_STUDY",
+    "sampling": "Every measured through-green and each through lane; every absence/nonstopped case retained",
+    "candidate": "Nearest observed front at green-1 within [photo station-15 m, photo station+0.762 m]",
+    "stopped": "Past-1-s causal position slope <=0.2 m/s; no missing source frame",
+    "release": "Five consecutive causal speed samples above each fixed threshold 0.1/0.5/1.0 m/s within 20 s",
+    "code_sha256": "9844958aace4713fd3e4ef9d56f339c475e0582ace5173ad32354729d249842c",
+    "approach_audit_sha256": "6df3fe40ec27c909cf261eb32e655d790229f69d020bae54e95d9cd477293ad7"
+  },
+  "results": [
+    {
+      "green_frame": 140,
+      "source_lane": "1",
+      "photo_stop_station_m": 38.773907825144434,
+      "observed_candidates": 0,
+      "status": "no_observed_candidate_at_green"
+    },
+    {
+      "green_frame": 140,
+      "source_lane": "2",
+      "photo_stop_station_m": 38.98676089752679,
+      "observed_candidates": 1,
+      "vehicle": 21,
+      "source_class": "2",
+      "position_at_green_m": 31.7394336,
+      "prefix_causal_speed_mps": 3.4536888000000037,
+      "status": "candidate_not_stopped"
+    },
+    {
+      "green_frame": 1143,
+      "source_lane": "1",
+      "photo_stop_station_m": 38.773907825144434,
+      "observed_candidates": 1,
+      "vehicle": 95,
+      "source_class": "2",
+      "position_at_green_m": 38.076835200000005,
+      "prefix_causal_speed_mps": 0.0,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 1194,
+          "delay_seconds": 5.1000000000000005
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 1196,
+          "delay_seconds": 5.300000000000001
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 1197,
+          "delay_seconds": 5.4
+        }
+      ],
+      "complete_twenty_second_observation": true,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 1143,
+      "source_lane": "2",
+      "photo_stop_station_m": 38.98676089752679,
+      "observed_candidates": 1,
+      "vehicle": 75,
+      "source_class": "3",
+      "position_at_green_m": 38.838835200000005,
+      "prefix_causal_speed_mps": 0.0,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 1202,
+          "delay_seconds": 5.9
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 1204,
+          "delay_seconds": 6.1000000000000005
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 1205,
+          "delay_seconds": 6.2
+        }
+      ],
+      "complete_twenty_second_observation": true,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 2147,
+      "source_lane": "1",
+      "photo_stop_station_m": 38.773907825144434,
+      "observed_candidates": 1,
+      "vehicle": 1689,
+      "source_class": "2",
+      "position_at_green_m": 32.310324,
+      "prefix_causal_speed_mps": 0.0,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 2225,
+          "delay_seconds": 7.800000000000001
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 2227,
+          "delay_seconds": 8.0
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 2229,
+          "delay_seconds": 8.200000000000001
+        }
+      ],
+      "complete_twenty_second_observation": true,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 2147,
+      "source_lane": "2",
+      "photo_stop_station_m": 38.98676089752679,
+      "observed_candidates": 2,
+      "vehicle": 271,
+      "source_class": "2",
+      "position_at_green_m": 36.2266992,
+      "prefix_causal_speed_mps": 0.12017432727272717,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 2147,
+          "delay_seconds": 0.0
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 2205,
+          "delay_seconds": 5.800000000000001
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 2207,
+          "delay_seconds": 6.0
+        }
+      ],
+      "complete_twenty_second_observation": false,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 3151,
+      "source_lane": "1",
+      "photo_stop_station_m": 38.773907825144434,
+      "observed_candidates": 1,
+      "vehicle": 530,
+      "source_class": "2",
+      "position_at_green_m": 33.9019896,
+      "prefix_causal_speed_mps": 7.739287636363639,
+      "status": "candidate_not_stopped"
+    },
+    {
+      "green_frame": 3151,
+      "source_lane": "2",
+      "photo_stop_station_m": 38.98676089752679,
+      "observed_candidates": 1,
+      "vehicle": 529,
+      "source_class": "2",
+      "position_at_green_m": 32.4752208,
+      "prefix_causal_speed_mps": 8.114579563636367,
+      "status": "candidate_not_stopped"
+    },
+    {
+      "green_frame": 4154,
+      "source_lane": "1",
+      "photo_stop_station_m": 38.773907825144434,
+      "observed_candidates": 1,
+      "vehicle": 671,
+      "source_class": "2",
+      "position_at_green_m": 31.229503200000003,
+      "prefix_causal_speed_mps": 0.0,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 4205,
+          "delay_seconds": 5.1000000000000005
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 4207,
+          "delay_seconds": 5.300000000000001
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 4208,
+          "delay_seconds": 5.4
+        }
+      ],
+      "complete_twenty_second_observation": true,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 4154,
+      "source_lane": "2",
+      "photo_stop_station_m": 38.98676089752679,
+      "observed_candidates": 1,
+      "vehicle": 684,
+      "source_class": "2",
+      "position_at_green_m": 31.8860424,
+      "prefix_causal_speed_mps": 3.2790106909090913,
+      "status": "candidate_not_stopped"
+    },
+    {
+      "green_frame": 5157,
+      "source_lane": "1",
+      "photo_stop_station_m": 38.773907825144434,
+      "observed_candidates": 1,
+      "vehicle": 787,
+      "source_class": "2",
+      "position_at_green_m": 32.3112384,
+      "prefix_causal_speed_mps": 0.0,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 5212,
+          "delay_seconds": 5.5
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 5214,
+          "delay_seconds": 5.7
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 5216,
+          "delay_seconds": 5.9
+        }
+      ],
+      "complete_twenty_second_observation": true,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 5157,
+      "source_lane": "2",
+      "photo_stop_station_m": 38.98676089752679,
+      "observed_candidates": 2,
+      "vehicle": 846,
+      "source_class": "2",
+      "position_at_green_m": 34.219896,
+      "prefix_causal_speed_mps": 0.0,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 5212,
+          "delay_seconds": 5.5
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 5215,
+          "delay_seconds": 5.800000000000001
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 5216,
+          "delay_seconds": 5.9
+        }
+      ],
+      "complete_twenty_second_observation": true,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 6161,
+      "source_lane": "1",
+      "photo_stop_station_m": 38.773907825144434,
+      "observed_candidates": 2,
+      "vehicle": 984,
+      "source_class": "2",
+      "position_at_green_m": 32.1743832,
+      "prefix_causal_speed_mps": 0.0173735999999991,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 6208,
+          "delay_seconds": 4.7
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 6210,
+          "delay_seconds": 4.9
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 6212,
+          "delay_seconds": 5.1000000000000005
+        }
+      ],
+      "complete_twenty_second_observation": true,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 6161,
+      "source_lane": "2",
+      "photo_stop_station_m": 38.98676089752679,
+      "observed_candidates": 2,
+      "vehicle": 1093,
+      "source_class": "2",
+      "position_at_green_m": 33.200340000000004,
+      "prefix_causal_speed_mps": 0.17492749090909207,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 6161,
+          "delay_seconds": 0.0
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 6204,
+          "delay_seconds": 4.3
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 6206,
+          "delay_seconds": 4.5
+        }
+      ],
+      "complete_twenty_second_observation": false,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 7164,
+      "source_lane": "1",
+      "photo_stop_station_m": 38.773907825144434,
+      "observed_candidates": 1,
+      "vehicle": 1176,
+      "source_class": "2",
+      "position_at_green_m": 31.621476,
+      "prefix_causal_speed_mps": 0.0,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 7211,
+          "delay_seconds": 4.7
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 7214,
+          "delay_seconds": 5.0
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 7216,
+          "delay_seconds": 5.2
+        }
+      ],
+      "complete_twenty_second_observation": true,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 7164,
+      "source_lane": "2",
+      "photo_stop_station_m": 38.98676089752679,
+      "observed_candidates": 1,
+      "vehicle": 1225,
+      "source_class": "2",
+      "position_at_green_m": 34.181796,
+      "prefix_causal_speed_mps": 0.0,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 7213,
+          "delay_seconds": 4.9
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 7221,
+          "delay_seconds": 5.7
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 7223,
+          "delay_seconds": 5.9
+        }
+      ],
+      "complete_twenty_second_observation": false,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 8168,
+      "source_lane": "1",
+      "photo_stop_station_m": 38.773907825144434,
+      "observed_candidates": 2,
+      "vehicle": 1476,
+      "source_class": "2",
+      "position_at_green_m": 39.448130400000004,
+      "prefix_causal_speed_mps": 0.10451869090909001,
+      "status": "observed_stopped_candidate",
+      "releases": [
+        {
+          "threshold_mps": 0.1,
+          "first_frame": 8168,
+          "delay_seconds": 0.0
+        },
+        {
+          "threshold_mps": 0.5,
+          "first_frame": 8201,
+          "delay_seconds": 3.3000000000000003
+        },
+        {
+          "threshold_mps": 1.0,
+          "first_frame": 8202,
+          "delay_seconds": 3.4000000000000004
+        }
+      ],
+      "complete_twenty_second_observation": true,
+      "interpretation": "Nearest observed stopped candidate, not proof of complete queue or causal driver reaction time"
+    },
+    {
+      "green_frame": 8168,
+      "source_lane": "2",
+      "photo_stop_station_m": 38.98676089752679,
+      "observed_candidates": 1,
+      "vehicle": 1497,
+      "source_class": "2",
+      "position_at_green_m": 37.767768000000004,
+      "prefix_causal_speed_mps": 2.4521714181818184,
+      "status": "candidate_not_stopped"
+    }
+  ]
+}

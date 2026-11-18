@@ -7,6 +7,21 @@ import model.hybrid.entity.state.model.LaneChangingModel
 
 /** An entry must leave enough space for the lane maneuvers that its fixed handoff requires. */
 object MicroEntryAdmission {
+  /** A measured state can be restored in either spatial order; desired gap is not physical length. */
+  def snapshotReason(state: LinkState, data: EnterLinkData, targetLane: Int): Option[String] = {
+    require(data.actorSize.isFinite && data.actorSize > 0.0,
+      "initial MICRO snapshot requires a finite positive vehicle length")
+    require(targetLane >= 0 && targetLane < state.lanes, "invalid initial MICRO snapshot lane")
+    require(data.initialRemainderSeconds == 0.0, "initial MICRO snapshot cannot carry boundary remainder")
+    val occupants = state.vehiclesByLane.get(targetLane).toList.flatMap(_.toList)
+    val space = occupants.forall { other =>
+      if (other.position >= data.initialPosition)
+        other.rearPosition >= data.initialPosition
+      else data.initialPosition-data.actorSize >= other.position
+    }
+    Option.unless(space)("initial_snapshot_overlap")
+  }
+
   def lane(state: LinkState, data: EnterLinkData): Int = {
     val compatible = state.laneConnections.filter(_.outgoingLinkId == data.nextLinkId).map(_.fromLane).distinct
     data.preferredLane.getOrElse((if (compatible.nonEmpty) compatible else (0 until state.lanes))

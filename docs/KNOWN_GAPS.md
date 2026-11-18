@@ -1,5 +1,10 @@
 # Known Gaps
 
+The [2026-11-18 reconstruction increment](MICRO_RECONSTRUCTION_AND_SNAPSHOT_2026_11_18.md)
+implements opt-in exact initial snapshots and per-lane boundary publication. It also
+isolates part of the field discrepancy as geometry. Lane-path consumption, general
+priority/gap acceptance and multilane admission/spillback remain open.
+
 Honest gap assessment against the README/docs claims, based on a source-level audit. This module
 has the platform's best documentation, but "best-documented" isn't the same as "fully accurate" —
 update this file as gaps close.
