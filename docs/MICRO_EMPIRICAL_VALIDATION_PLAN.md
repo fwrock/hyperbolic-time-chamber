@@ -7,6 +7,10 @@ See the [MESO companion campaign](MESO_EMPIRICAL_VALIDATION_PLAN.md) for aggrega
 traffic dynamics and the [VTRC source assessment](MESO_VTRC_22_R7_REVIEW.md) for
 the mesoscopic calibration methodology. Results and acceptance remain mode-specific.
 
+The [2026-11-18 prospective Peachtree study](MICRO_PEACHTREE_PROSPECTIVE_STUDY_2026_11_18.md)
+starts the first new-site conditional component experiment, with a protected
+recording split and explicit limits on comparative versus absolute adequacy.
+
 ## Objective and claim boundary
 
 Establish whether production HTC MICRO reproduces specified observed traffic
