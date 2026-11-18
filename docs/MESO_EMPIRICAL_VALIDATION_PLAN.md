@@ -184,6 +184,9 @@ development when they influence the revision.
 
 ## Initial development experiment
 
+The [2026-11-18 kickoff record](MESO_EXPERIMENT_KICKOFF_2026_11_18.md) retains
+the initial data-access audit, executable identity and experiment attempts.
+
 Start with a fresh execution of the existing bounded destination-ready-time
 engineering protocol: four cases (origin flow, storage, horizon and destination
 arrival), each at two fixed seeds, in real HTC and MATSim. This establishes
