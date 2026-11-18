@@ -5,6 +5,64 @@ Date: 2026-11-18. This starts the first new-site empirical experiment under the
 are recorded before requesting individual trajectories from the reserved recording.
 Execution completion and scientific acceptance are separate outcomes.
 
+## Executed outcome: inconclusive recruitment gates
+
+The prospective run completed after protocol/code publication in commit `a1d3e15`.
+It acquired 457,412 unique rows for 1,222 vehicles from the reserved recording.
+Nine following episodes qualified, against the fixed requirement of ten; no
+queue qualified, against the requirement of five. All selected primary predictions
+are complete and have nonnegative bumper gaps. Both seed-42 exact-repeat checks
+pass. No target, exclusion rule or physics parameter was changed after acquisition.
+
+| Following, nine held-out episodes | Position RMSE | Causal speed RMSE |
+|---|---:|---:|
+| HTC deterministic, primary | 1.82685 m | 0.70674 m/s |
+| HTC stochastic, secondary five-seed average | 1.77418 m | 0.69204 m/s |
+| Causal rigid spacing | 5.72716 m | 1.19780 m/s |
+| Constant velocity | 15.41437 m | 3.14656 m/s |
+
+The paired following skill comparisons pass their prespecified uncertainty checks:
+the upper adjusted one-sided bound on HTC-minus-baseline position-RMSE difference
+is -7.32345 m against constant velocity and -0.98945 m against causal rigid spacing.
+Nevertheless, the corresponding overall conditional gate does not pass because
+the recruitment requirement is unmet. Queue skill is unassessed, not evidence of
+poor queue predictions: there are no selected queue episodes to predict.
+
+There were 159 following candidate rejections: 78 lane changes, 51 class/direction/
+movement changes, 26 incomplete observations, three excessive initial gaps and one
+section/intersection crossing. None qualified in observation block 5; the other
+nine blocks each supplied one episode. Do not retrospectively add another candidate
+time or lower the required count to make this study pass.
+
+All 194 queue candidates failed the frozen observed-release eligibility rule.
+Of these, 142 had no detected eligible head transition within the search window.
+The other candidates produced 52 rejected release windows: 29 lane changes,
+16 incomplete station crossings, six insufficient post-crossing observation pads
+and one common forecast window shorter than five seconds. These diagnostics were
+examined after preserving the prospective outcome. They may inform future
+development, but this recording is now inspected and must not be reused as fresh.
+
+The [machine result](validation/micro-peachtree-prospective-2026-11-18.json)
+retains gates, primary episode scores, hashes and preregistration identity. The
+[local report and all nine figures](../../output/validation/micro-peachtree-20261118/report.html)
+include the complete selected cohort. All frozen evidence hashes, 72 scored
+case records, repeat outputs and local report links passed recomputed integrity
+checks. The post-study exposure ledger has 3,696 identities, including unused
+reserved-source subjects.
+
+The next study needs a new reserved recording/dataset with demonstrated coverage
+of stable following and complete queue-release chains. Develop an event-based
+queue-recruitment design on now-released observations, with a fixed future search
+budget, before opening that new holdout. Preserve all v1/v2/v3 outcomes; repeated
+search must not become a process of reporting only the first passing cohort.
+
+Implementation clarification: the inherited candidate-budget key applies per
+kind per candidate snapshot (up to 12), with four candidate snapshots in each
+90-second block. At most one episode per kind/block is selected. Bulk acquisition
+uses the sealed runner's 50,000-row, 30 MB response budgets; inherited historical
+per-candidate-query metadata fields are not the bulk downloader's limits. These
+behaviors are defined by the source sealed before reserved acquisition.
+
 ## Claim being tested
 
 Test conditional longitudinal predictive skill of the production HTC MICRO physics
