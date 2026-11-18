@@ -513,7 +513,10 @@ class Car(
   override protected def mesoOriginAtEnd: Boolean =
     state.journey.sumoDepartTick.isEmpty && state.mesoOriginLinkId.exists(id => state.currentPath.exists(_._1 == id))
 
-  override protected def microEntryVelocity: Double = journeyReporter.sumoArrivalSpeed
+  override protected def microEntryVelocity: Double =
+    if (state.journey.sumoDepartTick.isEmpty)
+      state.microDepartSpeed.getOrElse(journeyReporter.sumoArrivalSpeed)
+    else journeyReporter.sumoArrivalSpeed
   override protected def microAcceleration: Option[Double] = state.microAcceleration
   override protected def microMinGap: Option[Double] = state.microMinGap
   override protected def microReactionTime: Option[Double] = state.microReactionTime
@@ -524,7 +527,9 @@ class Car(
   override protected def microRandomSeed: Long = state.microRandomSeed
   override protected def microLc2013: model.hybrid.entity.state.model.Lc2013Parameters = state.microLc2013
   override protected def microEntryLane: Option[Int] =
-    if (state.movableCurrentPathIsJunction) None else state.journey.pendingRoadLane
+    if (state.movableCurrentPathIsJunction) None
+    else if (state.journey.sumoDepartTick.isEmpty) state.microDepartLane.orElse(state.journey.pendingRoadLane)
+    else state.journey.pendingRoadLane
   override protected def microDeceleration: Option[Double] = state.microDeceleration
   override protected def microEntryPosition: Double =
     if (state.journey.sumoDepartTick.isEmpty) state.microDepartPosition else 0.0

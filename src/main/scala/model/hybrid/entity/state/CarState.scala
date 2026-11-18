@@ -51,6 +51,12 @@ import scala.collection.mutable
   *   Current mode (MESO or MICRO)
   * @param microState
   *   Optional microscopic state (active in MICRO links)
+  * @param microDepartSpeed
+  *   Optional initial speed in m/s, used until the first accepted departure. Link admission
+  *   still applies physical limits and queue stopping; subsequent entries carry exit speed.
+  * @param microDepartLane
+  *   Optional zero-based origin-road lane preference, used only before first departure.
+  *   Junction connectors and subsequent roads retain the Node-selected lane contract.
   */
 case class CarState(
   override val startTick: Tick,
@@ -77,7 +83,11 @@ case class CarState(
   microSigma: Double = 0.0,
   microRandomSeed: Long = 0L,
   microLc2013: model.Lc2013Parameters = model.Lc2013Parameters(),
-  mesoOriginLinkId: Option[Long] = None
+  mesoOriginLinkId: Option[Long] = None,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Double])
+  microDepartSpeed: Option[Double] = None,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
+  microDepartLane: Option[Int] = None
 ) extends MovableState(
       startTick = startTick,
       reporterType = reporterType,
@@ -99,6 +109,8 @@ case class CarState(
   require(microDesiredMaxSpeed.forall(v => v.isFinite && v > 0), "invalid car MICRO desired maximum speed")
   require(microSigma.isFinite && microSigma >= 0 && microSigma <= 1, "invalid car MICRO sigma")
   require(microLc2013 != null, "missing LC2013 parameters")
+  require(microDepartSpeed.forall(v => v.isFinite && v >= 0), "invalid car MICRO departure speed")
+  require(microDepartLane.forall(_ >= 0), "invalid car MICRO departure lane")
 
   def bestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
   def bestRoute_=(v: Option[mutable.Queue[(Long, Long)]]): Unit = movableBestRoute = v

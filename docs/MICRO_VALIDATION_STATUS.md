@@ -1,5 +1,11 @@
 # MICRO implementation and validation status
 
+The [2026-11-18 complete empirical campaign ledger](MICRO_COMPLETE_EMPIRICAL_CAMPAIGN.md)
+tracks the current autonomous-field work and implementation gaps. It records measured
+Peachtree signal recovery and a four-vehicle actor integration experiment under both
+policies. That experiment exposes early boundary crossings; it is development evidence,
+not completed empirical acceptance. The older results below retain their original scope.
+
 Status updated on **2026-10-26**. The v2 scientific results below retain the
 **2026-10-25** campaign following milestone `729a746` on `feat/time-warp`;
 the new [bounded spillback acceptance](MICRO_SPILLBACK.md) is separate engineering

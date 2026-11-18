@@ -1,0 +1,214 @@
+{
+  "files": 32,
+  "original_csv_equivalence": true,
+  "partial_cycles": "Only observed transitions are retained; unknown initial aspects rejected",
+  "zero_duration_green": "Coincident BG/BY means Yellow at that frame; no artificial Green duration",
+  "sources": [
+    {
+      "file": "Peachtree_10th_EB_0400-0415.txt",
+      "movements": {
+        "Left": 45,
+        "Thru": 44
+      }
+    },
+    {
+      "file": "Peachtree_10th_EB_1245-0100.txt",
+      "movements": {
+        "Left": 45,
+        "Thru": 48
+      }
+    },
+    {
+      "file": "Peachtree_10th_NB_0400-0415.txt",
+      "movements": {
+        "Left": 57,
+        "Thru": 57
+      }
+    },
+    {
+      "file": "Peachtree_10th_NB_1245-0100.txt",
+      "movements": {
+        "Left": 57,
+        "Thru": 57
+      }
+    },
+    {
+      "file": "Peachtree_10th_SB_0400-0415.txt",
+      "movements": {
+        "Left": 57,
+        "Thru": 57
+      }
+    },
+    {
+      "file": "Peachtree_10th_SB_1245-0100.txt",
+      "movements": {
+        "Left": 57,
+        "Thru": 57
+      }
+    },
+    {
+      "file": "Peachtree_10th_WB_0400-0415.txt",
+      "movements": {
+        "Left": 45,
+        "Thru": 45
+      }
+    },
+    {
+      "file": "Peachtree_10th_WB_1245-0100.txt",
+      "movements": {
+        "Left": 45,
+        "Thru": 48
+      }
+    },
+    {
+      "file": "Peachtree_11th_EB_0400-0415.txt",
+      "movements": {
+        "Thru": 45
+      }
+    },
+    {
+      "file": "Peachtree_11th_EB_1245-0100.txt",
+      "movements": {
+        "Thru": 48
+      }
+    },
+    {
+      "file": "Peachtree_11th_NB_0400-0415.txt",
+      "movements": {
+        "Thru": 45
+      }
+    },
+    {
+      "file": "Peachtree_11th_NB_1245-0100.txt",
+      "movements": {
+        "Thru": 46
+      }
+    },
+    {
+      "file": "Peachtree_11th_SB_0400-0415.txt",
+      "movements": {
+        "Thru": 45
+      }
+    },
+    {
+      "file": "Peachtree_11th_SB_1245-0100.txt",
+      "movements": {
+        "Thru": 46
+      }
+    },
+    {
+      "file": "Peachtree_11th_WB_0400-0415.txt",
+      "movements": {
+        "Thru": 56
+      }
+    },
+    {
+      "file": "Peachtree_11th_WB_1245-0100.txt",
+      "movements": {
+        "Thru": 41
+      }
+    },
+    {
+      "file": "Peachtree_12th_EB_0400-0415.txt",
+      "movements": {
+        "Thru": 45
+      }
+    },
+    {
+      "file": "Peachtree_12th_EB_1245-0100.txt",
+      "movements": {
+        "Thru": 48
+      }
+    },
+    {
+      "file": "Peachtree_12th_NB_0400-0415.txt",
+      "movements": {
+        "Thru": 45
+      }
+    },
+    {
+      "file": "Peachtree_12th_NB_1245-0100.txt",
+      "movements": {
+        "Thru": 46
+      }
+    },
+    {
+      "file": "Peachtree_12th_SB_0400-0415.txt",
+      "movements": {
+        "Thru": 51
+      }
+    },
+    {
+      "file": "Peachtree_12th_SB_1245-0100.txt",
+      "movements": {
+        "Thru": 48
+      }
+    },
+    {
+      "file": "Peachtree_12th_WB_0400-0415.txt",
+      "movements": {
+        "Thru": 38
+      }
+    },
+    {
+      "file": "Peachtree_12th_WB_1245-0100.txt",
+      "movements": {
+        "Thru": 59
+      }
+    },
+    {
+      "file": "Peachtree_14th_EB_0400-0415.txt",
+      "movements": {
+        "Left": 51,
+        "Thru": 55
+      }
+    },
+    {
+      "file": "Peachtree_14th_EB_1245-0100.txt",
+      "movements": {
+        "Left": 54,
+        "Thru": 59
+      }
+    },
+    {
+      "file": "Peachtree_14th_NB_0400-0415.txt",
+      "movements": {
+        "Left": 39,
+        "Thru": 45
+      }
+    },
+    {
+      "file": "Peachtree_14th_NB_1245-0100.txt",
+      "movements": {
+        "Left": 45,
+        "Thru": 48
+      }
+    },
+    {
+      "file": "Peachtree_14th_SB_0400-0415.txt",
+      "movements": {
+        "Left": 44,
+        "Thru": 45
+      }
+    },
+    {
+      "file": "Peachtree_14th_SB_1245-0100.txt",
+      "movements": {
+        "Left": 48,
+        "Thru": 48
+      }
+    },
+    {
+      "file": "Peachtree_14th_WB_0400-0415.txt",
+      "movements": {
+        "Thru": 45
+      }
+    },
+    {
+      "file": "Peachtree_14th_WB_1245-0100.txt",
+      "movements": {
+        "Thru": 47
+      }
+    }
+  ]
+}

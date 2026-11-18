@@ -3,6 +3,10 @@
 Date: 2026-11-18. Status: proposed research and implementation plan; not a frozen
 experimental protocol and not evidence that empirical acceptance has been achieved.
 
+Execution tracking, audited missing features and the first native observed-signal
+actor experiment are recorded in the [complete campaign ledger](MICRO_COMPLETE_EMPIRICAL_CAMPAIGN.md).
+The conditional component study does not fulfill the requested complete campaign.
+
 See the [MESO companion campaign](MESO_EMPIRICAL_VALIDATION_PLAN.md) for aggregate
 traffic dynamics and the [VTRC source assessment](MESO_VTRC_22_R7_REVIEW.md) for
 the mesoscopic calibration methodology. Results and acceptance remain mode-specific.
