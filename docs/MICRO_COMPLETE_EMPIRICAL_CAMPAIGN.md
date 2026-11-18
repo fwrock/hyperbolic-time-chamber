@@ -2,6 +2,10 @@
 
 Status, 2026-11-18: **in progress; complete empirical validity has not been established**.
 
+The [Claude handoff (Portuguese)](CLAUDE_HANDOFF_MICRO_EMPIRICAL_2026_11_18.pt.md)
+records the implementation baseline, local evidence, reproduction commands, remaining
+dependencies and unrelated workspace changes that must be preserved.
+
 The [executed reconstruction and snapshot increment](MICRO_RECONSTRUCTION_AND_SNAPSHOT_2026_11_18.md)
 records the subsequent geometry sensitivity, track-birth audit, native exact initial
 snapshot option and per-lane publication groundwork. G01/G02 remain partially complete;
