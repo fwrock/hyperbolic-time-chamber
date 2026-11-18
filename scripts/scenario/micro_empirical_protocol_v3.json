@@ -1,0 +1,158 @@
+{
+  "id": "micro-peachtree-heldout-conditional-v3-20261118",
+  "version": 3,
+  "status": "frozen-before-first-individual-reserved-trajectory-access",
+  "classification": "Prospective conditional predictive-skill study; not general empirical adequacy",
+  "source": "https://data.transportation.gov/resource/8ect-6jqj.json",
+  "location": "peachtree",
+  "recordingOrigin": 1163030300,
+  "developmentRecordingOrigin": 1163018600,
+  "frameRange": [
+    1,
+    9000
+  ],
+  "blockFrames": 900,
+  "candidateFrames": [
+    100,
+    200,
+    300,
+    400,
+    1000,
+    1100,
+    1200,
+    1300,
+    1900,
+    2000,
+    2100,
+    2200,
+    2800,
+    2900,
+    3000,
+    3100,
+    3700,
+    3800,
+    3900,
+    4000,
+    4600,
+    4700,
+    4800,
+    4900,
+    5500,
+    5600,
+    5700,
+    5800,
+    6400,
+    6500,
+    6600,
+    6700,
+    7300,
+    7400,
+    7500,
+    7600,
+    8200,
+    8300,
+    8400,
+    8500
+  ],
+  "onePerKindPerBlock": true,
+  "maximumCandidatesPerKindAndBlock": 12,
+  "initializationSeconds": 1,
+  "stepSeconds": 0.1,
+  "followingPredictionSeconds": 10,
+  "queuePredictionSeconds": 20,
+  "requiredEpisodes": {
+    "following": 10,
+    "queue": 5
+  },
+  "sampleRationale": "Ten predeclared 90-second observation blocks constitute a bounded finite-recording assessment. Retain the historical minimum ten-following/five-queue recruitment requirements without claiming a powered population sample. If unmet, the corresponding claim is inconclusive. Do not add blocks, drop errors or relax targets after seeing held-out data.",
+  "bootstrapSeed": 20261118,
+  "statisticalDesign": {
+    "unit": "At most one episode of each kind per 90-second block; aggregate followers within a queue. Never resample frames as independent observations.",
+    "draws": 10000,
+    "plannedComparisons": [
+      "following HTC minus constant velocity position RMSE",
+      "following HTC minus causal rigid spacing position RMSE",
+      "queue HTC minus causal rigid spacing headway MAE"
+    ],
+    "decision": "Primary sigma=0 only. For each comparison require the one-sided Bonferroni upper percentile-bootstrap bound at 1-0.05/3 to be below zero. Also require the relevant data gate, complete primary predictions/crossings and nonnegative primary bumper gaps.",
+    "interpretation": "Within-recording block-bootstrap uncertainty is exploratory; adjacent traffic conditions may remain dependent. No population superiority or universal physical adequacy claim."
+  },
+  "quality": {
+    "exactSampleMilliseconds": 100,
+    "maximumReverseStepM": 0.05,
+    "maximumPrefixSpeedMps": 15.6464,
+    "maximumAbsolutePrefixStopSpeedMps": 0.2,
+    "minimumVehicleLengthM": 2,
+    "maximumVehicleLengthM": 8,
+    "minimumInitialBumperGapM": 2,
+    "minimumObservedBumperGapM": 0,
+    "maximumRowsPerQuery": 2000,
+    "maximumBytesPerQuery": 2000000,
+    "rules": [
+      "Remove exact duplicates, reject conflicting subject/time rows, truncation, missing 100 ms samples and nonconsecutive frame IDs.",
+      "Every subject remains a northbound through passenger Car in one unchanged lane; every follower retains its recorded immediate leader throughout initialization and prediction.",
+      "Use front-center local_y and measured lengths, converted from feet. Reject nonfinite data, negative annotated speeds, reversed steps beyond tolerance or overlapping observed bumpers.",
+      "Initialize speed by least-squares position slope over the disjoint one-second prefix; head-leader velocity at each boundary uses only its previous one-second positions, floored at zero.",
+      "Queue prefix fitted speed must remain within the stop threshold for all three Cars. The fixed virtual discharge station is 5 m beyond the head leader's initial front. All observed subjects must cross within 20 seconds; missing predicted crossings fail coverage, never exclude the case.",
+      "Retain all raw responses, query URLs, SHA256, license and every rejection. No fitted time shifts, post-outcome filtering or traffic-coefficient calibration."
+    ]
+  },
+  "physics": {
+    "speedLimitKmh": 56.327040000000004,
+    "maxAccelerationMps2": 2.6,
+    "maxDecelerationMps2": 4.5,
+    "reactionSeconds": 1,
+    "minGapM": 2,
+    "retainExits": true,
+    "linkLengthM": 100000
+  },
+  "followingContext": {
+    "sameNonzeroRoadSectionThroughout": true,
+    "noRecordedIntersectionThroughout": true,
+    "maximumInitialBumperGapM": 30,
+    "maximumInitialSafeSpeedFractionOfCap": 0.9,
+    "interpretation": "Leader-dominated midblock component scope. Does not infer signals or exclude indirect upstream/downstream traffic effects."
+  },
+  "queueRelease": {
+    "maximumSearchSeconds": 20,
+    "maximumFetchSeconds": 41,
+    "releaseDefinition": "First annotated head-leader speed >0.2 m/s after a one-second stopped initialization prefix, with >=0.3 m observed head displacement during the next second. All three prefix fitted speeds remain <=0.2 m/s in absolute value.",
+    "maximumPredictionSeconds": 20,
+    "minimumPredictionSeconds": 5,
+    "afterLastObservedCrossingSeconds": 1,
+    "endpoint": "Ceil the last observed station crossing plus one second to the 0.1 s grid, with a minimum five seconds and maximum twenty. Require complete common coverage through that endpoint. Missing predicted crossings fail coverage. Do not extend a failed prediction horizon.",
+    "station": "5 m beyond the observed head front at the last initialization sample; physical station and identities shared by all comparisons.",
+    "interpretation": "Conditional queue-release response to observed head motion, not reconstruction of the green phase or saturated signal capacity."
+  },
+  "variants": [
+    {
+      "id": "deterministic",
+      "sigma": 0,
+      "seeds": [
+        42
+      ]
+    },
+    {
+      "id": "stochastic",
+      "sigma": 0.5,
+      "seeds": [
+        42,
+        43,
+        44,
+        45,
+        46
+      ]
+    }
+  ],
+  "stochasticRole": "Predeclared secondary sensitivity only; average separately scored seed metrics within episode. Do not choose a best seed or use this variant for the primary acceptance gate.",
+  "baselineInformation": "Constant velocity uses the initial follower prefix only. Causal rigid spacing uses head position and causal velocity at the start of the forecast interval, with one-step constant-speed head extrapolation; no current/future head frame or future follower observation enters dynamics.",
+  "desiredSpeedInterpretation": "Fixed transferred 56.32704 km/h model cap from the existing benchmark, not a verified Peachtree posted speed limit and not calibrated on Peachtree outcomes.",
+  "calibration": "None. All acceleration, braking, gap, reaction and speed-cap parameters are fixed before reserved access. Development data informed tooling and recruitment design only.",
+  "absoluteApplicationTolerances": null,
+  "claimBoundary": "Conditional longitudinal following and observed head-release response for stable northbound through passenger-car chains in this held-out recording. Future lane/leader stability and complete observed discharge define eligibility, so results do not estimate all-traffic occurrence. No actor-runtime, autonomous signal, lane-change, corridor, safety or general empirical-adequacy validation.",
+  "missingPolicy": "Retain every selected episode and all prediction samples. Missing predicted queue crossings invalidate the affected headline and comparison; they never exclude an episode. Failed scientific or recruitment gates are completed experiments, not execution failures.",
+  "license": "CC_30_BY_SA",
+  "attribution": "U.S. Department of Transportation Intelligent Transportation Systems Joint Program Office (JPO) -- Recommended citation: \"U.S. Department of Transportation Federal Highway Administration. (2016). Next Generation Simulation (NGSIM) Vehicle Trajectories and Supporting Data. [Dataset]. Provided by ITS DataHub through Data.transportation.gov. Accessed YYYY-MM-DD from http://doi.org/10.21949/1504477\"",
+  "metadataSha256": "97b63625dee2d566527b90b463e7bb6683e86c085ef072df70d8c84ba5644142",
+  "exposureLedgerSha256": "a8782fc47c0de57795f99ca6ea09a15e3f53dc9a860ea72b45a4b1187b4d468a"
+}
