@@ -7,6 +7,9 @@ Execution tracking, audited missing features and the first native observed-signa
 actor experiment are recorded in the [complete campaign ledger](MICRO_COMPLETE_EMPIRICAL_CAMPAIGN.md).
 The conditional component study does not fulfill the requested complete campaign.
 
+See the [detailed implementation and acceptance roadmap (Portuguese)](MICRO_EMPIRICAL_GAPS_AND_ACCEPTANCE.pt.md)
+for the six evaluation stages, concrete implementation gaps and their completion evidence.
+
 See the [MESO companion campaign](MESO_EMPIRICAL_VALIDATION_PLAN.md) for aggregate
 traffic dynamics and the [VTRC source assessment](MESO_VTRC_22_R7_REVIEW.md) for
 the mesoscopic calibration methodology. Results and acceptance remain mode-specific.

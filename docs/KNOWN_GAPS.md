@@ -8,6 +8,12 @@ Start with [MICRO implementation and validation status](MICRO_VALIDATION_STATUS.
 for the consolidated current scope, evidence, scientific interpretation and next
 acceptance gates. The dated sections below retain milestone history.
 
+For the current autonomous MICRO empirical campaign, the
+[implementation backlog and evaluation requirements (Portuguese)](MICRO_EMPIRICAL_GAPS_AND_ACCEPTANCE.pt.md)
+detail per-lane causal observations, physical handoff and admission/spillback integration,
+junction conflict/priority control, permissive gap acceptance, short-link scope and
+measurement coverage. These are open work items, not completed capabilities.
+
 ## Field input audit and fresh v2 — sample gate still open (2026-10-26)
 
 The released v1 audit identifies the independently documented 35 mph site cap

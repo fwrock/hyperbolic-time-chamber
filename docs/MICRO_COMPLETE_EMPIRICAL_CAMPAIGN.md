@@ -5,6 +5,12 @@ The requested deliverable covers autonomous microscopic traffic, not only condit
 following. The earlier prospective Peachtree component study was inconclusive and
 does not complete this campaign. Its protocol and results remain frozen.
 
+The [implementation gaps and evaluation requirements (Portuguese)](MICRO_EMPIRICAL_GAPS_AND_ACCEPTANCE.pt.md)
+define the E01–E06 evaluation stages and G01–G07 implementation backlog, including
+code ownership boundaries, dependencies, architectural contracts and acceptance checks.
+They distinguish missing mechanisms from existing capabilities that still need field
+evaluation; the proposed mechanisms remain unimplemented.
+
 ## Coverage and outstanding work
 
 | Required behavior/evidence | Native capability audited | Empirical acceptance status / next work |
