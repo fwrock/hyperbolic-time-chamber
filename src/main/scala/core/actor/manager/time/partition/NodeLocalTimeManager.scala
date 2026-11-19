@@ -57,7 +57,7 @@ class NodeLocalTimeManager(
     id: LogicalProcessId,
     membership: Vector[ActorRef]
   ): ActorRef =
-    owners.getOrElse(id, throw new IllegalArgumentException(s"unknown node-local LP owner: $id"))
+    owners.getOrElse(id, membership(Math.floorMod(id.hashCode(), membership.size)))
 
   override protected def validAccountingOwner(
     ref: ActorRef,
@@ -256,10 +256,6 @@ class NodeLocalTimeManager(
       case _: FreezeConservativeMigration =>
         guarded {
           throw new IllegalStateException("node-local-tick does not support live migration")
-        }
-      case _: DirectBirth =>
-        guarded {
-          throw new IllegalStateException("node-local-tick does not support model actor births")
         }
     }
     partition.orElse(inherited)

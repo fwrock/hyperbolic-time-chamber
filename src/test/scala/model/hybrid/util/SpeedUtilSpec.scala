@@ -15,9 +15,9 @@ class SpeedUtilSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "grow steeply (quartic) past capacity, not linearly" in {
-    val atCapacity  = SpeedUtil.bprCongestionFactor(volume = 100.0, capacity = 100.0)
-    val over25pct   = SpeedUtil.bprCongestionFactor(volume = 125.0, capacity = 100.0)
-    val over50pct   = SpeedUtil.bprCongestionFactor(volume = 150.0, capacity = 100.0)
+    val atCapacity = SpeedUtil.bprCongestionFactor(volume = 100.0, capacity = 100.0)
+    val over25pct = SpeedUtil.bprCongestionFactor(volume = 125.0, capacity = 100.0)
+    val over50pct = SpeedUtil.bprCongestionFactor(volume = 150.0, capacity = 100.0)
 
     val penalty25 = over25pct - 1.0
     val penalty50 = over50pct - 1.0
@@ -31,17 +31,51 @@ class SpeedUtilSpec extends AnyFlatSpec with Matchers {
   }
 
   "linkDensitySpeed" should "return freeSpeed at zero occupancy" in {
-    SpeedUtil.linkDensitySpeed(length = 300.0, capacity = 20.0, numberOfCars = 0L, freeSpeed = 13.9) shouldBe 13.9
+    SpeedUtil.linkDensitySpeed(
+      length = 300.0,
+      capacity = 20.0,
+      numberOfCars = 0L,
+      freeSpeed = 13.9
+    ) shouldBe 13.9
   }
 
-  it should "return the capacity-saturated fallback speed (1.0 m/s) at or above capacity" in {
-    SpeedUtil.linkDensitySpeed(length = 300.0, capacity = 20.0, numberOfCars = 20L, freeSpeed = 13.9) shouldBe 1.0
-    SpeedUtil.linkDensitySpeed(length = 300.0, capacity = 20.0, numberOfCars = 25L, freeSpeed = 13.9) shouldBe 1.0
+  it should "return the capacity-saturated fallback speed (1.0 in the supplied speed units) at or above capacity" in {
+    SpeedUtil.linkDensitySpeed(
+      length = 300.0,
+      capacity = 20.0,
+      numberOfCars = 20L,
+      freeSpeed = 13.9
+    ) shouldBe 1.0
+    SpeedUtil.linkDensitySpeed(
+      length = 300.0,
+      capacity = 20.0,
+      numberOfCars = 25L,
+      freeSpeed = 13.9
+    ) shouldBe 1.0
   }
 
   it should "decrease monotonically as occupancy grows while strictly below capacity" in {
 
-    val speeds = (0 until 20).map(n => SpeedUtil.linkDensitySpeed(length = 300.0, capacity = 20.0, numberOfCars = n.toLong, freeSpeed = 13.9))
-    speeds.sliding(2).foreach { case Seq(a, b) => a should be >= b }
+    val speeds = (0 until 20).map(
+      n =>
+        SpeedUtil.linkDensitySpeed(
+          length = 300.0,
+          capacity = 20.0,
+          numberOfCars = n.toLong,
+          freeSpeed = 13.9
+        )
+    )
+    speeds.sliding(2).foreach {
+      case Seq(a, b) => a should be >= b
+    }
+  }
+
+  "pre-entry density" should "keep an isolated car at free flow on a one-slot sampled link" in {
+    SpeedUtil.linkEntryDensitySpeed(100, 1, 1, 36, includeEnteringVehicle = false) shouldBe 36.0
+    SpeedUtil.linkEntryDensitySpeed(100, 1, 1, 36, includeEnteringVehicle = true) shouldBe 1.0
+  }
+
+  it should "slow an entering car in proportion to vehicles already present" in {
+    SpeedUtil.linkEntryDensitySpeed(100, 4, 3, 36, includeEnteringVehicle = false) shouldBe 18.0
   }
 }

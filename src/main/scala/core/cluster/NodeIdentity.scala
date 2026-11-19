@@ -178,12 +178,12 @@ object NodeIdentity {
     originEnabled = scala.util.Try(config.getBoolean("htc.node.message-origin")).getOrElse(true)
     val cluster = Cluster(system)
     selfAddress = cluster.selfAddress.toString
-    val forced = sys.env.get("HTC_NODE_RANK").flatMap(_.trim.toIntOption).filter(_ >= 0)
+    val forced = scala.util.Try(config.getInt("htc.node.rank")).toOption.filter(_ >= 0)
     forced.foreach { r =>
       currentRank = r
       frozen = true
       publish()
-      logger.info(s"Node identity (forced by HTC_NODE_RANK): rank=$r name=$name strategy=$currentStrategy")
+      logger.info(s"Node identity (forced by htc.node.rank): rank=$r name=$name strategy=$currentStrategy")
     }
     if (forced.isEmpty) {
       val minMembers = scala.util.Try(config.getInt("pekko.cluster.min-nr-of-members")).getOrElse(1)

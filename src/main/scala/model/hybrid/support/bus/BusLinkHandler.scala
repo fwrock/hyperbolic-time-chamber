@@ -5,7 +5,7 @@ import core.types.Tick
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.state.BusState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{Finished, Moving}
-import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
+import org.interscity.htc.model.hybrid.util.SpeedUtil.linkEntryDensitySpeed
 
 /** Handles MESO link enter/leave events for Bus actors.
   *
@@ -43,7 +43,7 @@ class BusLinkHandler(
     // CarLinkHandler.handleEnterLink), so always safe to consume once received.
     consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
 
-    val speed = linkDensitySpeed(
+    val speed = linkEntryDensitySpeed(
       length       = data.linkLength,
       capacity     = data.linkCapacity,
       numberOfCars = data.linkNumberOfCars,

@@ -132,18 +132,12 @@ class Bus(
   protected var mesoExitTick: Option[Tick] = None
 
   private lazy val microUpdateLogEvery: Int =
-    sys.env
-      .get("HTC_BUS_MICRO_UPDATE_LOG_EVERY")
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .orElse(scala.util.Try(config.getInt("htc.bus.micro-update-log-every")).toOption)
+    scala.util.Try(config.getInt("htc.bus.micro-update-log-every")).toOption
       .filter(_ > 0)
       .getOrElse(200)
 
   private lazy val busStopProbeLogEvery: Int =
-    sys.env
-      .get("HTC_BUS_STOP_PROBE_LOG_EVERY")
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .orElse(scala.util.Try(config.getInt("htc.bus.stop-probe-log-every")).toOption)
+    scala.util.Try(config.getInt("htc.bus.stop-probe-log-every")).toOption
       .filter(_ > 0)
       .getOrElse(500)
 
@@ -153,10 +147,7 @@ class Bus(
     * the MESO/walking enter/leave events. See project memory on htc-replay live mode.
     */
   private lazy val microUpdateReportEvery: Int =
-    sys.env
-      .get("HTC_MICRO_UPDATE_REPORT_EVERY")
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .orElse(scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption)
+    scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption
       .filter(_ >= 0)
       .getOrElse(0)
 

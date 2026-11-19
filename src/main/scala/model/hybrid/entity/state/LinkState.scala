@@ -3,12 +3,13 @@ package model.hybrid.entity.state
 
 import core.types.Tick
 import core.entity.state.BaseState
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.annotation.{ JsonDeserialize, JsonSerialize }
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{LinkRegistry, LinkMetricsState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
-import org.interscity.htc.model.hybrid.entity.state.model.{ LaneConfig, VehicleInLane }
+import org.interscity.htc.model.hybrid.entity.state.model.{ LaneConfig, LaneConnectionIndex, VehicleInLane }
 
 import scala.collection.mutable
 
@@ -73,8 +74,8 @@ case class LinkState(
   speedLimit: Double,
   capacity: Double,
   freeSpeed: Double,
-  currentSpeed: Double = 0.0,
-  congestionFactor: Double = 1.0,
+  var currentSpeed: Double = 0.0,
+  var congestionFactor: Double = 1.0,
   @JsonSerialize(converter = classOf[LinkRegistry.ToJson])
   @JsonDeserialize(converter = classOf[LinkRegistry.FromJson])
   registered: LinkRegistry = new LinkRegistry,
@@ -137,6 +138,22 @@ case class LinkState(
     require(math.abs(speedLimit / 3.6 - geometry.speedLimitMps) <= 1e-6, "junction speed must match geometry")
   }
 
+  /** Derived from the immutable connections; rebuilt per state instance and never serialized. */
+  @JsonIgnore @transient lazy val laneConnectionIndex: LaneConnectionIndex = LaneConnectionIndex(laneConnections)
+
+  /** Single pass over the lanes; replaces repeated lane scans per vehicle event. */
+  def locateVehicle(actorId: Long): Option[(Int, VehicleInLane)] = {
+    val it = vehiclesByLane.iterator
+    while (it.hasNext) {
+      val (lane, queue) = it.next()
+      queue.find(_.actorId == actorId) match {
+        case Some(v) => return Some((lane, v))
+        case None    =>
+      }
+    }
+    None
+  }
+
   /** Check if link is in microscopic mode */
   def isMicroMode: Boolean = simulationMode == SimulationModeEnum.MICRO
 
@@ -145,7 +162,7 @@ case class LinkState(
 
   /** Get total number of vehicles in MICRO mode */
   def totalVehiclesInMicro: Int =
-    if (isMicroMode) vehiclesByLane.values.map(_.size).sum
+    if (isMicroMode) vehiclesByLane.valuesIterator.foldLeft(0)(_ + _.size)
     else 0
 
   /** Get total number of vehicles in MESO mode */

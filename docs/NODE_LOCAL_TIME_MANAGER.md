@@ -84,10 +84,11 @@ enrollment flag; other strategies retain their existing paths.
 The first implementation reuses conservative progressive input, startup delivery,
 reporting, inclusive horizon and retirement machinery. It requires direct
 conservative transport, positive fixed node/worker counts and disabled live load
-balancing. Time Warp and channel-closed reject this selection. Model-created actor
-birth and live migration are rejected. Runs requiring model-created Bus/Subway
-birth must explicitly select `scheduling-strategy="cluster-pool"`; `auto` does not
-infer model birth requirements from scenario data. Neither worker replacement nor independent
+balancing. Time Warp and channel-closed reject this selection. Live migration is rejected. Model-created
+actor births (Bus/Subway stations) are supported: a born LP is owned by the node authority
+selected by hashing its id (known to the parent's node before the child exists), which may be
+a different JVM from the one sharding places the actor on, so births pay one remote hop for
+that LP's scheduling. Neither worker replacement nor independent
 restart is a recovery mechanism. Unexpected partition loss fails the run.
 
 There is no public cancellation/replacement contract for this additive strategy.

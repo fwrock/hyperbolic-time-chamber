@@ -57,9 +57,7 @@ class LinkMicroSimulationHandler(
   }
 
   def findVehicleLane(actorId: Long): Option[Int] =
-    getLinkStateFn().vehiclesByLane.collectFirst {
-      case (laneId, queue) if queue.exists(_.actorId == actorId) => laneId
-    }
+    getLinkStateFn().locateVehicle(actorId).map(_._1)
 
   def findLeastOccupiedLane(): Int =
     microSimulationStrategy.selectEntryLane(
@@ -120,10 +118,11 @@ class LinkMicroSimulationHandler(
 
     val freshState = getLinkStateFn()
     if (freshState.isMicroMode) {
-      val vehicles  = freshState.vehiclesByLane.valuesIterator.flatMap(_.iterator).toVector
-      val meanSpeed = if (vehicles.nonEmpty) vehicles.map(_.velocity).sum / vehicles.size else 0.0
-      val congestionFactor = SpeedUtil.bprCongestionFactor(volume = vehicles.size.toDouble, capacity = freshState.capacity)
-      setLinkStateFn(freshState.copy(currentSpeed = meanSpeed, congestionFactor = congestionFactor))
+      var count = 0
+      var speedSum = 0.0
+      freshState.vehiclesByLane.valuesIterator.foreach(_.foreach { v => count += 1; speedSum += v.velocity })
+      freshState.currentSpeed = if (count > 0) speedSum / count else 0.0
+      freshState.congestionFactor = SpeedUtil.bprCongestionFactor(volume = count.toDouble, capacity = freshState.capacity)
     }
     metricsReporter.maybePublishDynamicCost(tick)
 
@@ -133,8 +132,7 @@ class LinkMicroSimulationHandler(
 
   def sendMicroLeaveLinkToVehicle(update: MicroVehicleUpdate): Unit = {
     val state = getLinkStateFn()
-    val entryPosition = state.vehiclesByLane.valuesIterator.flatMap(_.iterator)
-      .find(_.actorId == update.vehicleId).map(_.entryPosition).getOrElse(0.0)
+    val entryPosition = state.locateVehicle(update.vehicleId).map(_._2.entryPosition).getOrElse(0.0)
     val distanceTraveled = update.distanceTraveled.getOrElse(math.max(0.0, update.position - entryPosition))
     if (!state.downstreamSpillback)
       state.vehiclesByLane.foreach { case (_, q) => q.dequeueAll(_.actorId == update.vehicleId) }

@@ -76,8 +76,16 @@ object VehicleInLane {
   }
 
   def sortFrontToBack(queue: mutable.Queue[VehicleInLane]): Unit = {
-    val ordered = queue.sortWith(precedes)
-    queue.clear()
-    queue.enqueueAll(ordered)
+    var sorted = true
+    var i = 1
+    while (sorted && i < queue.length) {
+      if (precedes(queue(i), queue(i - 1))) sorted = false
+      i += 1
+    }
+    if (!sorted) {
+      val ordered = queue.sortWith(precedes)
+      queue.clear()
+      queue.enqueueAll(ordered)
+    }
   }
 }

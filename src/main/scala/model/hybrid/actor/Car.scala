@@ -199,10 +199,7 @@ class Car(
   )
 
   private lazy val staleEventLogEvery: Int =
-    sys.env
-      .get("HTC_CAR_STALE_EVENT_LOG_EVERY")
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .orElse(scala.util.Try(config.getInt("htc.car.stale-event-log-every")).toOption)
+    scala.util.Try(config.getInt("htc.car.stale-event-log-every")).toOption
       .filter(_ > 0)
       .getOrElse(100)
 
@@ -214,10 +211,7 @@ class Car(
     * the MESO/walking enter/leave events. See project memory on htc-replay live mode.
     */
   private lazy val microUpdateReportEvery: Int =
-    sys.env
-      .get("HTC_MICRO_UPDATE_REPORT_EVERY")
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .orElse(scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption)
+    scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption
       .filter(_ >= 0)
       .getOrElse(0)
 

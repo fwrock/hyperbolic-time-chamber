@@ -31,33 +31,11 @@ class ClickHouseReportData(
       startRealTime = startRealTime
     ) {
 
-  private val host = sys.env.getOrElse(
-    "HTC_CLICKHOUSE_HOST",
-    try config.getString("htc.report-manager.clickhouse.host")
-    catch { case _: Exception => "localhost" }
-  )
-  private val port = sys.env
-    .get("HTC_CLICKHOUSE_PORT")
-    .map(_.toInt)
-    .getOrElse(
-      try config.getInt("htc.report-manager.clickhouse.port")
-      catch { case _: Exception => 8123 }
-    )
-  private val database = sys.env.getOrElse(
-    "HTC_CLICKHOUSE_DATABASE",
-    try config.getString("htc.report-manager.clickhouse.database")
-    catch { case _: Exception => "htc" }
-  )
-  private val username = sys.env.getOrElse(
-    "HTC_CLICKHOUSE_USER",
-    try config.getString("htc.report-manager.clickhouse.username")
-    catch { case _: Exception => "default" }
-  )
-  private val password = sys.env.getOrElse(
-    "HTC_CLICKHOUSE_PASSWORD",
-    try config.getString("htc.report-manager.clickhouse.password")
-    catch { case _: Exception => "" }
-  )
+  private val host = config.getString("htc.report-manager.clickhouse.host")
+  private val port = config.getInt("htc.report-manager.clickhouse.port")
+  private val database = config.getString("htc.report-manager.clickhouse.database")
+  private val username = config.getString("htc.report-manager.clickhouse.username")
+  private val password = config.getString("htc.report-manager.clickhouse.password")
   private val batchSize =
     try config.getInt("htc.report-manager.clickhouse.batch-size")
     catch { case _: Exception => 10000 }

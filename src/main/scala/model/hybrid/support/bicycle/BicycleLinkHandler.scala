@@ -31,7 +31,7 @@ class BicycleLinkHandler(
 
   def handleEnterLink(linkId: Long, data: LinkInfoData, state: BicycleState): Unit = {
     consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
-    val bicycleSpeed = 5.56
+    val bicycleSpeed = model.hybrid.util.MesoTrafficConfig.bicycleSpeedMps
     val time         = data.linkLength / bicycleSpeed
     state.status = Moving
     journeyReporter.sumoIdealTravelTimeSeconds +=
