@@ -291,4 +291,34 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
     val h3 = new Harness(node(batch)); h3.tick = 5; h3.request(14, 5, 6) // connector 40 has no rule: granted at once
     h3.grants shouldBe List((14L, 40L))
   }
+
+  it should "subscribe by itself and release a yielding approach held at Red before any request was made" in {
+    val rule = List(JunctionConflict(20, 30, Some(30), "test-rule", Some(GapAcceptance(3.0, 10.0, publishPermission = true))))
+    val withSignal = node(rule).copy(movementSignals = List(MovementSignalBinding(1, 2, 801)))
+    withSignal.signals(801L) = SignalState(Green, 10, 100)
+    val h = new Harness(withSignal)
+    h.tick = 2
+    h.handler.handleReceiveSignalChangeStatus(h.event(801, 801), TrafficSignalChangeStatusData(SignalState(Green, 10, 100), 100, 801))
+    h.subscriptions shouldBe List(3L) // no request yet: the Node subscribed to the priority approach on its own
+    h.aspects.last._2 shouldBe Red // unknown observation: not allowed yet
+    h.tick = 3; h.handler.handleBoundaryUpdate(3, snapshot(2, None)) // the initial publication: the priority road is empty
+    h.aspects.last._2 shouldBe Green // released without any request from the held vehicle
+  }
+
+  "Batching of all requests" should "grant a contended connector by a total order, whatever the arrival order of same-tick requests" in {
+    def run(order: List[Long], batch: Boolean) = {
+      val h = new Harness(node(Nil).copy(batchAllRequests = batch, availableCapacity = mutable.Map(20L -> 1, 30L -> 5, 40L -> 5)))
+      h.tick = 5
+      order.foreach(v => h.request(v, 1, 2)) // all on connector 20, which has capacity 1
+      h.tick = 6; h.handler.onDecisionTick()
+      h
+    }
+    run(List(11, 12), batch = true).grants shouldBe List((11L, 20L))
+    run(List(12, 11), batch = true).grants shouldBe List((11L, 20L)) // the lowest vehicle id wins in both orders
+    run(List(11, 12), batch = false).grants shouldBe List((11L, 20L))
+    run(List(12, 11), batch = false).grants shouldBe List((12L, 20L)) // unbatched: the first arrival wins
+    val h = run(List(12, 11), batch = true)
+    h.free(20); h.tick = 7; h.handler.onDecisionTick()
+    h.grants.map(_._1) shouldBe List(11L, 12L) // released slot: the waiter is granted at the next decision, once
+  }
 }

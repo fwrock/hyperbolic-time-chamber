@@ -93,6 +93,7 @@ def generate(args):
             st['movementSignals'] = [dict(incomingLinkId=A, outgoingLinkId=E, origin=O_NB_THRU, laneIds=[0, 1]),
                 dict(incomingLinkId=A, outgoingLinkId=SINK, origin=O_NB_LEFT, laneIds=[2]),
                 dict(incomingLinkId=B, outgoingLinkId=X, origin=O_SB_THRU, laneIds=[])]
+            if args.batch_decisions: st['batchAllRequests'] = True
             if not args.no_conflict:
                 st['conflicts'] = [dict(connectorA=CL, connectorB=CS, priorityConnector=CS,
                     source='engineering protocol: NB permissive left yields to SB through at the same signalised intersection', gapAcceptance=gap)]
@@ -219,6 +220,7 @@ if __name__ == '__main__':
     p.add_argument('--critical-gap', type=float, default=3.0)
     p.add_argument('--critical-gap-source', default='protocol fixture default 3.0 s (midday estimate inconclusive: n=2 permissive lefts)')
     p.add_argument('--no-conflict', action='store_true')
+    p.add_argument('--batch-decisions', action='store_true', help='Node decides all junction requests in a deterministic batch at the next tick')
     p.add_argument('--publish-permission', action='store_true', help='anticipatory braking: the Node publishes the conflict permission to the approach Link')
     p.add_argument('--policy', choices=['discrete-event', 'time-warp'], default='discrete-event')
     p.add_argument('--initial-snapshot', action='store_true')

@@ -177,6 +177,7 @@ def generate(args):
             i = node-11
             if table[i][3] is not None: state['movementSignals'] = [dict(incomingLinkId=layout[2*i]['id'], outgoingLinkId=layout[2*i+2]['id'], origin=701+i, laneIds=[])]
             state['junctionMovements'] = [dict(incomingLinkId=layout[2*i]['id'], outgoingLinkId=layout[2*i+2]['id'], connectorLinkId=layout[2*i+1]['id'])]
+            if args.batch_decisions: state['batchAllRequests'] = True
         actors.append(actor('Node', node, state))
     def endpoints(link):
         i = link['intersection']
@@ -276,6 +277,7 @@ def main():
     p.add_argument('--suffix', default='0400-0415')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--direction', choices=['2', '4'], default='2', help='2 northbound, 4 southbound (mirrored coordinates)')
+    p.add_argument('--batch-decisions', action='store_true', help='Node decides all junction requests in a deterministic batch at the next tick (one tick of latency)')
     p.add_argument('--sb-full', action='store_true', help='southbound 13th..10th table (protocol FULL_SB_CORRIDOR)')
     p.add_argument('--intersections', type=int, default=2)
     p.add_argument('--exit-end-m', type=float)

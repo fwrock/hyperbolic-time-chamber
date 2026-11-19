@@ -35,7 +35,7 @@ class NodeEventHandler(
   /** True only while the Node runs its batched decision for the current tick. */
   private var deciding = false
 
-  private def batched(c: Long): Boolean = state.conflicts.exists(r => r.involves(c) && r.decisionBatching)
+  private def batched(c: Long): Boolean = state.batchAllRequests || state.conflicts.exists(r => r.involves(c) && r.decisionBatching)
 
   /** Ask for a decision at the next tick; at most one wake-up per tick (checkpointed, so a restored Node does not repeat it). */
   private def requestDecision(): Unit = {
@@ -209,7 +209,7 @@ class NodeEventHandler(
     val hasCapacity = !capacityKnown || state.availableCapacity(admissionLinkId) > 0
     val key = (currentTickFn(), event.actorRefId, event.seq)
     junction.foreach(j => ensureObserved(j.linkId))
-    val batchedNow = junction.exists(j => batched(j.linkId))
+    val batchedNow = batched(junction.map(_.linkId).getOrElse(data.targetLinkId)) && (junction.nonEmpty || state.batchAllRequests)
     if (hasCapacity && !batchedNow && !conflictBlocked(junction.map(_.linkId), key)) {
       if (capacityKnown) state.availableCapacity(admissionLinkId) -= 1
       sendGrant(event.actorRefId, event.shardRefId, event.seq, data.targetLinkId, junction,movement.flatMap(_.outgoingLane))
@@ -346,6 +346,9 @@ class NodeEventHandler(
   /** Tell the approach Link, only when it changes, whether the yielding movement may be entered now (anticipatory braking). */
   private def refreshPermission(c: Long): Unit =
     if (publishesPermission(c)) {
+      // Subscribe before judging: a yielding approach held at Red never sends the request that would otherwise subscribe, so an unknown
+      // observation would keep it at Red forever.
+      ensureObserved(c)
       val allowed = permissionNow(c)
       if (!state.publishedPermission.get(c).contains(allowed)) {
         state.publishedPermission(c) = allowed
@@ -368,8 +371,13 @@ class NodeEventHandler(
   def onDecisionTick(): Unit =
     if (state != null) {
       deciding = true
-      try state.conflicts.filter(_.decisionBatching).flatMap(r => List(r.connectorA, r.connectorB)).distinct.sorted.foreach { c =>
-        if (state.capacityWaitQueue.get(c).exists(_.nonEmpty)) drainConflictGroup(c)
+      try {
+        val ids = (if (state.batchAllRequests) state.capacityWaitQueue.keys.toList
+                   else state.conflicts.filter(_.decisionBatching).flatMap(r => List(r.connectorA, r.connectorB))).distinct.sorted
+        ids.foreach { c =>
+          if (state.capacityWaitQueue.get(c).exists(_.nonEmpty))
+            if (state.conflicts.exists(_.involves(c))) drainConflictGroup(c) else tryDrainCapacityQueue(c)
+        }
       } finally deciding = false
       refreshPermissions()
     }
@@ -444,6 +452,25 @@ class NodeEventHandler(
       val target = if (pending.targetLinkId == 0L) linkId else pending.targetLinkId
       pending.signalAlreadyCleared || signalFor(pending.approachLinkId,target,pending.approachLane)
         .forall(s => s.state == Green || s.state == TrafficSignalPhaseStateEnum.Off)
+    }
+    if (!deciding && batched(linkId)) { requestDecision(); return }
+    if (deciding && batched(linkId)) {
+      // Batched decision: requests received before this tick, in a total order that does not depend on arrival order; head-of-line blocking as in the FIFO drain.
+      state.capacityWaitQueue.get(linkId).foreach { queue =>
+        var available = state.availableCapacity.getOrElse(linkId, 0)
+        var stopped = false
+        queue.toList.filter(_.requestedTick < currentTickFn()).sortBy(p => (p.requestedTick, p.actorRefId, p.requestSeq)).foreach { pending =>
+          if (!stopped && available > 0 && mayProceed(pending)) {
+            queue.dequeueAll(_ eq pending)
+            available -= 1
+            sendGrant(pending.actorRefId, pending.shardRefId, pending.requestSeq,
+              if (pending.targetLinkId == 0L) linkId else pending.targetLinkId, pending.junctionLink, pending.outgoingLane)
+          } else stopped = true
+        }
+        state.availableCapacity(linkId) = available
+        if (queue.isEmpty) state.capacityWaitQueue.remove(linkId)
+      }
+      return
     }
     state.capacityWaitQueue.get(linkId).foreach { queue =>
       var available = state.availableCapacity.getOrElse(linkId, 0)

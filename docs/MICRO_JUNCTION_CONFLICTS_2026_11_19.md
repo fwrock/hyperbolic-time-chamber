@@ -156,3 +156,11 @@ mudanças de ocupação e de sinal não concedem na hora: só pedem o acordar do
 
 **Custo:** padrão desligado. Ligado, há no máximo um evento próprio do Node por tick com pedidos em conflito pendentes (o mesmo mecanismo de agendamento que os Links já usam), nenhuma mensagem nova entre atores, e **um tick (0,1 s) de latência** nas concessões dos movimentos em conflito. Três testes novos em
 `JunctionConflictSpec` (independência da ordem, pedido no tick da decisão fora do conjunto, checkpoint com a decisão agendada e conector sem regra imediato). **Não** foi avaliado em execução de ponta a ponta nesta rodada; só em unidade.
+
+
+## Correções posteriores (19/11, tarde)
+
+1. **Frenagem antecipada: defeito corrigido.** A avaliação da `publishPermission` deu comportamento patológico (11th: nenhuma esquerda cruzou; 12th: atraso mediano de +348 s). Causa: a assinatura das observações do sul só ocorria ao chegar o primeiro pedido; com a permissão ligada, observação desconhecida
+   publicava Vermelho, a esquerda parava antes da linha e nunca fazia o pedido que dispararia a assinatura (bloqueio permanente). Agora a assinatura ocorre ao avaliar a permissão. Teste de regressão em `JunctionConflictSpec`. A reavaliação em execução vem na rodada seguinte.
+2. **Decisão em lote para todos os pedidos (`NodeState.batchAllRequests`, padrão desligado).** Causa da variabilidade medida entre execuções: a fila de capacidade do Node atende pedidos do mesmo tick na ordem de chegada, que muda entre builds e entre 1 e 2 JVMs. Com a opção, **todos** os pedidos de junção são guardados e decididos no tick seguinte numa ordem total
+   `(tick do pedido, identidade do veículo, sequência)` sobre os pedidos recebidos até o tick anterior; liberações de capacidade e mudanças de sinal só pedem o acordar. Custo: um evento do Node por tick com pedidos pendentes e **um tick (0,1 s) de latência em toda travessia de junção**. Teste unitário com as duas ordens de chegada.
