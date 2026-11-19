@@ -87,11 +87,11 @@ abstract class LocalTimeManagerBase(
   private val runtimeIdentities = mutable.Map.empty[Long, Identify]
 
   private val registeredIdentities: mutable.Map[Long, Identify] = mutable.Map()
-  private val scheduleRevisions = mutable.Map.empty[Long, Long].withDefaultValue(0L)
+  private val scheduleRevisions = new LongDefaultMap(0L)
   private val inFlightTicks = mutable.Map.empty[Long, Tick]
   private val scheduledLocations = mutable.Map.empty[Long, mutable.Map[Tick, Identify]]
   private val logicalSchedules = mutable.Map.empty[Long, EventOrder]
-  private val dispatchGeneration: mutable.Map[Long, Long] = mutable.Map().withDefaultValue(0L)
+  private val dispatchGeneration = new LongDefaultMap(0L)
 
   /** Actors whose latest accepted `FinishEvent` said they are waiting for a reply
     * ([[FinishEvent.awaitingReply]]). Not running and not scheduled, yet not finished either.
