@@ -9,7 +9,6 @@ import core.util.{ IdUtil, JsonUtil }
 
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.cluster.sharding.ShardRegion
-import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
 import core.entity.event.control.execution.DestructAckEvent
@@ -45,7 +44,6 @@ abstract class BaseActor[T <: BaseState](
 
   protected def config = org.interscity.htc.core.api.SimulatorSettingsRegistry.effective
   private var isInitialized: Boolean = false
-  private val snapShotInterval = 10000000
 
   protected var entityId: String =
     if (properties != null) properties.entityId
@@ -96,7 +94,11 @@ abstract class BaseActor[T <: BaseState](
     } else super.aroundReceive(receive, message)
   }
 
-  override def persistenceId: String = s"${getClass.getName}-${self.path.name}"
+  /** There is no recovery phase, so an actor is always ready; kept because callers (and test probes)
+    * ask whether recovery is over.
+    */
+  final def recoveryFinished: Boolean = true
+  final def recoveryRunning: Boolean = false
 
   /** Initializes the actor. This method is called before the actor starts processing messages.
     */
@@ -197,25 +199,7 @@ abstract class BaseActor[T <: BaseState](
     case event: InitializeEvent               => onInitialize(event)
     case event: PrepareForMigrationEvent      => handlePrepareForMigration(event)
     case event: ShardRegion.StartEntity       => handleStartEntity(event)
-    case SaveSnapshotSuccess(metadata)        =>
-    case SaveSnapshotFailure(metadata, cause) =>
     case event                                => handleEvent(event)
-  }
-
-  private def save(event: Any): Unit = ()
-//    persist(event) {
-//      e =>
-//        context.system.eventStream.publish(e)
-//        if (lastSequenceNr % snapShotInterval == 0 && lastSequenceNr != 0)
-//          saveSnapshot(state)
-//    }
-
-  def receiveCommand: Receive = receive
-
-  def receiveRecover: Receive = {
-    case snapshot: SnapshotOffer =>
-      state = snapshot.snapshot.asInstanceOf[T]
-    case _ => receive
   }
 
   private def handleEnvelopeEvent(entityEnvelopeEvent: EntityEnvelopeEvent): Unit =

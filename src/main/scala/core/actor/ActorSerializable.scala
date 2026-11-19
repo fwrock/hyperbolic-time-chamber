@@ -1,6 +1,9 @@
 package org.interscity.htc
 package core.actor
 
-import org.apache.pekko.persistence.PersistentActor
+import org.apache.pekko.actor.Actor
 
-trait ActorSerializable extends PersistentActor
+/** Marker for HTC actors. Not a PersistentActor: nothing was ever persisted (the event journal was
+  * in-memory and no snapshot store was configured), so every actor was only paying for recovery.
+  */
+trait ActorSerializable extends Actor
