@@ -16,10 +16,8 @@ import java.util.concurrent.ConcurrentHashMap
 object LocalRegions {
   private val regions = new ConcurrentHashMap[(ActorSystem, String), ActorRef]()
   private val indexes = new ConcurrentHashMap[(ActorSystem, String), ConcurrentHashMap[String, ActorRef]]()
-  private val modes = new ConcurrentHashMap[ActorSystem, java.lang.Boolean]()
 
-  def enabled(system: ActorSystem): Boolean =
-    modes.computeIfAbsent(system, s => RuntimeMode.from(s.settings.config) == RuntimeMode.SingleNode)
+  def enabled(system: ActorSystem): Boolean = RuntimeMode.forSystem(system) == RuntimeMode.SingleNode
 
   def getOrCreate(system: ActorSystem, typeName: String, entityProps: => Props): ActorRef =
     regions.computeIfAbsent(

@@ -8,7 +8,7 @@ import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingle
 object DistributedUtil {
 
   def getShardRef(shardRegionName: String, system: ActorSystem): ActorRef =
-    RuntimeMode.from(system.settings.config) match {
+    RuntimeMode.forSystem(system) match {
       case RuntimeMode.Cluster    => ClusterSharding(system).shardRegion(shardRegionName)
       case RuntimeMode.SingleNode => LocalRegions.get(system, shardRegionName)
     }
@@ -18,7 +18,7 @@ object DistributedUtil {
     system: ActorSystem,
     name: String,
     proxyName: Option[String] = None
-  ): ActorRef = RuntimeMode.from(system.settings.config) match {
+  ): ActorRef = RuntimeMode.forSystem(system) match {
     case RuntimeMode.Cluster =>
       val props = ClusterSingletonProxy.props(s"/user/$name", ClusterSingletonProxySettings(system))
       proxyName.fold(factory.actorOf(props))(factory.actorOf(props, _))

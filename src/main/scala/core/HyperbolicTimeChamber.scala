@@ -73,6 +73,7 @@ object HyperbolicTimeChamber {
             .withFallback(baseConfig)
         )
     }
+    RuntimeMode.fix(system, runtimeMode)
 
     ConfigApiServer.start(system)
 

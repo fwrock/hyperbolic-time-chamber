@@ -36,6 +36,8 @@ object SimulatorSettingsRegistry {
       "Fixed simulation JVM count for node-local-tick; zero freezes the Up cohort at startup", "0"),
     SettingDef("htc.time-manager.node-local.workers-per-node", "HTC_NODE_LOCAL_SCHEDULER_WORKERS",
       "Private tick schedule partitions per simulation JVM", "4"),
+    SettingDef("htc.runtime.mode", "HTC_RUNTIME_MODE",
+      "Runtime topology, fixed at startup: cluster, or single-node (one JVM without sharding, singleton or cluster-router machinery)", "cluster"),
     SettingDef("htc.time-manager.conservative-transport", "HTC_CONSERVATIVE_TRANSPORT",
       "Conservative interaction transport, fixed before runtime startup", "direct"),
     SettingDef("htc.time-warp.max-ahead-ticks", "HTC_TIME_WARP_MAX_AHEAD_TICKS", "Optimistic tick window ahead of GVT, fixed at startup", "50"),
@@ -195,7 +197,7 @@ object SimulatorSettingsRegistry {
   /** Keys that are only read while the process boots (REST server, cluster); changing them through
     * the API is accepted but has no effect until the engine restarts.
     */
-  val startupOnlyPrefixes: List[String] = List("htc.api.", "htc.clustering.", "htc.brokers.", "htc.kafka-clients.")
+  val startupOnlyPrefixes: List[String] = List("htc.api.", "htc.clustering.", "htc.brokers.", "htc.kafka-clients.", "htc.runtime.")
 
   /** Closed value sets, taken from the code that parses each setting (not from comments). */
   val options: Map[String, List[String]] = {
@@ -208,6 +210,7 @@ object SimulatorSettingsRegistry {
       "htc.report-manager.default-strategy" -> reporters,
       "htc.report-manager.enabled-strategies" -> reporters,
       "htc.report-manager.parquet.compression" -> List("snappy", "zstd", "gzip", "uncompressed"),
+      "htc.runtime.mode" -> List("cluster", "single-node"),
       "htc.time-manager.conservative-transport" -> List("direct", "channel-closed"),
       "htc.time-manager.scheduling-strategy" -> List("auto", "cluster-pool", "node-local-tick"),
       "htc.routing.cache-strategy" -> List("kafka", "inmemory", "accounted", "disabled"),
