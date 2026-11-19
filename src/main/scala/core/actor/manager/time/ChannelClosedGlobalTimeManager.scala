@@ -121,8 +121,11 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       "new LP below conservative frontier")
     if (birth) require(event.initialWake.isEmpty && event.startTick == event.birth.get.tick, "invalid inert child enrollment")
     known.add(id)
-    val owner = if (nodeLocalScheduling) {
-      require(event.birth.isEmpty, "node-local-tick does not support model actor births")
+    val owner = if (nodeLocalScheduling && birth) {
+      // A child's JVM is chosen by sharding after authorization, but its owner must be known to the
+      // parent's node beforehand, so births use the fixed hash owner (possibly remote from the actor).
+      membership(Math.floorMod(id.hashCode(), membership.size))
+    } else if (nodeLocalScheduling) {
       val local = membership.filter(ref => physicalAddress(ref) == physicalAddress(event.ref))
       require(local.size == 1, s"expected one scheduler on LP node ${physicalAddress(event.ref)}")
       local.head
