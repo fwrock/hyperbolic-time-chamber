@@ -106,7 +106,7 @@ object HyperbolicTimeChamber {
     core.cluster.NodeIdentity.start(system)
     core.metrics.ExecutionTimingCollector(system)
 
-    ClusterSharding(system)
+    if (runtimeMode == RuntimeMode.Cluster) ClusterSharding(system)
 
     cluster.registerOnMemberUp {
       system.log.info(s"Member is up: ${cluster.selfMember}")
