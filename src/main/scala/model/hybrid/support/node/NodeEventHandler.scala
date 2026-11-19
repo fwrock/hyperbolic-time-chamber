@@ -213,8 +213,10 @@ class NodeEventHandler(
   private def sendGrant(vehicleId: Long, shardId: String, requestSeq: Long, targetLinkId: Long,
                         junction: Option[model.hybrid.entity.state.model.PrecomputedRouteItem], outgoingLane: Option[Int] = None): Unit = {
     junction.foreach { path =>
-      if (state.conflicts.nonEmpty)
+      if (state.conflicts.nonEmpty) {
         state.occupiedConnectors(path.linkId) = state.occupiedConnectors.getOrElse(path.linkId, 0) + 1
+        refreshPermissions()
+      }
       reportFn(Map("node_id" -> entityIdFn(), "vehicle_id" -> vehicleId,
         "connector_link_id" -> path.linkId, "target_link_id" -> targetLinkId,
         "tick" -> currentTickFn()), "junction_connector_admitted")
@@ -234,6 +236,7 @@ class NodeEventHandler(
       if (state.conflicts.exists(_.involves(data.linkId))) {
         state.occupiedConnectors(data.linkId) = math.max(0, state.occupiedConnectors.getOrElse(data.linkId, 0) - data.freedCount)
         drainConflictGroup(data.linkId)
+        refreshPermissions()
       } else tryDrainCapacityQueue(data.linkId)
     } else {
       logWarnFn(
@@ -303,8 +306,49 @@ class NodeEventHandler(
       }
     }
 
+  /** Would a vehicle of the yielding connector be granted right now, ignoring the order of waiting requests? */
+  private def permissionNow(c: Long): Boolean =
+    state.conflicts.filter(_.involves(c)).forall { rule =>
+      val other = rule.other(c)
+      state.occupiedConnectors.getOrElse(other, 0) == 0 &&
+        (!rule.priorityConnector.contains(other) ||
+          rule.gapAcceptance.forall(g => gapAccepted(other, g, state.occupiedConnectors.getOrElse(c, 0))))
+    }
+
+  private def publishesPermission(c: Long): Boolean =
+    state.conflicts.exists(r => r.involves(c) && r.priorityConnector.contains(r.other(c)) && r.gapAcceptance.exists(_.publishPermission))
+
+  /** The aspect the approach Link must obey for a movement: its own signal ANDed with the published conflict permission. */
+  private def effectiveAspect(incoming: Long, outgoing: Long, raw: TrafficSignalPhaseStateEnum): TrafficSignalPhaseStateEnum = {
+    val denied = state.junctionMovements.find(m => m.incomingLinkId == incoming && m.outgoingLinkId == outgoing)
+      .exists(m => state.publishedPermission.get(m.connectorLinkId).contains(false))
+    if (denied && (raw == Green || raw == TrafficSignalPhaseStateEnum.Yellow || raw == TrafficSignalPhaseStateEnum.Off)) Red else raw
+  }
+
+  /** Tell the approach Link, only when it changes, whether the yielding movement may be entered now (anticipatory braking). */
+  private def refreshPermission(c: Long): Unit =
+    if (publishesPermission(c)) {
+      val allowed = permissionNow(c)
+      if (!state.publishedPermission.get(c).contains(allowed)) {
+        state.publishedPermission(c) = allowed
+        state.junctionMovements.find(_.connectorLinkId == c).foreach { m =>
+          val binding = state.movementSignals.find(b => b.incomingLinkId == m.incomingLinkId && b.outgoingLinkId == m.outgoingLinkId)
+          val raw = signalFor(m.incomingLinkId, m.outgoingLinkId, m.incomingLane).map(_.state).getOrElse(Green)
+          getLinkDependencyFn(m.incomingLinkId).foreach { dep =>
+            sendMessageFn(dep.entityId, dep.classType,
+              LinkSignalStateData(effectiveAspect(m.incomingLinkId, m.outgoingLinkId, raw), currentTickFn(), Some(m.outgoingLinkId),
+                binding.map(_.laneIds).getOrElse(m.incomingLane.toList)),
+              EventTypeEnum.LinkSignalState.toString)
+          }
+        }
+      }
+    }
+
+  private def refreshPermissions(): Unit = state.conflicts.flatMap(r => List(r.connectorA, r.connectorB)).distinct.sorted.foreach(refreshPermission)
+
   /** A priority movement turning Red (or Green) changes what its yielding movements may do: re-evaluate their waiters. */
-  private def drainYieldersOfOrigin(origin: Long): Unit =
+  private def drainYieldersOfOrigin(origin: Long): Unit = {
+    refreshPermissions()
     state.movementSignals.filter(_.origin == origin).flatMap { binding =>
       state.junctionMovements.filter(m => m.incomingLinkId == binding.incomingLinkId && m.outgoingLinkId == binding.outgoingLinkId)
     }.map(_.connectorLinkId).distinct.foreach { priority =>
@@ -312,6 +356,7 @@ class NodeEventHandler(
         if (state.capacityWaitQueue.get(yielding).exists(_.nonEmpty)) drainConflictGroup(yielding)
       }
     }
+  }
 
   /** A published observation can only improve or worsen a gap; re-evaluate every waiter it concerns. */
   def handleBoundaryUpdate(source: Long, snapshot: MicroBoundarySnapshot): Unit =
@@ -324,6 +369,7 @@ class NodeEventHandler(
         Option.when(priorityMovement(rule.priorityConnector.get).exists(_.incomingLinkId == source))(yielding)
       }.distinct.sorted
       concerned.foreach(c => if (state.capacityWaitQueue.get(c).exists(_.nonEmpty)) drainConflictGroup(c))
+      refreshPermissions()
     }
 
   /** Grants waiting requests across a connector and the connectors it conflicts with, one at a
@@ -394,7 +440,7 @@ class NodeEventHandler(
         movements.groupBy(_._1.incomingLinkId).toVector.sortBy(_._1).foreach { case (link,entries) =>
           val updates = entries.map { case (movement,change) =>
             model.hybrid.entity.event.data.signal.MovementAspectUpdate(movement.outgoingLinkId,movement.laneIds,
-              change.signalState.state,change.nextTick)
+              effectiveAspect(movement.incomingLinkId, movement.outgoingLinkId, change.signalState.state),change.nextTick)
           }
           val head=updates.head
           getLinkDependencyFn(link).foreach { dep =>
@@ -421,7 +467,7 @@ class NodeEventHandler(
       state.movementSignals.filter(_.origin == data.phaseOrigin).foreach { movement =>
         getLinkDependencyFn(movement.incomingLinkId).foreach { dep =>
           sendMessageFn(dep.entityId,dep.classType,
-            LinkSignalStateData(data.signalState.state,data.nextTick,Some(movement.outgoingLinkId),movement.laneIds),
+            LinkSignalStateData(effectiveAspect(movement.incomingLinkId, movement.outgoingLinkId, data.signalState.state),data.nextTick,Some(movement.outgoingLinkId),movement.laneIds),
             EventTypeEnum.LinkSignalState.toString)
         }
         if (data.signalState.state == Green || data.signalState.state == TrafficSignalPhaseStateEnum.Off) {

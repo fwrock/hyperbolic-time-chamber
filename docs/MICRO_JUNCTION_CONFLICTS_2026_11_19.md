@@ -134,3 +134,14 @@ momento da avaliação; um veículo prioritário que já cruzou no amarelo conti
 (`occupiedConnectors` do conector que cede) soma `followUpSeconds` à brecha crítica exigida do próximo. Com 0 uma única brecha libera a fila inteira (o limite documentado antes);
 com valor positivo o k-ésimo seguidor exige `crítica + k × seguimento`. Dois testes novos em `JunctionConflictSpec` (a observação que libera o seguidor precisa ser estritamente
 anterior ao tick de decisão, como em todo o G05). O valor de `followUpSeconds` não tem fonte empírica nesta rodada; fica 0 nos cenários dos relatórios, e o parâmetro existe para estudo de sensibilidade.
+
+
+## Frenagem antecipada (opt-in `publishPermission`)
+
+Antes, o veículo que cede só descobria que não podia entrar ao chegar ao fim do Link (parava na linha de forma geométrica, não por frenagem). Com `GapAcceptance.publishPermission = true`, o Node avisa a via de
+aproximação, **somente quando a permissão muda**, se um veículo que chegasse agora seria liberado (nenhum conector conflitante ocupado e a brecha aceita). O aviso usa o mesmo caminho do sinal
+(`LinkSignalStateData` com o destino e as faixas do movimento), com o aspecto **Vermelho** quando negado, e o aspecto do próprio sinal do movimento quando permitido; as publicações de sinal do Node passam a vir já combinadas
+com a permissão (E lógico), para que o sinal verde não desfaça uma negação. A permissão é reavaliada quando chega uma observação, quando a ocupação de um conector muda e quando um movimento prioritário muda de sinal.
+
+**Custo:** padrão desligado (nenhuma mudança onde não for pedido). Ligado, há uma mensagem Node-Link por mudança de permissão de um movimento que cede (não por tick); nenhum uso do Time Manager. **Limite:** a permissão é "agora" e
+não prevê a chegada do veículo prioritário durante a frenagem; a decisão final de entrada continua no pedido de acesso. Dois testes em `JunctionConflictSpec` (publicação só na mudança, E lógico com o sinal próprio, desligado por padrão).

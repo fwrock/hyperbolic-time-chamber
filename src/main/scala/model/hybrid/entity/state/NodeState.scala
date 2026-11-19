@@ -57,7 +57,9 @@ case class NodeState(
   @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[model.MicroBoundaryHistory])
   boundaryObservations: mutable.Map[Long, model.MicroBoundaryHistory] = mutable.Map.empty,
   @JsonDeserialize(contentAs = classOf[java.lang.Long])
-  var observationsRequested: List[Long] = Nil
+  var observationsRequested: List[Long] = Nil,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Boolean])
+  publishedPermission: mutable.Map[Long, Boolean] = mutable.Map.empty
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,

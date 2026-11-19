@@ -18,10 +18,13 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize
   * @param criticalGapSeconds  minimum time the yielding vehicle needs ahead of a priority arrival (s)
   * @param conflictOffsetM     distance from the priority approach stop line to the conflict point, along its connector (m)
   * @param assumedAccelerationMps2 acceleration assumed for a priority vehicle when estimating its earliest arrival (m/s^2)
+  * @param publishPermission when true the Node tells the yielding approach Link, only when it changes, whether a vehicle arriving now would be granted
+  *                          (as a Red/aspect for that movement, ANDed with the movement's own signal), so the approach brakes before the line
   * @param followUpSeconds extra gap required for each vehicle of the yielding movement already admitted and not yet released (0 = one gap releases a whole queue)
   */
 final case class GapAcceptance(criticalGapSeconds: Double, conflictOffsetM: Double,
-                               assumedAccelerationMps2: Double = 2.6, followUpSeconds: Double = 0.0) {
+                               assumedAccelerationMps2: Double = 2.6, followUpSeconds: Double = 0.0,
+                               publishPermission: Boolean = false) {
   require(followUpSeconds.isFinite && followUpSeconds >= 0, "invalid follow-up gap")
   require(criticalGapSeconds.isFinite && criticalGapSeconds > 0, "invalid critical gap")
   require(conflictOffsetM.isFinite && conflictOffsetM >= 0, "invalid conflict offset")

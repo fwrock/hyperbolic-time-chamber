@@ -3,7 +3,7 @@ package model.hybrid.support.node
 
 import core.entity.event.ActorInteractionEvent
 import core.util.JsonUtil
-import model.hybrid.entity.event.data.link.{LinkCapacityFreedData, SubscribeMicroBoundaryData}
+import model.hybrid.entity.event.data.link.{LinkCapacityFreedData, LinkSignalStateData, SubscribeMicroBoundaryData}
 import model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
 import model.hybrid.entity.event.node.LinkAccessData
 import model.hybrid.entity.state.NodeState
@@ -29,9 +29,10 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
     var tick = 1L
     val raw = mutable.Buffer.empty[(Long, AnyRef)]
     def sent = raw.collect { case (id, a: LinkAccessData) => (id, a) }
+    def aspects = raw.collect { case (id, d: LinkSignalStateData) => (id, d.phase, d.targetLinkId) }.toList
     def subscriptions = raw.collect { case (id, _: SubscribeMicroBoundaryData) => id }.toList
     val handler = new NodeEventHandler(() => s, () => "9", () => tick, mutable.Map.empty, (_, _) => (),
-      (id, _, d, _) => { raw += ((id, d)); () }, _ => None, _ => (), _ => ())
+      (id, _, d, _) => { raw += ((id, d)); () }, id => Some(core.entity.actor.ShardActorId(id, "hybrid.actor.Link")), _ => (), _ => ())
     def event(id: Long, seq: Long) = ActorInteractionEvent(tick, tick, id, "hybrid.actor.Car", id.toString,
       "hybrid.actor.Car", data = "unused", resourceId = "test", seq = seq)
     def request(vehicle: Long, approach: Long, target: Long): Unit =
@@ -217,5 +218,34 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
   it should "keep one gap per queue when the follow-up is zero (previous behaviour) and reject a negative value" in {
     an[IllegalArgumentException] should be thrownBy GapAcceptance(3.0, 10.0, followUpSeconds = -1.0)
     GapAcceptance(3.0, 10.0).followUpSeconds shouldBe 0.0
+  }
+
+  "Published permission (anticipatory braking)" should "tell the yielding approach, only on change, whether a vehicle arriving now would be granted" in {
+    val rule = List(JunctionConflict(20, 30, Some(30), "test-rule", Some(GapAcceptance(3.0, 10.0, publishPermission = true))))
+    val h = new Harness(node(rule))
+    h.tick = 3; h.handler.handleRegisterLinkCapacity(model.hybrid.entity.event.data.link.RegisterLinkCapacityData(20, 5)) // no-op for aspects
+    h.request(11, 1, 2) // subscribes to the priority approach; no observation yet: unknown, so not granted
+    h.tick = 4; h.handler.handleBoundaryUpdate(3, snapshot(3, near))
+    h.aspects shouldBe List((1L, Red, Some(2L))) // a priority vehicle is about to arrive: the yielding approach must stop at the line
+    h.tick = 5; h.handler.handleBoundaryUpdate(3, snapshot(3, near)) // same situation: no repeated publication
+    h.aspects should have size 1
+    h.tick = 6; h.handler.handleBoundaryUpdate(3, snapshot(5, None)) // the road is clear
+    h.aspects.last shouldBe ((1L, Green, Some(2L)))
+    h.aspects should have size 2
+  }
+
+  it should "AND the permission with the movement's own signal and stay off unless enabled" in {
+    val rule = List(JunctionConflict(20, 30, Some(30), "test-rule", Some(GapAcceptance(3.0, 10.0, publishPermission = true))))
+    val withSignal = node(rule).copy(movementSignals = List(MovementSignalBinding(1, 2, 801)))
+    withSignal.signals(801L) = SignalState(Green, 10, 100)
+    val h = new Harness(withSignal)
+    h.tick = 3; h.request(11, 1, 2)
+    h.tick = 4; h.handler.handleBoundaryUpdate(3, snapshot(3, near))
+    h.aspects.last._2 shouldBe Red
+    h.handler.handleReceiveSignalChangeStatus(h.event(801, 801), TrafficSignalChangeStatusData(SignalState(Green, 20, 300), 300, 801))
+    h.aspects.last._2 shouldBe Red // own signal Green but the conflict forbids it: the approach still sees Red
+    val off = new Harness(node(gapRule)) // publishPermission defaults to false
+    off.tick = 3; off.request(11, 1, 2); off.tick = 4; off.handler.handleBoundaryUpdate(3, snapshot(3, near))
+    off.aspects shouldBe empty
   }
 }
