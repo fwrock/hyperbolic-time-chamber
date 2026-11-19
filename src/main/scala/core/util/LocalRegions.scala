@@ -43,6 +43,8 @@ object LocalRegions {
         sender() ! ShardRegion.StartEntityAck(start.entityId, LocalShardId)
       case EntityEnvelopeEvent(id, payload) =>
         entity(id).forward(payload)
+      case ShardRegion.Passivate(stopMessage) =>
+        sender() ! stopMessage
     }
   }
 }

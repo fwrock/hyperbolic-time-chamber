@@ -57,6 +57,10 @@ object HyperbolicTimeChamber {
 
     val baseConfig = ConfigFactory.load()
     val runtimeMode = RuntimeMode.from(baseConfig)
+    require(
+      runtimeMode == RuntimeMode.Cluster || !baseConfig.getBoolean("htc.load-balance-manager.enabled"),
+      "htc.runtime.mode=single-node has no second node to balance to; set htc.load-balance-manager.enabled=false"
+    )
     // A single-node run is a one-member cluster that joins itself; the Cluster extension stays
     // so existing membership readers keep working, but no peer or seed node is ever contacted.
     val system = runtimeMode match {
@@ -120,7 +124,8 @@ object HyperbolicTimeChamber {
         throw error
     }
 
-    actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)
+    if (runtimeMode == RuntimeMode.Cluster)
+      actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)
 
     val simulation = util.ActorCreatorUtil.createSingletonManager(
       system = system,

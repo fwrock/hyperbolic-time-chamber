@@ -51,6 +51,25 @@ class LocalRegionsSpec extends TestKit(ActorSystem("LocalRegionsSpec",
     expectMsg(3.seconds, ("", "a%2Fb", "y"))
   }
 
+  it should "answer Passivate by sending the stop message back so the entity stops" in {
+    val region = LocalRegions.getOrCreate(system, "model.D", Props(new Actor {
+      override def receive: Receive = {
+        case "passivate" => context.parent ! ShardRegion.Passivate("stop")
+        case "stop"      => context.stop(self)
+      }
+    }))
+    region ! EntityEnvelopeEvent("p1", "passivate")
+    awaitAssert(
+      {
+        val probe = org.apache.pekko.testkit.TestProbe()
+        system.actorSelection(region.path / "p1").tell(org.apache.pekko.actor.Identify(1), probe.ref)
+        probe.expectMsgType[org.apache.pekko.actor.ActorIdentity](1.second).ref shouldBe None
+      },
+      5.seconds,
+      100.millis
+    )
+  }
+
   "getShardRef" should "fail clearly for a type that was never started" in {
     an[IllegalStateException] should be thrownBy DistributedUtil.getShardRef("model.Missing", system)
   }
