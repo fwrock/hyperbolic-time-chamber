@@ -255,7 +255,7 @@ class NodeEventHandler(
             val theirs = (p.requestedTick, p.actorRefId, p.requestSeq)
             otherWins || (rule.priorityConnector.isEmpty && Ordering[(Long, Long, Long)].lt(theirs, mine))
           }) ||
-          (otherWins && rule.gapAcceptance.exists(gap => !gapAccepted(other, gap)))
+          (otherWins && rule.gapAcceptance.exists(gap => !gapAccepted(other, gap, state.occupiedConnectors.getOrElse(c, 0))))
       }
     }
 
@@ -283,7 +283,7 @@ class NodeEventHandler(
     * is credited to the approaching vehicle. A vehicle already waiting at the stop line is not a gap
     * threat: its request is ordered by the queue and excluded by occupancy.
     */
-  private def gapAccepted(priority: Long, gap: model.hybrid.entity.state.model.GapAcceptance): Boolean =
+  private def gapAccepted(priority: Long, gap: model.hybrid.entity.state.model.GapAcceptance, alreadyAdmitted: Int = 0): Boolean =
     priorityMovement(priority).exists { movement =>
       // A priority movement that currently shows Red cannot send a vehicle into the conflict: its approach is no gap threat.
       // Yellow still counts (a vehicle may cross); an unknown aspect is treated as a threat.
@@ -298,7 +298,7 @@ class NodeEventHandler(
             val distance = math.max(0.0, snapshot.length - v.position) + gap.conflictOffsetM
             val a = gap.assumedAccelerationMps2
             val arrival = (-v.velocity + math.sqrt(v.velocity * v.velocity + 2 * a * distance)) / a
-            arrival - elapsed >= gap.criticalGapSeconds
+            arrival - elapsed >= gap.criticalGapSeconds + gap.followUpSeconds * alreadyAdmitted
           }
       }
     }

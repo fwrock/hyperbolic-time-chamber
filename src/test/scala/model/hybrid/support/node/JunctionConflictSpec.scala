@@ -200,4 +200,22 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
     h.tick = 4; h.request(13, 1, 2)
     h.waits should contain(13L) // now green with a near vehicle: unknown/near means wait
   }
+
+  "Follow-up gap" should "require a larger gap for each vehicle of the yielding movement already admitted" in {
+    val rule = List(JunctionConflict(20, 30, Some(30), "test-rule", Some(GapAcceptance(3.0, 10.0, followUpSeconds = 2.0))))
+    val h = new Harness(node(rule))
+    h.tick = 2; h.request(11, 1, 2); h.request(12, 1, 2)
+    h.tick = 4 // a priority vehicle about 4 s away at the snapshot
+    h.handler.handleBoundaryUpdate(3, snapshot(3, Some(MicroBoundaryVehicle(80, 49.2, 10.0, 4.5))))
+    h.grants.map(_._1) shouldBe List(11L) // 3.9 s >= 3.0 for the first, but the second needs 3.0 + 2.0 = 5.0 s
+    h.waits should contain(12L)
+    h.tick = 5 // the clear road was observed at tick 4: only an observation strictly before the decision tick counts
+    h.handler.handleBoundaryUpdate(3, snapshot(4, None)) // the road clears: the follower may go
+    h.grants.map(_._1) shouldBe List(11L, 12L)
+  }
+
+  it should "keep one gap per queue when the follow-up is zero (previous behaviour) and reject a negative value" in {
+    an[IllegalArgumentException] should be thrownBy GapAcceptance(3.0, 10.0, followUpSeconds = -1.0)
+    GapAcceptance(3.0, 10.0).followUpSeconds shouldBe 0.0
+  }
 }

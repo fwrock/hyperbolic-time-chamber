@@ -126,3 +126,11 @@ Para esquerdas permissivas contra um movimento prioritário com sinal, o G05 ori
 aproximação não é ameaça de brecha**; Amarelo continua contando, e aspecto desconhecido é tratado como ameaça. Quando o sinal do movimento prioritário muda,
 os pedidos que cedem a ele são reavaliados (`drainYieldersOfOrigin`). Dois testes novos em `JunctionConflictSpec`. Limite: a decisão usa o aspecto do Node no
 momento da avaliação; um veículo prioritário que já cruzou no amarelo continua sendo contabilizado pela ocupação do conector.
+
+
+## Ajuste posterior (mesmo dia): brecha de seguimento para pelotões
+
+`GapAcceptance.followUpSeconds` (padrão 0, sem mudar o comportamento anterior): cada veículo do movimento que cede já admitido e ainda não liberado
+(`occupiedConnectors` do conector que cede) soma `followUpSeconds` à brecha crítica exigida do próximo. Com 0 uma única brecha libera a fila inteira (o limite documentado antes);
+com valor positivo o k-ésimo seguidor exige `crítica + k × seguimento`. Dois testes novos em `JunctionConflictSpec` (a observação que libera o seguidor precisa ser estritamente
+anterior ao tick de decisão, como em todo o G05). O valor de `followUpSeconds` não tem fonte empírica nesta rodada; fica 0 nos cenários dos relatórios, e o parâmetro existe para estudo de sensibilidade.
