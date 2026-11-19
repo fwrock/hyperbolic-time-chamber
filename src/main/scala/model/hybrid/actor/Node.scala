@@ -67,7 +67,8 @@ class Node(
       CityMapUtil.edgeLabelsById.get(linkId)
         .map(e => ShardActorId(entityId = e.id.toLong, classType = e.classType, shardBucket = e.resourceId)),
     logWarnFn           = logWarn,
-    logDebugFn          = logDebug
+    logDebugFn          = logDebug,
+    scheduleFn          = tick => scheduleEvent(tick)
   )
 
   override def onInitialize(event: InitializeEvent): Unit = {
@@ -84,8 +85,10 @@ class Node(
     }
   }
 
-  override protected def actSpontaneous(event: SpontaneousEvent): Unit =
+  override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
+    nodeHandler.onDecisionTick()
     onFinishSpontaneous(None)
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {

@@ -8,6 +8,10 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize
   * Occupancy of either connector excludes the other. When both are requested, `priorityConnector`
   * decides; with no priority the older request wins (tick, vehicle id, request sequence). The rule
   * must name its source: priority is never deduced from the numeric order of IDs.
+  *
+  * With `decisionBatching` the Node decides the requests of this conflict only at the start of the next tick, over the set of requests received up to the
+  * previous tick, ordered deterministically; the result then does not depend on the order in which same-tick requests arrive, at the cost of one tick of
+  * latency for the conflicted movements (default off).
   */
 /** Causal gap acceptance for the yielding connector of a conflict (G05).
   *
@@ -37,7 +41,8 @@ final case class JunctionConflict(
   @JsonDeserialize(contentAs = classOf[java.lang.Long])
   priorityConnector: Option[Long] = None,
   source: String = "",
-  gapAcceptance: Option[GapAcceptance] = None
+  gapAcceptance: Option[GapAcceptance] = None,
+  decisionBatching: Boolean = false
 ) {
   require(gapAcceptance.isEmpty || priorityConnector.nonEmpty, "gap acceptance needs a priority connector")
   require(connectorA != connectorB, "a connector cannot conflict with itself")

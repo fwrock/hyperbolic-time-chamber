@@ -28,11 +28,12 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
   private class Harness(var s: NodeState) {
     var tick = 1L
     val raw = mutable.Buffer.empty[(Long, AnyRef)]
+    val scheduled = mutable.Buffer.empty[Long]
     def sent = raw.collect { case (id, a: LinkAccessData) => (id, a) }
     def aspects = raw.collect { case (id, d: LinkSignalStateData) => (id, d.phase, d.targetLinkId) }.toList
     def subscriptions = raw.collect { case (id, _: SubscribeMicroBoundaryData) => id }.toList
     val handler = new NodeEventHandler(() => s, () => "9", () => tick, mutable.Map.empty, (_, _) => (),
-      (id, _, d, _) => { raw += ((id, d)); () }, id => Some(core.entity.actor.ShardActorId(id, "hybrid.actor.Link")), _ => (), _ => ())
+      (id, _, d, _) => { raw += ((id, d)); () }, id => Some(core.entity.actor.ShardActorId(id, "hybrid.actor.Link")), _ => (), _ => (), t => { scheduled += t; () })
     def event(id: Long, seq: Long) = ActorInteractionEvent(tick, tick, id, "hybrid.actor.Car", id.toString,
       "hybrid.actor.Car", data = "unused", resourceId = "test", seq = seq)
     def request(vehicle: Long, approach: Long, target: Long): Unit =
@@ -247,5 +248,47 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
     val off = new Harness(node(gapRule)) // publishPermission defaults to false
     off.tick = 3; off.request(11, 1, 2); off.tick = 4; off.handler.handleBoundaryUpdate(3, snapshot(3, near))
     off.aspects shouldBe empty
+  }
+
+  "Batched decisions" should "not depend on the order in which same-tick requests arrive" in {
+    val batch = List(JunctionConflict(20, 30, Some(30), "test-rule", None, decisionBatching = true))
+    def run(order: List[(Long, Long, Long)], rules: List[JunctionConflict]) = {
+      val h = new Harness(node(rules)); h.tick = 5
+      order.foreach { case (vehicle, approach, target) => h.request(vehicle, approach, target) }
+      h.tick = 6; h.handler.onDecisionTick()
+      h
+    }
+    val a = (11L, 1L, 2L) // yielding movement
+    val b = (12L, 3L, 4L) // priority movement
+    val first = run(List(a, b), batch); val second = run(List(b, a), batch)
+    first.grants shouldBe List((12L, 30L)) // the priority request wins whatever the arrival order
+    second.grants shouldBe first.grants
+    first.scheduled.toList shouldBe List(6L) // one wake-up for the tick, not one per request
+    // the same two orders without batching are order dependent: the first arrival wins
+    val u1 = run(List(a, b), priority30); val u2 = run(List(b, a), priority30)
+    u1.grants.map(_._1) should not be u2.grants.map(_._1)
+  }
+
+  it should "leave out requests that arrive at the decision tick itself" in {
+    val batch = List(JunctionConflict(20, 30, Some(30), "test-rule", None, decisionBatching = true))
+    val h = new Harness(node(batch))
+    h.tick = 5; h.request(11, 1, 2)
+    h.tick = 6; h.request(12, 3, 4) // arrives at the tick of the decision: it is not part of that decision
+    h.handler.onDecisionTick()
+    h.grants shouldBe List((11L, 20L))
+    h.tick = 7; h.free(20); h.handler.onDecisionTick()
+    h.grants shouldBe List((11L, 20L), (12L, 30L))
+  }
+
+  it should "survive a checkpoint with its scheduled decision and keep other connectors immediate" in {
+    val batch = List(JunctionConflict(20, 30, Some(30), "test-rule", None, decisionBatching = true))
+    val h = new Harness(node(batch)); h.tick = 5; h.request(11, 1, 2)
+    val restored = JsonUtil.fromJson[NodeState](JsonUtil.toJson(h.s))
+    restored.decisionScheduledFor shouldBe 6L
+    restored.conflicts.head.decisionBatching shouldBe true
+    val h2 = new Harness(restored); h2.tick = 6; h2.handler.onDecisionTick()
+    h2.grants shouldBe List((11L, 20L))
+    val h3 = new Harness(node(batch)); h3.tick = 5; h3.request(14, 5, 6) // connector 40 has no rule: granted at once
+    h3.grants shouldBe List((14L, 40L))
   }
 }

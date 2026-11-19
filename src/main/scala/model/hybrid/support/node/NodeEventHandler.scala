@@ -26,10 +26,25 @@ class NodeEventHandler(
   sendMessageFn: (Long, String, AnyRef, String) => Unit,
   getLinkDependencyFn: Long => Option[ShardActorId],
   logWarnFn:           String => Unit,
-  logDebugFn:          String => Unit
+  logDebugFn:          String => Unit,
+  scheduleFn:          Tick => Unit = _ => ()
 ) {
 
   private def state: NodeState = getStateFn()
+
+  /** True only while the Node runs its batched decision for the current tick. */
+  private var deciding = false
+
+  private def batched(c: Long): Boolean = state.conflicts.exists(r => r.involves(c) && r.decisionBatching)
+
+  /** Ask for a decision at the next tick; at most one wake-up per tick (checkpointed, so a restored Node does not repeat it). */
+  private def requestDecision(): Unit = {
+    val t = currentTickFn() + 1
+    if (state.decisionScheduledFor < t) {
+      state.decisionScheduledFor = t
+      scheduleFn(t)
+    }
+  }
 
   private def signalFor(approach: Long,target: Long,lane: Option[Int]): Option[SignalState] = {
     val bindings = state.movementSignals.filter(m => m.incomingLinkId == approach && m.outgoingLinkId == target &&
@@ -194,7 +209,8 @@ class NodeEventHandler(
     val hasCapacity = !capacityKnown || state.availableCapacity(admissionLinkId) > 0
     val key = (currentTickFn(), event.actorRefId, event.seq)
     junction.foreach(j => ensureObserved(j.linkId))
-    if (hasCapacity && !conflictBlocked(junction.map(_.linkId), key)) {
+    val batchedNow = junction.exists(j => batched(j.linkId))
+    if (hasCapacity && !batchedNow && !conflictBlocked(junction.map(_.linkId), key)) {
       if (capacityKnown) state.availableCapacity(admissionLinkId) -= 1
       sendGrant(event.actorRefId, event.shardRefId, event.seq, data.targetLinkId, junction,movement.flatMap(_.outgoingLane))
     } else {
@@ -204,6 +220,7 @@ class NodeEventHandler(
           targetLinkId = if (junction.nonEmpty) data.targetLinkId else 0L, junctionLink = junction,
           outgoingLane=movement.flatMap(_.outgoingLane),approachLinkId=data.approachLinkId,approachLane=data.approachLane,
           requestedTick=currentTickFn()))
+      if (batchedNow) requestDecision()
       sendMessageFn(event.actorRefId, event.shardRefId,
         LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Full,
           requestSeq = event.seq), EventTypeEnum.ReceiveLinkAccess.toString)
@@ -255,8 +272,9 @@ class NodeEventHandler(
         val otherWins = rule.priorityConnector.contains(other)
         state.occupiedConnectors.getOrElse(other, 0) > 0 ||
           state.capacityWaitQueue.get(other).exists(_.exists { p =>
+            (!deciding || p.requestedTick < currentTickFn()) && {
             val theirs = (p.requestedTick, p.actorRefId, p.requestSeq)
-            otherWins || (rule.priorityConnector.isEmpty && Ordering[(Long, Long, Long)].lt(theirs, mine))
+            otherWins || (rule.priorityConnector.isEmpty && Ordering[(Long, Long, Long)].lt(theirs, mine)) }
           }) ||
           (otherWins && rule.gapAcceptance.exists(gap => !gapAccepted(other, gap, state.occupiedConnectors.getOrElse(c, 0))))
       }
@@ -346,6 +364,16 @@ class NodeEventHandler(
 
   private def refreshPermissions(): Unit = state.conflicts.flatMap(r => List(r.connectorA, r.connectorB)).distinct.sorted.foreach(refreshPermission)
 
+  /** Batched decision (opt-in): grants over the requests received before this tick, in deterministic order, then refreshes the published permissions. */
+  def onDecisionTick(): Unit =
+    if (state != null) {
+      deciding = true
+      try state.conflicts.filter(_.decisionBatching).flatMap(r => List(r.connectorA, r.connectorB)).distinct.sorted.foreach { c =>
+        if (state.capacityWaitQueue.get(c).exists(_.nonEmpty)) drainConflictGroup(c)
+      } finally deciding = false
+      refreshPermissions()
+    }
+
   /** A priority movement turning Red (or Green) changes what its yielding movements may do: re-evaluate their waiters. */
   private def drainYieldersOfOrigin(origin: Long): Unit = {
     refreshPermissions()
@@ -378,6 +406,7 @@ class NodeEventHandler(
     * single-queue drain.
     */
   private def drainConflictGroup(connector: Long): Unit = {
+    if (!deciding && batched(connector)) { requestDecision(); return }
     val group = (connector :: state.conflicts.filter(_.involves(connector)).map(_.other(connector))).distinct
     var progressed = true
     while (progressed) {
@@ -386,6 +415,7 @@ class NodeEventHandler(
         state.capacityWaitQueue.get(c).flatMap(_.headOption).map(p => (c, p))
       }.filter { case (c, p) =>
         val target = if (p.targetLinkId == 0L) c else p.targetLinkId
+        (!deciding || p.requestedTick < currentTickFn()) &&
         state.availableCapacity.getOrElse(c, 0) > 0 &&
           (p.signalAlreadyCleared || signalFor(p.approachLinkId, target, p.approachLane)
             .forall(s => s.state == Green || s.state == TrafficSignalPhaseStateEnum.Off)) &&

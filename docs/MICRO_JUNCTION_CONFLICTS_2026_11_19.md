@@ -145,3 +145,14 @@ com a permissão (E lógico), para que o sinal verde não desfaça uma negação
 
 **Custo:** padrão desligado (nenhuma mudança onde não for pedido). Ligado, há uma mensagem Node-Link por mudança de permissão de um movimento que cede (não por tick); nenhum uso do Time Manager. **Limite:** a permissão é "agora" e
 não prevê a chegada do veículo prioritário durante a frenagem; a decisão final de entrada continua no pedido de acesso. Dois testes em `JunctionConflictSpec` (publicação só na mudança, E lógico com o sinal próprio, desligado por padrão).
+
+
+## Desempate de pedidos no mesmo tick (opt-in `decisionBatching`)
+
+Sem esta opção, o primeiro pedido que chega ao Node no tick é decidido na hora, então dois pedidos do mesmo tick dão resultados diferentes conforme a ordem de entrega (o teste `Batched decisions` mostra os dois casos). Com
+`JunctionConflict.decisionBatching = true`, os pedidos das conexões dessa regra são **sempre guardados** (resposta de espera imediata, como na fila de capacidade) e o Node agenda **um único acordar no tick seguinte**; nesse tick (`onDecisionTick`) ele
+decide sobre o conjunto dos pedidos recebidos **até o tick anterior**, em ordem determinística (prioridade, depois idade, identidade e sequência), reavaliando a ocupação a cada concessão. Pedidos que chegam no próprio tick da decisão não participam dela. Observações,
+mudanças de ocupação e de sinal não concedem na hora: só pedem o acordar do tick seguinte. Resultado: a decisão não depende da ordem de entrega dos pedidos do mesmo tick.
+
+**Custo:** padrão desligado. Ligado, há no máximo um evento próprio do Node por tick com pedidos em conflito pendentes (o mesmo mecanismo de agendamento que os Links já usam), nenhuma mensagem nova entre atores, e **um tick (0,1 s) de latência** nas concessões dos movimentos em conflito. Três testes novos em
+`JunctionConflictSpec` (independência da ordem, pedido no tick da decisão fora do conjunto, checkpoint com a decisão agendada e conector sem regra imediato). **Não** foi avaliado em execução de ponta a ponta nesta rodada; só em unidade.
