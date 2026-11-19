@@ -152,7 +152,8 @@ class TravelTimeModeChoiceStrategy extends ModeChoiceStrategy {
               case _            => 0.0
             }
             
-            GPSUtil.calcRouteCompact(originNodeId, destinationNodeId) map { case (dynamicCost, routeQueue) =>
+            GPSUtil.calcRouteCompact(originNodeId, destinationNodeId,
+              useDynamicWeights = model.hybrid.util.MesoTrafficConfig.useDynamicWeights(mode)) map { case (dynamicCost, routeQueue) =>
               val travelTimeS = dynamicCost / typicalSpeedMs
               val score = weights.betaMode * modePref - weights.betaTravelTime * travelTimeS
               (ArrivalLogistics(mode = mode, vehicle = Some(vehicleRef), precomputedRoute = Some(routeQueue.toList)), score)

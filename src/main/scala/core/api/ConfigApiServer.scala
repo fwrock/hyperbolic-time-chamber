@@ -29,13 +29,8 @@ object ConfigApiServer {
   private val logger = LoggerFactory.getLogger(getClass)
 
   def start(system: ActorSystem): Unit = {
-    val apiEnabled = sys.env
-      .getOrElse(
-        "HTC_API_ENABLED",
-        try system.settings.config.getString("htc.api.enabled")
-        catch { case _: Exception => "false" }
-      )
-      .equalsIgnoreCase("true")
+    val config = SimulatorSettingsRegistry.overlay(system.settings.config)
+    val apiEnabled = config.getBoolean("htc.api.enabled")
 
     SimulationController.initialize(system, apiEnabled)
 
@@ -46,31 +41,14 @@ object ConfigApiServer {
       return
     }
 
-    val port = sys.env
-      .get("HTC_API_PORT")
-      .flatMap(_.toIntOption)
-      .getOrElse(
-        try system.settings.config.getInt("htc.api.port")
-        catch { case _: Exception => 8080 }
-      )
+    val port = config.getInt("htc.api.port")
 
     implicit val actorSystem: ActorSystem = system
     implicit val mat: Materializer = Materializer(system)
     implicit val ec = system.dispatcher
 
-    val allowedOrigins = sys.env
-      .getOrElse(
-        "HTC_API_CORS_ORIGINS",
-        try system.settings.config.getString("htc.api.cors-origins")
-        catch { case _: Exception => "*" }
-      )
-
-    val scenariosDir = sys.env
-      .getOrElse(
-        "HTC_SCENARIOS_DIR",
-        try system.settings.config.getString("htc.api.scenarios-dir")
-        catch { case _: Exception => "/app/simulations" }
-      )
+    val allowedOrigins = config.getString("htc.api.cors-origins")
+    val scenariosDir = config.getString("htc.api.scenarios-dir")
 
     ScenarioRegistry.configure(scenariosDir)
 

@@ -5,7 +5,7 @@ import core.types.Tick
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.state.MotorcycleState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{ Finished, Moving, Parked }
-import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
+import org.interscity.htc.model.hybrid.util.SpeedUtil.linkEntryDensitySpeed
 
 class MotorcycleLinkHandler(
   reportFn:                (Map[String, Any], String) => Unit,
@@ -32,7 +32,7 @@ class MotorcycleLinkHandler(
 
   def handleEnterLink(linkId: Long, data: LinkInfoData, state: MotorcycleState): Unit = {
     consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
-    val baseSpeed       = linkDensitySpeed(
+    val baseSpeed       = linkEntryDensitySpeed(
       length        = data.linkLength,
       capacity      = data.linkCapacity,
       numberOfCars  = data.linkNumberOfCars,
@@ -67,7 +67,7 @@ class MotorcycleLinkHandler(
       ),
       "enter_link"
     )
-    val exitTick = currentTickFn() + Math.ceil(time).toLong
+    val exitTick = model.hybrid.support.car.MesoLinkTiming.exitTick(currentTickFn(), time, originAtEnd = false, carry = model.hybrid.util.VehicleSimulationConfig.mesoCarryRounding, state)
     setMesoExitTickFn(Some(exitTick))
     onFinishSpontaneousFn(Some(exitTick))
   }
@@ -113,7 +113,7 @@ class MotorcycleLinkHandler(
       onFinishSpontaneousFn(None)
       if (!isPersonCentricFn()) selfDestructFn()
     } else {
-      onFinishSpontaneousFn(Some(currentTickFn() + 1))
+      onFinishSpontaneousFn(Some(if (model.hybrid.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) currentTickFn() else currentTickFn() + 1))
     }
   }
 }

@@ -5,7 +5,7 @@ import core.types.Tick
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.state.BusState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{Finished, Moving}
-import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
+import org.interscity.htc.model.hybrid.util.SpeedUtil.linkEntryDensitySpeed
 
 /** Handles MESO link enter/leave events for Bus actors.
   *
@@ -43,7 +43,7 @@ class BusLinkHandler(
     // CarLinkHandler.handleEnterLink), so always safe to consume once received.
     consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
 
-    val speed = linkDensitySpeed(
+    val speed = linkEntryDensitySpeed(
       length       = data.linkLength,
       capacity     = data.linkCapacity,
       numberOfCars = data.linkNumberOfCars,
@@ -79,7 +79,8 @@ class BusLinkHandler(
       "enter_link"
     )
 
-    val exitTick = tick + time.toLong
+    // Legacy truncated the traversal time; with carried rounding the exit follows the continuous time (at least one tick).
+    val exitTick = if (model.hybrid.util.VehicleSimulationConfig.mesoCarryRounding) model.hybrid.support.car.MesoLinkTiming.exitTick(tick, time, originAtEnd = false, carry = true, state.journey) else tick + time.toLong
     setMesoExitTickFn(Some(exitTick))
     onFinishSpontaneousFn(Some(exitTick))
   }
@@ -131,7 +132,7 @@ class BusLinkHandler(
       finishJourneyFn("reached_destination", state.destination)
       onFinishDestructFn()
     } else {
-      onFinishSpontaneousFn(Some(tick + 1))
+      onFinishSpontaneousFn(Some(if (model.hybrid.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) tick else tick + 1))
     }
   }
 }

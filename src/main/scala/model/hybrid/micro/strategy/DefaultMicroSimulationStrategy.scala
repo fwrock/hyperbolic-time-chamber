@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.hybrid.micro.strategy
 
 import core.types.Tick
-import model.hybrid.entity.state.model.VehicleInLane
+import model.hybrid.entity.state.model.{LaneConnectionIndex, VehicleInLane}
 import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
 import model.hybrid.micro.model.{ CarFollowingModel, KraussModel }
@@ -66,20 +66,22 @@ class DefaultMicroSimulationStrategy(
     laneRestrictions: Map[Int,String] = Map.empty,
     movementSignals: Map[(Long,Int),TrafficSignalPhaseStateEnum] = Map.empty,
     laneChangedFn: (Long,Int,Int,String) => Unit = (_,_,_,_) => (),
-    observedFn: (VehicleInLane,VehicleInLane,Int,Double) => Unit = (_,_,_,_) => ()
+    observedFn: (VehicleInLane,VehicleInLane,Int,Double) => Unit = (_,_,_,_) => (),
+    downstreamLaneLeader: (Long,Int,Long) => Option[VehicleInLane] = (_,_,_) => None
   ): Seq[MicroVehicleUpdate] = {
     val lastUpdateByVehicle = mutable.LinkedHashMap[Long, MicroVehicleUpdate]()
     val nSubTicks = math.max(1, microTicksPerGlobalTick)
+    val laneIndex = LaneConnectionIndex(laneConnections)
 
     for (st <- 0 until nSubTicks) {
       val physicalStart = (tick-1).toDouble * microTimeStep * nSubTicks + st * microTimeStep
       val strategicYieldLeaders = laneChanging.model match {
         case model.hybrid.entity.state.model.LaneChangingModel.Mobil =>
           MobilLaneChangeStrategy.execute(vehiclesByLane,laneChanging,laneConnections,laneRestrictions,
-            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn)
+            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn,downstreamLaneLeader,Some(laneIndex))
         case model.hybrid.entity.state.model.LaneChangingModel.Lc2013 =>
           Lc2013LaneChangeStrategy.execute(vehiclesByLane,laneChanging,laneConnections,laneRestrictions,
-            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn)
+            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn,downstreamLaneLeader,Some(laneIndex))
         case _ => Map.empty[Long,VehicleInLane]
       }
       vehiclesByLane.toVector.sortBy(_._1).foreach {
@@ -101,6 +103,7 @@ class DefaultMicroSimulationStrategy(
               retainExits = retainExits,
               movementSignals = movementSignals,
               laneConnections = laneConnections,
+              laneIndex = Some(laneIndex),
               strategicYieldLeaders = strategicYieldLeaders,
               strategicYieldGapM = laneChanging.minGapMeters,
               observedFn = (before,after,lane) => observedFn(before,after,lane,physicalStart)
@@ -162,11 +165,13 @@ class DefaultMicroSimulationStrategy(
     retainExits: Boolean = false,
     movementSignals: Map[(Long,Int),TrafficSignalPhaseStateEnum] = Map.empty,
     laneConnections: List[model.hybrid.entity.state.model.LaneConnection] = Nil,
+    laneIndex: Option[LaneConnectionIndex] = None,
     strategicYieldLeaders: Map[Long,VehicleInLane] = Map.empty,
     strategicYieldGapM: Double = 2.0,
     observedFn: (VehicleInLane,VehicleInLane,Int) => Unit = (_,_,_) => ()
   ): Seq[MicroVehicleUpdate] = {
     VehicleInLane.sortFrontToBack(vehicles)
+    val connectionIndex = laneIndex.getOrElse(LaneConnectionIndex(laneConnections))
 
     val updates = mutable.ArrayBuffer[MicroVehicleUpdate]()
     val previous = vehicles.toVector
@@ -195,7 +200,7 @@ class DefaultMicroSimulationStrategy(
           .orElse(movementSignals.get((vehicle.nextLinkId,-1))).orElse(signalAtExit)
         val yellowStop = aspect.contains(model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.Yellow) &&
           vehicle.velocity * vehicle.velocity / (2 * vehicle.maxDeceleration) <= math.max(0,linkLength-stopLineGapM-vehicle.position)
-        val legalLanes = laneConnections.filter(_.outgoingLinkId == vehicle.nextLinkId).map(_.fromLane)
+        val legalLanes = connectionIndex.legal(vehicle.nextLinkId)
         val wrongLane = legalLanes.nonEmpty && !legalLanes.contains(laneId)
         val blocked = endPosition == linkLength && (aspect.contains(Red) || yellowStop || wrongLane)
         val applicableSignal = Option.when(blocked)(VehicleInLane(SignalBlockerId,"",linkLength-stopLineGapM+vehicle.minGap,

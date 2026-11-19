@@ -64,7 +64,7 @@ class LinkFollowingHandler(
       }
     else Nil
     val snapshot = MicroBoundarySnapshot(entityIdFn(), currentTickFn(), state.following.sequence,
-      state.length, nearest, supported = state.isMicroMode && state.lanes == 1 && state.microTicksPerGlobalTick == 1,
+      state.length, nearest, supported = state.isMicroMode && state.microTicksPerGlobalTick == 1,
       stepSeconds = state.microTimeStep, laneCount = state.lanes, laneBoundaries = perLane)
     subscribers.foreach { target =>
       sendFn(target.id, target.shardId, MicroBoundaryUpdateData(snapshot), EventTypeEnum.MicroBoundaryUpdate.toString)
@@ -77,26 +77,51 @@ class LinkFollowingHandler(
     // A positive publication can outlive an undone subscription until its anti-message arrives.
     if (!state.following.requested.contains(source)) return
     require(snapshot.supported, "unsupported downstream MICRO boundary")
+    require(snapshot.laneCount == 1 || snapshot.laneBoundaries.nonEmpty,
+      "multi-lane downstream boundary without per-lane occupancy cannot be consumed")
     require(math.abs(snapshot.stepSeconds - state.microTimeStep) < 1e-9, "downstream MICRO timestep mismatch")
     val history = state.following.observations.getOrElse(source, MicroBoundaryHistory())
     history.accept(snapshot)
     state.following.observations = state.following.observations.updated(source, history)
   }
 
+  /** Physical leader on the downstream path of (next road, origin lane), in this Link's coordinates.
+    *
+    * Only the lane the path actually enters is consulted, so occupancy in another lane never blocks
+    * it. A missing connection, observation or lane detail yields no leader: that is "unknown", and
+    * the LinkState guard keeps multi-lane lookahead from being enabled without explicit connections.
+    */
+  def laneLeader(tick: Tick, road: Long, lane: Int, exclude: Long = Long.MinValue): Option[VehicleInLane] = {
+    val state = stateFn()
+    if (!state.downstreamLookahead || road == 0L) return None
+    val connection = if (state.lanes == 1 && state.laneConnections.isEmpty) None
+      else state.laneConnections.find(c => c.outgoingLinkId == road && c.fromLane == lane)
+    if (connection.isEmpty && !(state.lanes == 1 && state.laneConnections.isEmpty)) return None
+    val first = state.downstreamConnectors.getOrElse(road, road)
+    def rearmost(id: Long, laneId: Int) = state.following.observations.get(id).flatMap(_.before(tick)).flatMap { s =>
+      val vehicle = if (s.laneBoundaries.isEmpty) (if (laneId == 0) s.vehicle else None)
+        else s.laneBoundaries.find(_.laneId == laneId).flatMap(_.rearmost)
+      vehicle.filter(_.id != exclude).map(v => (s, v))
+    }
+    def snapshot(id: Long) = state.following.observations.get(id).flatMap(_.before(tick))
+    val nearLane = connection.fold(0)(_.toLane)
+    val near = rearmost(first, nearLane)
+    val farther = if (first != road) snapshot(first).flatMap { connector =>
+      rearmost(road, connection.fold(0)(_.roadLane)).map { case (_, v) => (v, connector.length) }
+    } else None
+    (near.toList.map { case (_, v) => (v, 0.0) } ++ farther.toList).map { case (v, offset) =>
+      VehicleInLane(v.id, "hybrid.actor.Link", state.length + offset + v.position, v.velocity, 0.0, v.length)
+    }.minByOption(v => (v.rearPosition, v.actorId))
+  }
+
+  /** One leader per vehicle, from the lane the vehicle currently occupies. */
   def leaders(tick: Tick): Map[Long, VehicleInLane] = {
     val state = stateFn()
     if (!state.downstreamLookahead) return Map.empty
-    def snapshot(id: Long) = state.following.observations.get(id).flatMap(_.before(tick))
-    state.vehiclesByLane.valuesIterator.flatMap(_.iterator).flatMap { vehicle =>
-      val road = vehicle.nextLinkId
-      val first = state.downstreamConnectors.getOrElse(road, road)
-      val near = snapshot(first)
-      val farther = if (first != road) snapshot(road).flatMap(s => near.map(n => (s, n.length))) else None
-      val candidates = near.toList.map(_ -> 0.0) ++ farther.toList
-      candidates.flatMap { case (s, offset) => s.vehicle.filter(_.id != vehicle.actorId).map { v =>
-        VehicleInLane(v.id, "hybrid.actor.Link", state.length + offset + v.position,
-          v.velocity, 0.0, v.length)
-      }}.minByOption(v => (v.rearPosition, v.actorId)).map(vehicle.actorId -> _)
+    state.vehiclesByLane.iterator.flatMap { case (lane, queue) =>
+      queue.iterator.flatMap { vehicle =>
+        laneLeader(tick, vehicle.nextLinkId, lane, vehicle.actorId).map(vehicle.actorId -> _)
+      }
     }.toMap
   }
 }

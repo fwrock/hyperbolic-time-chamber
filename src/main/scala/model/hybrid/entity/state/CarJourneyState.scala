@@ -25,13 +25,16 @@ case class CarJourneyState(
   var boundaryRemainderSeconds: Double = 0.0,
   var boundaryExitTick: Option[Tick] = None,
   var retainedMicroExitLinkId: Option[Long] = None,
+  /** MESO tick-rounding credit (ticks): how much the last link exit was rounded up. Carried into the next link so rounding does not accumulate. */
+  var mesoRoundingCredit: Double = 0.0,
+  var mesoLastExitTick: Long = -1L,
   var capacityWaitSinceTick: Option[Tick] = None,
   @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
   var lastMicroLane: Option[Int] = None,
   @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
   var pendingRoadLane: Option[Int] = None,
   var mesoOriginActive: Boolean = false
-) {
+) extends org.interscity.htc.model.hybrid.support.car.MesoTimingState {
   def entryRemainderAt(tick: Tick): Double =
     if (boundaryExitTick.contains(tick) && sumoArrivalSpeed > 0.0) boundaryRemainderSeconds else 0.0
 }

@@ -105,6 +105,8 @@ class CarJourneyReporter(
     journeyStateFn().boundaryRemainderSeconds = 0.0
     journeyStateFn().boundaryExitTick = None
     journeyStateFn().retainedMicroExitLinkId = None
+    journeyStateFn().mesoRoundingCredit = 0.0
+    journeyStateFn().mesoLastExitTick = -1L
     journeyStateFn().capacityWaitSinceTick = None
   }
 

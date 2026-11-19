@@ -2,7 +2,7 @@ package org.interscity.htc
 package model.hybrid.micro.strategy
 
 import model.hybrid.entity.state.MicroCarState
-import model.hybrid.entity.state.model.{LaneChangingConfig, LaneConnection, VehicleInLane}
+import model.hybrid.entity.state.model.{LaneChangingConfig, LaneConnection, LaneConnectionIndex, VehicleInLane}
 import model.hybrid.micro.lane.MobilLaneChange
 import model.hybrid.micro.model.KraussModel
 import scala.collection.mutable
@@ -13,22 +13,30 @@ object MobilLaneChangeStrategy {
     lanes: mutable.Map[Int, mutable.Queue[VehicleInLane]], config: LaneChangingConfig,
     connections: List[LaneConnection], restrictions: Map[Int, String],
     length: Double, speedMps: Double, deltaSeconds: Double, timeSeconds: Double, tick: Long,
-    changed: (Long, Int, Int, String) => Unit
+    changed: (Long, Int, Int, String) => Unit,
+    downstreamLaneLeader: (Long, Int, Long) => Option[VehicleInLane] = (_, _, _) => None,
+    laneIndex: Option[LaneConnectionIndex] = None
   ): Map[Long,VehicleInLane] = {
+    val index = laneIndex.getOrElse(LaneConnectionIndex(connections))
     val yielding = mutable.Map.empty[Long,VehicleInLane]
     val model = MobilLaneChange(politeness = config.politeness, safeDeceleration = config.safeDeceleration,
       accelerationThreshold = config.accelerationThreshold, biasToRight = config.biasToRight,
       carFollowingModel = KraussModel.deterministic, decisionTimeStep = deltaSeconds)
-    val initial = lanes.toVector.sortBy(_._1).flatMap { case (lane, q) => q.map(v => (lane, v)) }
-      .sortBy(_._2.actorId)
-    def neighbours(lane: Int, vehicle: VehicleInLane) = {
-      val others = lanes.get(lane).toVector.flatMap(_.iterator).filter(_.actorId != vehicle.actorId)
-      val ahead = others.filter(_.position >= vehicle.position).minByOption(v => (v.position, v.actorId))
-      val behind = others.filter(_.position < vehicle.position).maxByOption(v => (v.position, -v.actorId))
-      (ahead, behind)
+    val initial = lanes.toVector.flatMap { case (lane, q) => q.map(v => (lane, v)) }.sortBy(_._2.actorId)
+    // Lane changes insert in order, so a lane sorted now stays sorted for the whole call.
+    val orderedLanes = lanes.collect { case (lane, q) if LaneNeighbours.isSorted(q) => lane }.toSet
+    def neighbours(lane: Int, vehicle: VehicleInLane): LaneNeighbours.Pair = {
+      lanes.get(lane).fold[LaneNeighbours.Pair]((None, None))(q =>
+        if (orderedLanes.contains(lane)) LaneNeighbours.sorted(q, vehicle) else LaneNeighbours.linear(q, vehicle))
+    }
+    // Safety and incentive must see the leader of the lane's own downstream path, not only the
+    // same-Link leader; same-Link vehicles are always nearer, so they win whenever present.
+    def withDownstream(lane: Int, vehicle: VehicleInLane) = {
+      val (ahead, behind) = neighbours(lane, vehicle)
+      (ahead.orElse(downstreamLaneLeader(vehicle.nextLinkId, lane, vehicle.actorId)), behind)
     }
     def safe(lane: Int, vehicle: VehicleInLane): Boolean = {
-      val (ahead, behind) = neighbours(lane, vehicle)
+      val (ahead, behind) = withDownstream(lane, vehicle)
       val frontSafe = ahead.forall { leader =>
         val gap = vehicle.gapTo(leader)
         gap >= math.max(config.minGapMeters,vehicle.minGap) && {
@@ -49,7 +57,7 @@ object MobilLaneChangeStrategy {
     }
     initial.foreach { case (currentLane, vehicle) =>
       if (vehicle.entryTick < tick && vehicle.pendingExitTick.isEmpty) {
-        val allowed = connections.filter(_.outgoingLinkId == vehicle.nextLinkId).map(_.fromLane).toSet
+        val allowed = index.legalSet(vehicle.nextLinkId)
         val strategic = allowed.nonEmpty && !allowed(currentLane) && length - vehicle.position <= config.strategicLookaheadMeters
         val cooldown = if (strategic) config.strategicCooldownSeconds else config.cooldownSeconds
         val ready = vehicle.lastLaneChangeSeconds.forall(t => timeSeconds - t + 1e-9 >= cooldown)
@@ -58,14 +66,14 @@ object MobilLaneChangeStrategy {
           maxAcceleration = vehicle.maxAcceleration, maxDeceleration = vehicle.maxDeceleration,
           minGap = math.max(config.minGapMeters,vehicle.minGap), reactionTime = vehicle.reactionTime,
           desiredVelocity = vehicle.desiredSpeed(speedMps), vehicleLength = vehicle.vehicleLength)
-        val (oldAhead, oldBehind) = neighbours(currentLane, vehicle)
+        val (oldAhead, oldBehind) = withDownstream(currentLane, vehicle)
         val targets = Vector(currentLane-1, currentLane+1).filter(lanes.contains)
         val candidates = targets.flatMap { target =>
           val inReach = !strategic || targetGoal.exists(goal => math.abs(goal-target) < math.abs(goal-currentLane))
           val routeSafe = allowed.isEmpty || allowed(target) || length - vehicle.position > config.strategicLookaheadMeters || strategic
           if (!ready || !inReach || !routeSafe || !safe(target, vehicle) || !model.isLaneAvailable(state,target,restrictions)) None
           else {
-            val (ahead, behind) = neighbours(target, vehicle)
+            val (ahead, behind) = withDownstream(target, vehicle)
             def front(v: VehicleInLane) = (v.actorId.toString, vehicle.gapTo(v), v.velocity)
             def back(v: VehicleInLane) = (v.actorId.toString, vehicle.rearPosition-v.position, v.velocity)
             val decision = model.evaluateLaneChange(state,currentLane,oldAhead.map(front),oldBehind.map(back),

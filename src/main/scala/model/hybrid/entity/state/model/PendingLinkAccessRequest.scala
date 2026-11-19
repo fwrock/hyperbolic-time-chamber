@@ -26,5 +26,6 @@ case class PendingLinkAccessRequest(
   outgoingLane: Option[Int] = None,
   approachLinkId: Long = 0L,
   @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
-  approachLane: Option[Int] = None
+  approachLane: Option[Int] = None,
+  requestedTick: Long = 0L
 )

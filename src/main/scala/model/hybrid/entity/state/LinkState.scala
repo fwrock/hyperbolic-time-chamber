@@ -3,12 +3,13 @@ package model.hybrid.entity.state
 
 import core.types.Tick
 import core.entity.state.BaseState
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.annotation.{ JsonDeserialize, JsonSerialize }
 
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.hybrid.entity.state.model.{LinkRegistry, LinkMetricsState}
 import org.interscity.htc.model.hybrid.entity.state.enumeration.SimulationModeEnum
-import org.interscity.htc.model.hybrid.entity.state.model.{ LaneConfig, VehicleInLane }
+import org.interscity.htc.model.hybrid.entity.state.model.{ LaneConfig, LaneConnectionIndex, VehicleInLane }
 
 import scala.collection.mutable
 
@@ -73,8 +74,8 @@ case class LinkState(
   speedLimit: Double,
   capacity: Double,
   freeSpeed: Double,
-  currentSpeed: Double = 0.0,
-  congestionFactor: Double = 1.0,
+  var currentSpeed: Double = 0.0,
+  var congestionFactor: Double = 1.0,
   @JsonSerialize(converter = classOf[LinkRegistry.ToJson])
   @JsonDeserialize(converter = classOf[LinkRegistry.FromJson])
   registered: LinkRegistry = new LinkRegistry,
@@ -114,8 +115,6 @@ case class LinkState(
   require(sidewalk != null, "sidewalk configuration cannot be null; use enabled=false to disable walking")
   require(laneChanging != null, "lane-changing configuration cannot be null")
   require(microEntry != null && (!microEntry.enabled || isMicroMode), "queued entry requires MICRO")
-  require(!microEntry.enabled || !downstreamSpillback,
-    "queued MICRO entry does not yet support retained upstream spillback footprints")
   require(laneChanging.model == model.LaneChangingModel.Disabled || isMicroMode,
     "active lane changing requires MICRO links")
   require(laneConnections.forall(_.fromLane < lanes), "lane connection exceeds link lane count")
@@ -124,10 +123,11 @@ case class LinkState(
   require(signalControls.forall(_.laneIds.forall(l => l >= 0 && l < lanes)), "invalid signal control lane")
   require(exitSpeedLimitsMps.values.forall(v => v.isFinite && v > 0.0), "exit speed limits must be positive m/s")
   require(stopLineGapM.isFinite && stopLineGapM >= 0 && stopLineGapM < length, "invalid signal stop-line gap")
-  require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && lanes == 1 && microTicksPerGlobalTick == 1),
-    "downstream lookahead requires single-lane MICRO with one physics step per runtime tick")
-  require(!downstreamSpillback || downstreamLookahead,
-    "downstream spillback requires single-lane MICRO downstream lookahead")
+  require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
+    "downstream lookahead requires MICRO with one physics step per runtime tick")
+  require(!downstreamLookahead || lanes == 1 || laneConnections.nonEmpty,
+    "multi-lane downstream lookahead requires explicit lane connections; a missing path is unknown, not free")
+  require(!downstreamSpillback || downstreamLookahead, "downstream spillback requires MICRO downstream lookahead")
   require(!carryMicroRemainder || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
     "MICRO boundary remainder requires one physics step per runtime tick")
   require(!carryMicroRemainder || length > speedLimit / 3.6 * microTimeStep,
@@ -138,6 +138,22 @@ case class LinkState(
     require(math.abs(speedLimit / 3.6 - geometry.speedLimitMps) <= 1e-6, "junction speed must match geometry")
   }
 
+  /** Derived from the immutable connections; rebuilt per state instance and never serialized. */
+  @JsonIgnore @transient lazy val laneConnectionIndex: LaneConnectionIndex = LaneConnectionIndex(laneConnections)
+
+  /** Single pass over the lanes; replaces repeated lane scans per vehicle event. */
+  def locateVehicle(actorId: Long): Option[(Int, VehicleInLane)] = {
+    val it = vehiclesByLane.iterator
+    while (it.hasNext) {
+      val (lane, queue) = it.next()
+      queue.find(_.actorId == actorId) match {
+        case Some(v) => return Some((lane, v))
+        case None    =>
+      }
+    }
+    None
+  }
+
   /** Check if link is in microscopic mode */
   def isMicroMode: Boolean = simulationMode == SimulationModeEnum.MICRO
 
@@ -146,7 +162,7 @@ case class LinkState(
 
   /** Get total number of vehicles in MICRO mode */
   def totalVehiclesInMicro: Int =
-    if (isMicroMode) vehiclesByLane.values.map(_.size).sum
+    if (isMicroMode) vehiclesByLane.valuesIterator.foldLeft(0)(_ + _.size)
     else 0
 
   /** Get total number of vehicles in MESO mode */

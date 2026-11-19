@@ -41,14 +41,16 @@ case class BicycleState(
   override val actorType: ActorTypeEnum,
   override val size: Double,
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
-  var microState: Option[MicroBicycleState] = None
+  var microState: Option[MicroBicycleState] = None,
+  var mesoRoundingCredit: Double = 0.0,
+  var mesoLastExitTick: Long = -1L
 ) extends MovableState(
       startTick = startTick,
       origin = origin,
       destination = destination,
       actorType = actorType,
       size = size
-    ) {
+    ) with org.interscity.htc.model.hybrid.support.car.MesoTimingState {
 
   def bestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
   def bestRoute_=(v: Option[mutable.Queue[(Long, Long)]]): Unit = movableBestRoute = v

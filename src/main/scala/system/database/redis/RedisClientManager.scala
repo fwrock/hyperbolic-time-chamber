@@ -4,8 +4,9 @@ package system.database.redis
 import redis.clients.jedis.{ JedisPool, JedisPoolConfig }
 
 class RedisClientManager {
-  private val redisHost = sys.env.getOrElse("REDIS_HOST", "localhost")
-  private val redisPort = sys.env.getOrElse("REDIS_PORT", "6379").toInt
+  private val config = core.api.SimulatorSettingsRegistry.effective
+  private val redisHost = config.getString("htc.redis.host")
+  private val redisPort = config.getInt("htc.redis.port")
 
   private val pool = new JedisPool(new JedisPoolConfig(), redisHost, redisPort)
 

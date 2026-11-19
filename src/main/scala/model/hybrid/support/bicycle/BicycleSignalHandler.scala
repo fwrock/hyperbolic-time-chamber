@@ -50,7 +50,11 @@ class BicycleSignalHandler(
     val currentPathNode = state.currentPath.map(_._2).orNull
     val routeDepleted   = state.bestRoute.forall(_.isEmpty)
     val tripDest        = getTripDestinationFn().getOrElse(state.destination)
-    if (tripDest == currentPathNode || routeDepleted) {
+    if (routeDepleted && state.currentPath.nonEmpty) {
+      // Complete the modeled leave exchange before publishing arrival or parking. The Link
+      // must release storage and its terminal reply must credit the final distance exactly once.
+      leavingLinkFn()
+    } else if (routeDepleted) {
       val nodeId = getCurrentNodeFn()
       if (nodeId != 0L) {
         finishJourneyFn("reached_destination", nodeId)

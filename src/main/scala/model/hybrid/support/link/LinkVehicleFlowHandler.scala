@@ -153,9 +153,11 @@ class LinkVehicleFlowHandler(
         "queued MICRO entry currently supports Car only")
       val pending = model.hybrid.entity.state.model.PendingMicroEntry(event.actorRefId,
         core.util.StringPool.intern(event.shardRefId),event.tick,event.seq,data)
-      requestedState.pendingMicroEntries =
-        (requestedState.pendingMicroEntries.filterNot(_.actorId == pending.actorId) :+ pending)
-          .sortBy(p => (p.requestedTick,p.actorId,p.requestSeq))
+      // The list is kept sorted, so insert at the ordered position instead of re-sorting it.
+      def key(p: model.hybrid.entity.state.model.PendingMicroEntry) = (p.requestedTick,p.actorId,p.requestSeq)
+      val (before,after) = requestedState.pendingMicroEntries.filterNot(_.actorId == pending.actorId)
+        .span(p => Ordering[(Long,Long,Long)].lteq(key(p),key(pending)))
+      requestedState.pendingMicroEntries = before ::: pending :: after
       drainMicroEntries()
       if (!isMicroScheduledFn()) { setMicroScheduledFn(true); scheduleEventFn(currentTickFn() + 1) }
       return
@@ -226,7 +228,8 @@ class LinkVehicleFlowHandler(
       data.initialPosition + entryVelocity * data.initialRemainderSeconds)
     val availablePosition = getLinkStateFn().vehiclesByLane.get(assignedLane).toSeq.flatMap(_.iterator)
       .map(v => v.position - v.vehicleLength - data.minGap.getOrElse(2.0)).minOption.getOrElse(state.length)
-    require(!state.downstreamSpillback || availablePosition >= -1e-9,
+    // A measured snapshot may be tighter than the desired gap; its physical overlap is checked by MicroEntryAdmission.snapshotReason.
+    require(preserveSnapshotPosition || !state.downstreamSpillback || availablePosition >= -1e-9,
       "MICRO spillback entry has no physical room; origin injection or handoff requires admission")
     val entryPosition = if (preserveSnapshotPosition) requestedPosition
       else math.max(0.0, math.min(requestedPosition, availablePosition))
@@ -331,23 +334,19 @@ class LinkVehicleFlowHandler(
     entryTick: Long
   ): Unit = {
     val state = getLinkStateFn()
-    val pendingExit = state.vehiclesByLane.valuesIterator.flatMap(_.iterator)
-      .exists(v => v.actorId == event.actorRefId && v.pendingExitTick.nonEmpty)
-    if (pendingExit) {
+    val located = state.locateVehicle(event.actorRefId)
+    if (located.exists(_._2.pendingExitTick.nonEmpty)) {
       state.vehiclesByLane.valuesIterator.foreach(_.dequeueAll(_.actorId == event.actorRefId))
       if (state.totalVehiclesInMicro == 0 && isMicroScheduledFn()) setMicroScheduledFn(false)
       return
     }
-    val stillInLanes = state.vehiclesByLane.values.exists(_.exists(_.actorId == event.actorRefId))
-    if (!stillInLanes) {
+    if (located.isEmpty) {
       logDebugFn(s"${event.actorRefId}: LeaveLinkData received after proactive MicroLeaveLink — cleanup only.")
       if (state.totalVehiclesInMicro == 0 && isMicroScheduledFn()) setMicroScheduledFn(false)
       return
     }
 
-    val vehicleVelocity = state.vehiclesByLane.values
-      .flatMap(_.find(_.actorId == event.actorRefId))
-      .headOption.map(_.velocity).getOrElse(0.0)
+    val vehicleVelocity = located.map(_._2.velocity).getOrElse(0.0)
 
     state.vehiclesByLane.foreach { case (_, q) => q.dequeueAll(_.actorId == event.actorRefId) }
 

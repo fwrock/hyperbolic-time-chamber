@@ -23,7 +23,7 @@ object MicroEntryAdmission {
   }
 
   def lane(state: LinkState, data: EnterLinkData): Int = {
-    val compatible = state.laneConnections.filter(_.outgoingLinkId == data.nextLinkId).map(_.fromLane).distinct
+    val compatible = state.laneConnectionIndex.legal(data.nextLinkId).distinct
     data.preferredLane.getOrElse((if (compatible.nonEmpty) compatible else (0 until state.lanes))
       .minBy(l => (state.vehiclesByLane.get(l).fold(0)(_.size), l)))
   }
@@ -39,8 +39,8 @@ object MicroEntryAdmission {
     if (!space) Some("entry_position_occupied")
     else if (!state.microEntry.avoidWeavingConflicts || state.laneChanging.model == LaneChangingModel.Disabled) None
     else {
-      def goal(lane: Int, next: Long): Int = state.laneConnections.filter(_.outgoingLinkId == next)
-        .map(_.fromLane).distinct.minByOption(l => (math.abs(l-lane),l)).getOrElse(lane)
+      def goal(lane: Int, next: Long): Int = state.laneConnectionIndex.legal(next)
+        .distinct.minByOption(l => (math.abs(l-lane),l)).getOrElse(lane)
       val incomingGoal = goal(targetLane,data.nextLinkId)
       val conflict = state.vehiclesByLane.exists { case (otherLane, vehicles) => vehicles.exists { other =>
         val otherGoal = goal(otherLane,other.nextLinkId)

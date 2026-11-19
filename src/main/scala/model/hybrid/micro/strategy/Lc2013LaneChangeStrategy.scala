@@ -13,12 +13,15 @@ object Lc2013LaneChangeStrategy {
     lanes: mutable.Map[Int,mutable.Queue[VehicleInLane]], config: LaneChangingConfig,
     connections: List[LaneConnection], restrictions: Map[Int,String], length: Double,
     speedMps: Double, deltaSeconds: Double, timeSeconds: Double, tick: Long,
-    changed: (Long,Int,Int,String) => Unit
+    changed: (Long,Int,Int,String) => Unit,
+    downstreamLaneLeader: (Long,Int,Long) => Option[VehicleInLane] = (_,_,_) => None,
+    laneIndex: Option[LaneConnectionIndex] = None
   ): Map[Long,VehicleInLane] = {
     val yielding=mutable.Map.empty[Long,VehicleInLane]
     val initial=lanes.toVector.sortBy(_._1).flatMap((lane,q) => q.map(v => (lane,v))).sortBy(_._2.actorId)
     def permitted(lane: Int): Boolean = !restrictions.get(lane).exists(Set("bus_lane","bike_lane","emergency"))
-    def allowed(v: VehicleInLane): Set[Int] = connections.filter(_.outgoingLinkId==v.nextLinkId).map(_.fromLane).toSet
+    val index = laneIndex.getOrElse(LaneConnectionIndex(connections))
+    def allowed(v: VehicleInLane): Set[Int] = index.legalSet(v.nextLinkId)
     def goal(lane: Int,v: VehicleInLane): Int = allowed(v).toVector.sortBy(l => (math.abs(l-lane),l)).headOption.getOrElse(lane)
     def horizon(lane: Int,v: VehicleInLane): Double = {
       val direction=if (goal(lane,v)>lane) v.lc2013.lookaheadLeft else 1.0
@@ -26,24 +29,29 @@ object Lc2013LaneChangeStrategy {
     }
     def needs(lane: Int,v: VehicleInLane): Boolean =
       v.lc2013.strategic>0 && goal(lane,v)!=lane && length-v.position <= horizon(lane,v)
-    def neighbours(lane: Int,v: VehicleInLane): (Option[VehicleInLane],Option[VehicleInLane]) = {
-      val others=lanes.get(lane).toVector.flatMap(_.iterator).filter(_.actorId!=v.actorId)
-      (others.filter(_.position>=v.position).minByOption(o => (o.position,o.actorId)),
-        others.filter(_.position<v.position).maxByOption(o => (o.position,-o.actorId)))
+    // Lane changes insert in order, so a lane sorted now stays sorted for the whole call.
+    val orderedLanes=lanes.collect { case (lane,q) if LaneNeighbours.isSorted(q) => lane }.toSet
+    def neighbours(lane: Int,v: VehicleInLane): LaneNeighbours.Pair =
+      lanes.get(lane).fold[LaneNeighbours.Pair]((None,None))(q =>
+        if (orderedLanes.contains(lane)) LaneNeighbours.sorted(q,v) else LaneNeighbours.linear(q,v))
+    // Same-Link vehicles are always nearer than the downstream path leader, so they win when present.
+    def withDownstream(lane: Int,v: VehicleInLane) = {
+      val (front,rear)=neighbours(lane,v)
+      (front.orElse(downstreamLaneLeader(v.nextLinkId,lane,v.actorId)),rear)
     }
     def follow(v: VehicleInLane,leader: VehicleInLane): Double =
       KraussModel.deterministic.calculateSafeVelocity(v.velocity,v.desiredSpeed(speedMps),
         math.max(0,v.gapTo(leader)),leader.velocity,v.maxAcceleration,v.maxDeceleration,
         math.max(config.minGapMeters,v.minGap),v.reactionTime,deltaSeconds)
     def safe(lane: Int,v: VehicleInLane): Boolean = {
-      val (front,rear)=neighbours(lane,v)
+      val (front,rear)=withDownstream(lane,v)
       front.forall(o => v.gapTo(o)>=math.max(config.minGapMeters,v.minGap) &&
         follow(v,o)>=v.velocity-v.maxDeceleration*deltaSeconds) &&
       rear.forall(o => o.gapTo(v)>=math.max(config.minGapMeters,o.minGap) &&
         follow(o,v)>=o.velocity-math.min(config.safeDeceleration,o.maxDeceleration)*deltaSeconds)
     }
     def predicted(lane: Int,v: VehicleInLane): Double =
-      math.min(v.desiredSpeed(speedMps),neighbours(lane,v)._1.fold(v.desiredSpeed(speedMps))(follow(v,_)))
+      math.min(v.desiredSpeed(speedMps),withDownstream(lane,v)._1.fold(v.desiredSpeed(speedMps))(follow(v,_)))
     def advise(follower: VehicleInLane,requester: VehicleInLane): Unit =
       if (follower.lc2013.cooperative>0 && config.cooperativeStrategicChanges) {
         yielding.get(follower.actorId) match {

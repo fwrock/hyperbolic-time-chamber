@@ -3,11 +3,12 @@ package model.hybrid.entity.state
 
 import core.entity.state.BaseState
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.types.Tick
-import org.interscity.htc.model.hybrid.entity.state.model.{ PendingLinkAccessRequest, SignalState }
+import org.interscity.htc.model.hybrid.entity.state.model.{ NodeJunctionIndex, PendingLinkAccessRequest, SignalState }
 
 import scala.collection.mutable
 
@@ -49,7 +50,19 @@ case class NodeState(
   availableCapacity: mutable.Map[Long, Int] = mutable.Map.empty,
   junctionMovements: List[model.JunctionMovement] = Nil,
   movementSignals: List[model.MovementSignalBinding] = Nil,
-  routeAwareJunctionLanes: Boolean = false
+  routeAwareJunctionLanes: Boolean = false,
+  @JsonDeserialize(contentAs = classOf[model.JunctionConflict])
+  conflicts: List[model.JunctionConflict] = Nil,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Integer])
+  occupiedConnectors: mutable.Map[Long, Int] = mutable.Map.empty,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[model.MicroBoundaryHistory])
+  boundaryObservations: mutable.Map[Long, model.MicroBoundaryHistory] = mutable.Map.empty,
+  @JsonDeserialize(contentAs = classOf[java.lang.Long])
+  var observationsRequested: List[Long] = Nil,
+  var decisionScheduledFor: Long = -1L,
+  batchAllRequests: Boolean = false,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Boolean])
+  publishedPermission: mutable.Map[Long, Boolean] = mutable.Map.empty
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
@@ -57,6 +70,14 @@ case class NodeState(
     ) {
   require(junctionMovements.map(m => (m.incomingLinkId, m.outgoingLinkId,m.incomingLane,m.outgoingLane)).distinct.size == junctionMovements.size,
     "junction movements must have unique road and lane pairs")
+  /** Derived from the immutable junction tables; rebuilt per state instance and never serialized. */
+  @JsonIgnore @transient lazy val junction: NodeJunctionIndex =
+    new NodeJunctionIndex(junctionMovements, movementSignals, conflicts)
+
   require(junctionMovements.map(_.connectorLinkId).distinct.size == junctionMovements.size,
     "junction connector must belong to exactly one movement")
+  require(conflicts.forall(c => junctionMovements.exists(_.connectorLinkId == c.connectorA) &&
+    junctionMovements.exists(_.connectorLinkId == c.connectorB)), "junction conflict names an unknown connector")
+  require(conflicts.map(c => Set(c.connectorA, c.connectorB)).distinct.size == conflicts.size,
+    "junction conflicts must be unique per connector pair")
 }

@@ -47,7 +47,12 @@ private class DeadLetterListener extends Actor {
 object HyperbolicTimeChamber {
 
   def start(): Unit = {
-    val metricsPort = sys.env.get("HTC_METRICS_PORT").flatMap(_.toIntOption).getOrElse(9001)
+    // Install file-owned settings before any process-wide resource or ActorSystem is created.
+    val bootstrap = core.api.SimulatorSettingsRegistry.effective
+    if (bootstrap.hasPath("htc.simulation.config-file") &&
+        bootstrap.getString("htc.simulation.config-file").nonEmpty)
+      SimulationUtil.installLocalScenarioSettings(SimulationUtil.loadSimulationConfig())
+    val metricsPort = core.api.SimulatorSettingsRegistry.effective.getInt("htc.metrics.port")
     core.metrics.MetricsServer.start(metricsPort)
 
     val system = ActorSystem("hyperbolic-time-chamber")

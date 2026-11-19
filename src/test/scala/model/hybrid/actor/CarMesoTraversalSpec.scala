@@ -103,7 +103,9 @@ class CarMesoTraversalSpec extends AnyFlatSpec with Matchers with BeforeAndAfter
         } else {
           completions shouldBe empty
           wake = manager.expectMsgType[FinishEvent].scheduleTick.get.toLong
-          wake shouldBe exitTick + 4L
+          // Immediate node transfer is the default: the next link starts at the tick of the leave reply (exitTick + 3). The previous
+          // behaviour (htc.meso.immediate-node-transfer = false) waited one more tick (exitTick + 4).
+          wake shouldBe exitTick + 3L
         }
       }
     }

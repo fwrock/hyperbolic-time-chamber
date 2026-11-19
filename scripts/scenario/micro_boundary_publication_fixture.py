@@ -8,7 +8,7 @@ import sys
 from ngsim_actor_approach import actor
 
 
-def generate(output, policy, initial_snapshot=False):
+def generate(output, policy, initial_snapshot=False, spillback=False, handoff=False):
     if output.exists():
         raise FileExistsError(output)
     workspace = Path(__file__).resolve().parents[3]
@@ -28,11 +28,14 @@ def generate(output, policy, initial_snapshot=False):
             signalControls=[dict(targetLinkId=12 if link==11 else 0)])
         if link==12:
             state['stopLineGapM']=17.
+        if spillback:
+            state['carryMicroRemainder']=True
+            if link==11: state['downstreamSpillback']=True
         if initial_snapshot:
             state['microEntry']=dict(enabled=True,initialSnapshotTick=0)
         actors.append(actor('Link',link,state,{'from':dict(id=a,classType='hybrid.actor.Node'),
                                             'to':dict(id=b,classType='hybrid.actor.Node')}))
-    for identity,origin,position in [(101,1,35.),(102,1,20.),(103,2,3.)]:
+    for identity,origin,position in ([(101,1,35.),(102,1,20.)] if handoff else [(101,1,35.),(102,1,20.),(103,2,3.)]):
         route=[dict(linkId=11,nodeId=2),dict(linkId=12,nodeId=3)] if origin==1 else [dict(linkId=12,nodeId=3)]
         # The fixture tests boundary transport, not same-tick interior injection arbitration.
         actors.append(actor('Car',identity,dict(startTick=1 if identity==102 and not initial_snapshot else 0,origin=origin,destination=3,
@@ -51,7 +54,7 @@ def generate(output, policy, initial_snapshot=False):
     write_city_map_json(city,data)
     simulation=build_simulation_json(output.name,'Causal boundary publication regression',
         'Synthetic engineering control: stopped downstream tail blocks two upstream cars',
-        counts,str(output.parent),end_tick=50,tick_duration=.1,
+        counts,str(output.parent),end_tick=400 if handoff else 50,tick_duration=.1,
         settings={'htc.time-manager.conservative-transport':'channel-closed'})
     simulation['timeManagerType']=policy
     (output/'simulation.json').write_text(json.dumps(simulation,indent=2)+'\n')
@@ -69,5 +72,7 @@ if __name__=='__main__':
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--policy',choices=['discrete-event','time-warp'],default='discrete-event')
     parser.add_argument('--initial-snapshot',action='store_true')
+    parser.add_argument('--handoff',action='store_true',help='no downstream blocker, longer horizon: cars cross the 11->12 boundary')
+    parser.add_argument('--spillback',action='store_true',help='retain exits on the approach (needs no --initial-snapshot with engines before G03)')
     args=parser.parse_args()
-    generate(args.output.resolve(),args.policy,args.initial_snapshot)
+    generate(args.output.resolve(),args.policy,args.initial_snapshot,args.spillback,args.handoff)

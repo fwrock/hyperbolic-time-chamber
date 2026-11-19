@@ -199,10 +199,7 @@ class Car(
   )
 
   private lazy val staleEventLogEvery: Int =
-    sys.env
-      .get("HTC_CAR_STALE_EVENT_LOG_EVERY")
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .orElse(scala.util.Try(config.getInt("htc.car.stale-event-log-every")).toOption)
+    scala.util.Try(config.getInt("htc.car.stale-event-log-every")).toOption
       .filter(_ > 0)
       .getOrElse(100)
 
@@ -214,10 +211,7 @@ class Car(
     * the MESO/walking enter/leave events. See project memory on htc-replay live mode.
     */
   private lazy val microUpdateReportEvery: Int =
-    sys.env
-      .get("HTC_MICRO_UPDATE_REPORT_EVERY")
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .orElse(scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption)
+    scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption
       .filter(_ >= 0)
       .getOrElse(0)
 
@@ -543,9 +537,13 @@ class Car(
     signalWaitUntilTick = None
     signalWaitNeedsReverify = false
     state.status = Ready
+    val held = holdPreviousLinkUntilNextAdmitted
     super.leavingLink()
-    state.journey.retainedMicroExitLinkId = None
+    if (!held) state.journey.retainedMicroExitLinkId = None
   }
+
+  override protected def holdPreviousLinkUntilNextAdmitted: Boolean =
+    state.journey.retainedMicroExitLinkId.nonEmpty && !state.movableBestRoute.forall(_.isEmpty)
 
   override protected def onFinish(nodeId: Long): Unit = {
     finishJourney("onFinish_called", nodeId)
@@ -561,6 +559,14 @@ class Car(
     if (requiresReplyCorrelation && data.requestSeq != 0L &&
       !isAwaitingReply(Movable.enterLinkAwaitKey(event.actorRefId),"EnterLinkData",data.requestSeq)) return
     consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
+    // Release the retained footprint only now: the next Link has physically admitted this Car.
+    state.journey.retainedMicroExitLinkId.foreach { approach =>
+      sendMessageTo(entityId = approach, shardId = "hybrid.actor.Link",
+        data = model.hybrid.entity.event.data.LeaveLinkData(state.actorType, state.size,
+          core.enumeration.CreationTypeEnum.LoadBalancedDistributed),
+        eventType = model.hybrid.entity.state.enumeration.EventTypeEnum.LeaveLink.toString)
+    }
+    state.journey.retainedMicroExitLinkId = None
     microHandler.handleMicroEnterLink(data, state)
     emissionHandler.onMicroEnterLink(data.linkId, data.microTimeStep)
   }
@@ -614,6 +620,15 @@ class Car(
     if (state == null) return
 
     signalHandler.cancelPendingCapacityRequest(state)
+    // Destroyed after a capacity grant but before the next Link acknowledged admission: the footprint held on the previous Link
+    // would never be released. (A WaitingCapacity cancel above already released and cleared it.)
+    state.journey.retainedMicroExitLinkId.foreach { approach =>
+      sendMessageTo(entityId = approach, shardId = "hybrid.actor.Link",
+        data = model.hybrid.entity.event.data.LeaveLinkData(state.actorType, state.size,
+          core.enumeration.CreationTypeEnum.LoadBalancedDistributed),
+        eventType = model.hybrid.entity.state.enumeration.EventTypeEnum.LeaveLink.toString)
+    }
+    state.journey.retainedMicroExitLinkId = None
 
     if (state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)

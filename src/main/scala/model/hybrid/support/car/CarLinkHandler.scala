@@ -5,7 +5,7 @@ import core.types.Tick
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.state.CarState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Parked}
-import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
+import org.interscity.htc.model.hybrid.util.SpeedUtil.linkEntryDensitySpeed
 
 /** Handles MESO link enter/leave events for Car actors.
   *
@@ -75,7 +75,7 @@ class CarLinkHandler(
     setLinkEntryTickFn(Some(tick))
 
     state.journey.mesoOriginActive = data.mesoOriginAtEnd
-    val speed = if (data.mesoOriginAtEnd) 0.0 else linkDensitySpeed(
+    val speed = if (data.mesoOriginAtEnd) 0.0 else linkEntryDensitySpeed(
       length       = data.linkLength,
       capacity     = data.linkCapacity,
       numberOfCars = data.linkNumberOfCars,
@@ -115,10 +115,14 @@ class CarLinkHandler(
       if (data.mesoOriginAtEnd) "meso_origin_admitted" else "enter_link"
     )
 
-    val exitTick = tick + Math.ceil(time).toLong
+    val exitTick = mesoExitTick(tick, time, data.mesoOriginAtEnd, state)
     setMesoExitTickFn(Some(exitTick))
     onFinishSpontaneousFn(Some(exitTick))
   }
+
+  private def mesoExitTick(tick: Tick, timeSeconds: Double, originAtEnd: Boolean, state: CarState): Tick =
+    MesoLinkTiming.exitTick(tick, timeSeconds / math.max(1e-9, state.journey.secondsPerTick), originAtEnd,
+      model.hybrid.util.VehicleSimulationConfig.mesoCarryRounding, state.journey)
 
   def handleLeaveLink(linkId: Long, data: LinkInfoData, state: CarState): Unit = {
     val tick     = currentTickFn()
@@ -182,7 +186,8 @@ class CarLinkHandler(
       val tripDest = getTripDestinationFn().getOrElse(state.destination)
       finishAndCleanupFn("reached_destination", tripDest)
     } else {
-      onFinishSpontaneousFn(Some(if (data.mesoOriginAtEnd) tick else tick + 1))
+      // Default keeps one tick between leaving a link and entering the next; `htc.meso.immediate-node-transfer` makes the transfer immediate (t' = t).
+      onFinishSpontaneousFn(Some(if (data.mesoOriginAtEnd || model.hybrid.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) tick else tick + 1))
     }
   }
 }

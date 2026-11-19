@@ -17,7 +17,7 @@ import scala.collection.mutable
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.hybrid.entity.event.data.bus.RegisterBusStopData
-import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkCapacityFreedData, RegisterLinkCapacityData }
+import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkCapacityFreedData, MicroBoundaryUpdateData, RegisterLinkCapacityData }
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.hybrid.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
@@ -67,7 +67,8 @@ class Node(
       CityMapUtil.edgeLabelsById.get(linkId)
         .map(e => ShardActorId(entityId = e.id.toLong, classType = e.classType, shardBucket = e.resourceId)),
     logWarnFn           = logWarn,
-    logDebugFn          = logDebug
+    logDebugFn          = logDebug,
+    scheduleFn          = tick => scheduleEvent(tick)
   )
 
   override def onInitialize(event: InitializeEvent): Unit = {
@@ -84,8 +85,10 @@ class Node(
     }
   }
 
-  override protected def actSpontaneous(event: SpontaneousEvent): Unit =
+  override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
+    nodeHandler.onDecisionTick()
     onFinishSpontaneous(None)
+  }
 
   override def actInteractWith(event: ActorInteractionEvent): Unit =
     event.data match {
@@ -95,6 +98,7 @@ class Node(
       case d: RegisterLinkCapacityData  => nodeHandler.handleRegisterLinkCapacity(d)
       case d: LinkCapacityFreedData     => nodeHandler.handleLinkCapacityFreed(d)
       case d: CancelLinkAccessRequestData => nodeHandler.handleCancelLinkAccessRequest(event, d)
+      case d: MicroBoundaryUpdateData   => nodeHandler.handleBoundaryUpdate(event.actorRefId, d.snapshot)
       case d: TrafficSignalChangeStatusData =>
         nodeHandler.handleReceiveSignalChangeStatus(event, d)
       case _ =>
