@@ -31,3 +31,36 @@ Controle: o mesmo cenário **sem a regra de conflito**; relato quantas esquerdas
 
 Cenário de uma interseção; sul reto como proxy com a mesma aceleração do norte; comprimento do conector de esquerda e a via de saída da esquerda sem fonte; esquerdas em faixa compartilhada tratadas como de bolso; sem tráfego transversal
 nem pedestres; brecha crítica do meio-dia com amostra pequena (8 minutos).
+
+## Resultados
+
+**Estimação da brecha crítica (meio-dia): inconclusiva.** Meu primeiro cálculo usou por engano o arquivo de sinal da tarde (`0400-0415`) para filtrar as esquerdas permissivas do meio-dia e deu n = 8,
+mediana 9,45 s e p15 = 6,5 s; **esse resultado era inválido** (o meio-dia corresponde a `1245-0100`). Com o arquivo correto: **n = 2** esquerdas permissivas (brechas 2,3 s e 73,2 s), abaixo do mínimo
+declarado (8). Pela regra congelada o cenário usa **3,0 s** (valor do fixture, sem fonte empírica). `conflictOffsetM` = 16,91 m (geométrico).
+
+**Poder da amostra da PM, informação importante antes dos números:** das 27 esquerdas do 10th, **12 são observadas antes da linha de retenção** (as outras 15 só aparecem dentro da caixa, então a decisão de entrar
+não é observada) e, entre as que o gerador classificou com aproximação (14), **5 ocorrem com o sul reto verde ou amarelo**. Os dados do Peachtree **não permitem validar a aceitação de brechas** com
+significância; o que segue verifica o mecanismo e descreve a concordância.
+
+**Incidentes (defeitos do meu gerador, registrados; saídas inválidas em `experiments/claude-g01/invalid-left-arrival-position/`):** (1) linhas com faixa artefato (9999, 3, 1061) excluíam o veículo inteiro; agora só
+a linha é descartada; (2) esquerdas vistas pela primeira vez dentro da caixa passam a ser injetadas na saída da esquerda (6 veículos, sem decisão modelada); (3) veículos que terminam dentro da caixa sem rótulo de
+caixa geravam `invalid MICRO arrival position` e abortaram as duas execuções; corrigido (proxy de saída com 3 m).
+
+**Execuções válidas** (jar `claude-g06`; 355 veículos incluídos: 173 NB e 182 SB, esquerdas 14 + 6 injetadas, 136 retos, 17 saídas proxy, 182 que terminam na via; excluídos: 16 faixa de bolso sem esquerda, 9 nunca em faixa,
+49 esquerdas do sul não modeladas):
+
+| Medida (14 esquerdas NB com aproximação) | Com regra de conflito | Controle sem regra | Observado |
+| --- | --- | --- | --- |
+| Violações de exclusão (esquerda e sul reto no conflito ao mesmo tempo) | **0** | **34** | |
+| Brecha até a próxima chegada do sul reto, todas: mediana / mínima | 10,55 s / **6,2 s** | 7,5 s / **0,2 s** | 9,35 s / 4,6 s |
+| Brecha, só fase permissiva (n): mediana / mínima | 6,6 s / 6,2 s (5) | 0,6 s / 0,2 s (9) | 9,5 s / 4,6 s (5) |
+| Brechas menores que a crítica de 3,0 s | **0** | **6** | |
+| Erro do cruzamento da linha (modelo menos observado): mediana, p15, máximo | +2,1 s, −0,4, +68,8 | −0,15, −1,6, +5,1 | 0 |
+
+Os quatro runtimes (conservativo e Time Warp, 1 e 2 JVMs) dão **129.606 eventos físicos comprometidos idênticos** com a regra de conflito.
+
+**Conclusão (limitada):** (a) a exclusão e a brecha **mudam o resultado do jeito esperado**: sem a regra há 34 sobreposições e brechas de até 0,2 s, com a regra há 0 e a mínima é 6,2 s;
+(b) as brechas aceitas pelo modelo (mínima 6,2 s) são **maiores** que as observadas (mínima 4,6 s), ou seja, o modelo está conservador com a brecha crítica de 3,0 s, mais que o necessário para reproduzir o
+mínimo observado, mas **a amostra (5 permissivas) não permite estimar nem validar o valor**; (c) a mediana do atraso na linha é +2,1 s com uma esquerda esperando um ciclo a mais (+68,8 s), coerente com o rigor
+do modelo; (d) o resíduo de brecha crítica fica **não identificável com os dados do Peachtree 10th**. Limites: n = 14 (5 permissivas), esquerda do sul não modelada, comprimento do conector de esquerda e da via de saída
+sem fonte, esquerdas de faixa compartilhada tratadas como de bolso, PM já vista em agregado.
