@@ -49,7 +49,11 @@ case class NodeState(
   availableCapacity: mutable.Map[Long, Int] = mutable.Map.empty,
   junctionMovements: List[model.JunctionMovement] = Nil,
   movementSignals: List[model.MovementSignalBinding] = Nil,
-  routeAwareJunctionLanes: Boolean = false
+  routeAwareJunctionLanes: Boolean = false,
+  @JsonDeserialize(contentAs = classOf[model.JunctionConflict])
+  conflicts: List[model.JunctionConflict] = Nil,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Integer])
+  occupiedConnectors: mutable.Map[Long, Int] = mutable.Map.empty
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,
@@ -59,4 +63,8 @@ case class NodeState(
     "junction movements must have unique road and lane pairs")
   require(junctionMovements.map(_.connectorLinkId).distinct.size == junctionMovements.size,
     "junction connector must belong to exactly one movement")
+  require(conflicts.forall(c => junctionMovements.exists(_.connectorLinkId == c.connectorA) &&
+    junctionMovements.exists(_.connectorLinkId == c.connectorB)), "junction conflict names an unknown connector")
+  require(conflicts.map(c => Set(c.connectorA, c.connectorB)).distinct.size == conflicts.size,
+    "junction conflicts must be unique per connector pair")
 }

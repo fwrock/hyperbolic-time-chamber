@@ -192,7 +192,8 @@ class NodeEventHandler(
     val admissionLinkId = junction.map(_.linkId).getOrElse(data.targetLinkId)
     val capacityKnown = state.availableCapacity.contains(admissionLinkId)
     val hasCapacity = !capacityKnown || state.availableCapacity(admissionLinkId) > 0
-    if (hasCapacity) {
+    val key = (currentTickFn(), event.actorRefId, event.seq)
+    if (hasCapacity && !conflictBlocked(junction.map(_.linkId), key)) {
       if (capacityKnown) state.availableCapacity(admissionLinkId) -= 1
       sendGrant(event.actorRefId, event.shardRefId, event.seq, data.targetLinkId, junction,movement.flatMap(_.outgoingLane))
     } else {
@@ -200,7 +201,8 @@ class NodeEventHandler(
         .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId,
           requestSeq = event.seq, signalAlreadyCleared = data.signalAlreadyCleared,
           targetLinkId = if (junction.nonEmpty) data.targetLinkId else 0L, junctionLink = junction,
-          outgoingLane=movement.flatMap(_.outgoingLane),approachLinkId=data.approachLinkId,approachLane=data.approachLane))
+          outgoingLane=movement.flatMap(_.outgoingLane),approachLinkId=data.approachLinkId,approachLane=data.approachLane,
+          requestedTick=currentTickFn()))
       sendMessageFn(event.actorRefId, event.shardRefId,
         LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Full,
           requestSeq = event.seq), EventTypeEnum.ReceiveLinkAccess.toString)
@@ -210,6 +212,8 @@ class NodeEventHandler(
   private def sendGrant(vehicleId: Long, shardId: String, requestSeq: Long, targetLinkId: Long,
                         junction: Option[model.hybrid.entity.state.model.PrecomputedRouteItem], outgoingLane: Option[Int] = None): Unit = {
     junction.foreach { path =>
+      if (state.conflicts.nonEmpty)
+        state.occupiedConnectors(path.linkId) = state.occupiedConnectors.getOrElse(path.linkId, 0) + 1
       reportFn(Map("node_id" -> entityIdFn(), "vehicle_id" -> vehicleId,
         "connector_link_id" -> path.linkId, "target_link_id" -> targetLinkId,
         "tick" -> currentTickFn()), "junction_connector_admitted")
@@ -226,12 +230,63 @@ class NodeEventHandler(
   def handleLinkCapacityFreed(data: LinkCapacityFreedData): Unit =
     if (state != null) {
       state.availableCapacity(data.linkId) = state.availableCapacity.getOrElse(data.linkId, 0) + data.freedCount
-      tryDrainCapacityQueue(data.linkId)
+      if (state.conflicts.exists(_.involves(data.linkId))) {
+        state.occupiedConnectors(data.linkId) = math.max(0, state.occupiedConnectors.getOrElse(data.linkId, 0) - data.freedCount)
+        drainConflictGroup(data.linkId)
+      } else tryDrainCapacityQueue(data.linkId)
     } else {
       logWarnFn(
         s"Node ${entityIdFn()}: LinkCapacityFreedData arrived before initialization for link=${data.linkId}"
       )
     }
+
+  /** True when the connector may not be granted now: a conflicting connector is occupied, or a
+    * conflicting request that beats this one (rule priority, else older) is still waiting.
+    * Connectors without a conflict rule are never blocked here.
+    */
+  private def conflictBlocked(connector: Option[Long], mine: (Long, Long, Long)): Boolean =
+    connector.exists { c =>
+      state.conflicts.filter(_.involves(c)).exists { rule =>
+        val other = rule.other(c)
+        val otherWins = rule.priorityConnector.contains(other)
+        state.occupiedConnectors.getOrElse(other, 0) > 0 ||
+          state.capacityWaitQueue.get(other).exists(_.exists { p =>
+            val theirs = (p.requestedTick, p.actorRefId, p.requestSeq)
+            otherWins || (rule.priorityConnector.isEmpty && Ordering[(Long, Long, Long)].lt(theirs, mine))
+          })
+      }
+    }
+
+  /** Grants waiting requests across a connector and the connectors it conflicts with, one at a
+    * time in deterministic (tick, vehicle, sequence) order; each grant changes occupancy, which is
+    * re-evaluated before the next. Signal state and capacity are checked exactly as in the
+    * single-queue drain.
+    */
+  private def drainConflictGroup(connector: Long): Unit = {
+    val group = (connector :: state.conflicts.filter(_.involves(connector)).map(_.other(connector))).distinct
+    var progressed = true
+    while (progressed) {
+      progressed = false
+      val candidates = group.flatMap { c =>
+        state.capacityWaitQueue.get(c).flatMap(_.headOption).map(p => (c, p))
+      }.filter { case (c, p) =>
+        val target = if (p.targetLinkId == 0L) c else p.targetLinkId
+        state.availableCapacity.getOrElse(c, 0) > 0 &&
+          (p.signalAlreadyCleared || signalFor(p.approachLinkId, target, p.approachLane)
+            .forall(s => s.state == Green || s.state == TrafficSignalPhaseStateEnum.Off)) &&
+          !conflictBlocked(Some(c), (p.requestedTick, p.actorRefId, p.requestSeq))
+      }.sortBy { case (_, p) => (p.requestedTick, p.actorRefId, p.requestSeq) }
+      candidates.headOption.foreach { case (c, _) =>
+        val queue = state.capacityWaitQueue(c)
+        val pending = queue.dequeue()
+        state.availableCapacity(c) = state.availableCapacity.getOrElse(c, 0) - 1
+        sendGrant(pending.actorRefId, pending.shardRefId, pending.requestSeq,
+          if (pending.targetLinkId == 0L) c else pending.targetLinkId, pending.junctionLink, pending.outgoingLane)
+        if (queue.isEmpty) state.capacityWaitQueue.remove(c)
+        progressed = true
+      }
+    }
+  }
 
   /** Capacity waiting cannot retroactively invalidate a MICRO crossing already authorized by
     * its approach Link. Other requests still need the current Green phase. Retaining FIFO and
@@ -239,6 +294,7 @@ class NodeEventHandler(
     * obligation without another model round-trip. See docs/CONGESTION_PROPAGATION_DESIGN.md.
     */
   private def tryDrainCapacityQueue(linkId: Long): Unit = {
+    if (state.conflicts.exists(_.involves(linkId))) { drainConflictGroup(linkId); return }
     def mayProceed(pending: PendingLinkAccessRequest): Boolean = {
       val target = if (pending.targetLinkId == 0L) linkId else pending.targetLinkId
       pending.signalAlreadyCleared || signalFor(pending.approachLinkId,target,pending.approachLane)

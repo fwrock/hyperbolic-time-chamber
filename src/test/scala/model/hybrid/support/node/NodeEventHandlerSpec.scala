@@ -312,7 +312,7 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     handler.handleRequestLinkAccess(requestEvent(1L), RequestLinkAccessData(targetLinkId = 100L))
 
     sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, capacityState = Full)
-    capacityWaitQueue(100L) shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "hybrid.actor.Car"))
+    capacityWaitQueue(100L) shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "hybrid.actor.Car", requestedTick = 100L))
     availableCapacity(100L) shouldBe 0
   }
 
@@ -333,14 +333,14 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     handler.handleRequestLinkAccess(requestFrom(5L, "hybrid.actor.Bus"), RequestLinkAccessData(targetLinkId = 100L))
 
     capacityWaitQueue(100L) shouldBe mutable.Queue(
-      PendingLinkAccessRequest(actorRefId = 4L, shardRefId = "hybrid.actor.Car"),
-      PendingLinkAccessRequest(actorRefId = 5L, shardRefId = "hybrid.actor.Bus")
+      PendingLinkAccessRequest(actorRefId = 4L, shardRefId = "hybrid.actor.Car", requestedTick = 100L),
+      PendingLinkAccessRequest(actorRefId = 5L, shardRefId = "hybrid.actor.Bus", requestedTick = 100L)
     )
 
     handler.handleLinkCapacityFreed(LinkCapacityFreedData(linkId = 100L, freedCount = 1))
 
     sent.last shouldBe ((4L, "hybrid.actor.Car", LinkAccessData(phase = Green, nextTick = 100L, capacityState = Available), "ReceiveLinkAccess"))
-    capacityWaitQueue(100L) shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = 5L, shardRefId = "hybrid.actor.Bus"))
+    capacityWaitQueue(100L) shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = 5L, shardRefId = "hybrid.actor.Bus", requestedTick = 100L))
   }
 
   // ── Capacity: cancellation (destroyed while buffered) ────────────────────────────────────
@@ -456,7 +456,7 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     val signals = mutable.Map(500L -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L))
     val availableCapacity = mutable.Map(100L -> 0)
     val capacityWaitQueue = mutable.Map(
-      100L -> mutable.Queue(PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "hybrid.actor.Car"))
+      100L -> mutable.Queue(PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "hybrid.actor.Car", requestedTick = 100L))
     )
     val (handler, sent) = newHandler(
       newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
@@ -474,7 +474,7 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     val signals = mutable.Map.empty[Long, SignalState]
     val availableCapacity = mutable.Map(100L -> 1)
     val capacityWaitQueue = mutable.Map(
-      100L -> mutable.Queue(PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "hybrid.actor.Car"))
+      100L -> mutable.Queue(PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "hybrid.actor.Car", requestedTick = 100L))
     )
     val (handler, sent) = newHandler(
       newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
