@@ -64,3 +64,20 @@ na linha da 11th de −5,9 para −3,3 s. A hipótese de que a densidade (e não
 em todo o trecho) permanece sem causa identificada: ficam de fora os veículos de faixa de bolso, o tráfego transversal, os pedestres, o conflito das conversões à esquerda
 com o sentido sul e a sincronização do sinal. Limites: `side_entry` e `turn_off_proxy` usam o comportamento observado na fronteira (parcialmente forçado); somente 80 veículos são avaliados;
 o conjunto de 5 sementes mede variabilidade do sorteio da velocidade, não incerteza do dado; a PM já foi vista em agregado.
+
+## Intervalos de confiança (adendo; `aggregate_corridor_results.py`)
+
+Reamostragem de veículos (2.000 amostras, semente fixa, intervalo percentil de 95%), com os valores por veículo médios entre as cinco sementes. **Isso corrige a leitura das tabelas de medianas por semente acima**, que não tinham incerteza.
+Medidas na 11th (77 veículos) e na 10th (75):
+
+| Medida | B: só reto + v. desejada | C: todos NB + v. desejada |
+| --- | --- | --- |
+| 11th, erro mediano na linha (s) | −5,4 (−6,6 a −3,9) | −2,3 (−4,1 a −1,3) |
+| 11th, dentro de ±5 s | 40% (30 a 52) | 57% (46 a 68) |
+| 11th, erro mediano do tempo de via (s) | −3,1 (−4,4 a −2,0) | −2,1 (−3,1 a −0,5) |
+| 10th, erro mediano na linha (s) | −0,18 (−0,48 a +0,02) | −0,1 (−0,3 a +0,14) |
+
+**Comparação pareada nos mesmos veículos (C menos B, erro absoluto na linha):** na 11th, a **mediana** da diferença é **−1,26 s (−2,02 a −0,12)**, ou seja, C melhora e o intervalo exclui zero;
+a **média** da diferença é −0,72 s (−1,65 a +0,27), que inclui zero. Na 10th a diferença é zero na mediana (esperado: a primeira interseção não depende do que vem antes). Portanto o ganho de incluir todos os veículos na 11th é **sustentado
+para a mediana, mas não para a média** do erro absoluto; a frase anterior "fecha cerca de dois terços da diferença" descreve estimativas pontuais com incerteza, não uma garantia.
+Limite: os intervalos reamostram veículos e tratam as sementes como réplicas do mesmo veículo; não capturam a incerteza dos parâmetros, da geometria nem a dependência entre veículos do mesmo ciclo.

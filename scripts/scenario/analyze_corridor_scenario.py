@@ -58,6 +58,7 @@ def analyze(scenario, run, compare=None):
             if row['direction'] == direction and vid in subjects and subjects[vid]['first_frame'] <= frame <= end and s <= exit_end:
                 observed.setdefault(vid, []).append((frame-start, s))
     errors, missing = [], 0
+    raw_stop, raw_road = {i['name']: [] for i in meta['intersections']}, {}
     stop_err = {i['name']: [] for i in meta['intersections']}
     slips = {i['name']: [0, 0, 0] for i in meta['intersections']}      # model later >20 s, within 5 s, total
     road_obs = {}
@@ -75,6 +76,7 @@ def analyze(scenario, run, compare=None):
             if t_obs is not None and first_s is not None and first_s < inter['stop_bar_m'] and (native, connector['id']) in enter:
                 e = (enter[native, connector['id']]-t_obs)*.1
                 stop_err[inter['name']].append(e)
+                raw_stop[inter['name']].append([vid, round(e, 3)])
                 slips[inter['name']][2] += 1
                 slips[inter['name']][0] += e > 20
                 slips[inter['name']][1] += abs(e) <= 5
@@ -88,12 +90,14 @@ def analyze(scenario, run, compare=None):
             if a is not None and b is not None and (native, road['id']) in enter and (native, conn['id']) in enter:
                 road_obs.setdefault(nxt['name'], []).append((b-a)*.1)
                 road_model.setdefault(nxt['name'], []).append((enter[native, conn['id']]-enter[native, road['id']])*.1)
+                raw_road.setdefault(nxt['name'], []).append([vid, round((b-a)*.1, 3), round((enter[native, conn['id']]-enter[native, road['id']])*.1, 3)])
     result = dict(status='DEVELOPMENT_ONLY', subjects=len(subjects), model_completed=len(finished), observed_samples=sum(len(v) for v in observed.values()),
         missing_prediction_samples=missing, position_rmse_m=math.sqrt(sum(e*e for e in errors)/len(errors)) if errors else None,
         stop_bar_crossing_error_s={k: summary(v) for k, v in stop_err.items()},
         stop_bar_slips={k: dict(model_one_cycle_later=v[0], within_5s=v[1], vehicles=v[2]) for k, v in slips.items()},
         inter_intersection_road_time_s={k: dict(observed=summary(road_obs[k]), model=summary(road_model[k])) for k in road_obs},
         interpretation='Signed errors are model minus observed (positive = model later). Development evidence on exposed data; through-only slice.',
+        raw=dict(stop_bar_error_s=raw_stop, road_time_s_observed_model=raw_road),
         assumptions=meta['assumptions'], exclusions={k: v['count'] for k, v in meta['exclusions'].items()})
     if compare:
         result['committed_physical_events_match_comparison'] = canonical(rows) == canonical(events(compare))
