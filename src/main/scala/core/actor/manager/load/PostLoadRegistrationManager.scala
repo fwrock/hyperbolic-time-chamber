@@ -13,7 +13,6 @@ import core.entity.state.DefaultState
 import core.util.ManagerConstantsUtil.POST_LOAD_REGISTRATION_MANAGER_ACTOR_NAME
 
 import org.apache.pekko.actor.{ActorRef, Cancellable, Props}
-import org.apache.pekko.cluster.sharding.ClusterSharding
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 import org.interscity.htc.core.entity.event.EntityEnvelopeEvent
 import org.interscity.htc.core.util.StringUtil
@@ -54,7 +53,7 @@ class PostLoadRegistrationManager(
   private implicit def executionContext: scala.concurrent.ExecutionContext = context.dispatcher
 
   protected def dispatchRegistration(entityId: String, classType: String): Unit = {
-    val shardRef = ClusterSharding(context.system).shardRegion(StringUtil.getModelClassName(classType))
+    val shardRef = core.util.DistributedUtil.getShardRef(StringUtil.getModelClassName(classType), context.system)
     shardRef ! EntityEnvelopeEvent(entityId, PostLoadRegistrationEvent(coordinatorRef = self))
   }
 

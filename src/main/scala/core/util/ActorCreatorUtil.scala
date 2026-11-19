@@ -144,27 +144,32 @@ object ActorCreatorUtil {
     runtimeCoordinator: Option[ActorRef] = None
   ): ActorRef = {
     val clazz = Class.forName(StringUtil.getModelClassName(actorClassName))
-    val sharding = ClusterSharding(system)
-
     val shardName = StringUtil.getModelClassName(actorClassName)
+
+    def propsFor(): Props = Props(
+      clazz,
+      Properties(
+        entityId = entityId,
+        resourceId = resourceId,
+        timeManagers = timeManagers,
+        runtimeCoordinator = runtimeCoordinator,
+        creatorManager = creatorManager,
+        reporters = reporters,
+        actorType = CreationTypeEnum.LoadBalancedDistributed
+      )
+    )
+
+    if (RuntimeMode.from(system.settings.config) == RuntimeMode.SingleNode)
+      return LocalRegions.getOrCreate(system, shardName, propsFor())
+
+    val sharding = ClusterSharding(system)
 
     if (!sharding.shardTypeNames.contains(shardName)) {
       system.log.info(
         s"Creating shard region for $actorClassName with id $shardName entityId $entityId"
       )
 
-      val entityProps = Props(
-        clazz,
-        Properties(
-          entityId = entityId,
-          resourceId = resourceId,
-          timeManagers = timeManagers,
-          runtimeCoordinator = runtimeCoordinator,
-          creatorManager = creatorManager,
-          reporters = reporters,
-          actorType = CreationTypeEnum.LoadBalancedDistributed
-        )
-      )
+      val entityProps = propsFor()
 
       val distributedAllocation = core.actor.manager.loadbalance.allocation.AllocationRuntime(system)
       if (distributedAllocation.enabled) {

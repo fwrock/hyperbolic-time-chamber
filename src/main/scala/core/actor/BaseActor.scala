@@ -8,7 +8,7 @@ import core.actor.manager.loadbalance.migration.{ MigrationSnapshot, MigrationSt
 import core.util.{ IdUtil, JsonUtil }
 
 import com.typesafe.config.ConfigFactory
-import org.apache.pekko.cluster.sharding.{ ClusterSharding, ShardRegion }
+import org.apache.pekko.cluster.sharding.ShardRegion
 import org.apache.pekko.persistence.{ SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 import org.apache.pekko.util.Timeout
 import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
@@ -511,7 +511,7 @@ abstract class BaseActor[T <: BaseState](
     *   The actor reference of the shard region
     */
   protected def getSelfShard: ActorRef =
-    ClusterSharding(context.system).shardRegion(getShardId)
+    core.util.DistributedUtil.getShardRef(getShardId, context.system)
 
   /** Gets the shard name for the current actor.
     * @return
@@ -526,5 +526,5 @@ abstract class BaseActor[T <: BaseState](
     *   The actor reference of the shard region
     */
   protected def getShardRef(className: String): ActorRef =
-    ClusterSharding(context.system).shardRegion(className)
+    core.util.DistributedUtil.getShardRef(className, context.system)
 }
