@@ -338,6 +338,11 @@ abstract class Movable[T <: MovableState](
     if (usesNodeLocalScheduling && next.contains(currentTick)) enterLink()
     else onFinishSpontaneous(next)
 
+  /** True while the previous Link must keep this vehicle's physical footprint until the next Link
+    * has actually admitted it (the Node's capacity grant is not physical acceptance).
+    */
+  protected def holdPreviousLinkUntilNextAdmitted: Boolean = false
+
   protected def leavingLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, nextNodeId)) =>
@@ -355,7 +360,9 @@ abstract class Movable[T <: MovableState](
               onFinishSpontaneous(None)
               return
             }
-            sendMessageTo(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString)
+            val routeContinues = !state.movableBestRoute.forall(_.isEmpty)
+            if (!(routeContinues && holdPreviousLinkUntilNextAdmitted))
+              sendMessageTo(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString)
             if (state.movableBestRoute.forall(_.isEmpty)) {
               state.movableCurrentPath = None
               onFinish(nextNodeId)

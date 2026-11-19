@@ -79,8 +79,6 @@ class LinkFollowingHandler(
     require(snapshot.supported, "unsupported downstream MICRO boundary")
     require(snapshot.laneCount == 1 || snapshot.laneBoundaries.nonEmpty,
       "multi-lane downstream boundary without per-lane occupancy cannot be consumed")
-    require(snapshot.laneCount == 1 || !state.downstreamSpillback,
-      "retained spillback cannot consume a multi-lane downstream link yet (G03)")
     require(math.abs(snapshot.stepSeconds - state.microTimeStep) < 1e-9, "downstream MICRO timestep mismatch")
     val history = state.following.observations.getOrElse(source, MicroBoundaryHistory())
     history.accept(snapshot)

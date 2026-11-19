@@ -543,9 +543,13 @@ class Car(
     signalWaitUntilTick = None
     signalWaitNeedsReverify = false
     state.status = Ready
+    val held = holdPreviousLinkUntilNextAdmitted
     super.leavingLink()
-    state.journey.retainedMicroExitLinkId = None
+    if (!held) state.journey.retainedMicroExitLinkId = None
   }
+
+  override protected def holdPreviousLinkUntilNextAdmitted: Boolean =
+    state.journey.retainedMicroExitLinkId.nonEmpty && !state.movableBestRoute.forall(_.isEmpty)
 
   override protected def onFinish(nodeId: Long): Unit = {
     finishJourney("onFinish_called", nodeId)
@@ -561,6 +565,14 @@ class Car(
     if (requiresReplyCorrelation && data.requestSeq != 0L &&
       !isAwaitingReply(Movable.enterLinkAwaitKey(event.actorRefId),"EnterLinkData",data.requestSeq)) return
     consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
+    // Release the retained footprint only now: the next Link has physically admitted this Car.
+    state.journey.retainedMicroExitLinkId.foreach { approach =>
+      sendMessageTo(entityId = approach, shardId = "hybrid.actor.Link",
+        data = model.hybrid.entity.event.data.LeaveLinkData(state.actorType, state.size,
+          core.enumeration.CreationTypeEnum.LoadBalancedDistributed),
+        eventType = model.hybrid.entity.state.enumeration.EventTypeEnum.LeaveLink.toString)
+    }
+    state.journey.retainedMicroExitLinkId = None
     microHandler.handleMicroEnterLink(data, state)
     emissionHandler.onMicroEnterLink(data.linkId, data.microTimeStep)
   }

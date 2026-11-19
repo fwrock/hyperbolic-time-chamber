@@ -114,8 +114,6 @@ case class LinkState(
   require(sidewalk != null, "sidewalk configuration cannot be null; use enabled=false to disable walking")
   require(laneChanging != null, "lane-changing configuration cannot be null")
   require(microEntry != null && (!microEntry.enabled || isMicroMode), "queued entry requires MICRO")
-  require(!microEntry.enabled || !downstreamSpillback,
-    "queued MICRO entry does not yet support retained upstream spillback footprints")
   require(laneChanging.model == model.LaneChangingModel.Disabled || isMicroMode,
     "active lane changing requires MICRO links")
   require(laneConnections.forall(_.fromLane < lanes), "lane connection exceeds link lane count")
@@ -128,8 +126,7 @@ case class LinkState(
     "downstream lookahead requires MICRO with one physics step per runtime tick")
   require(!downstreamLookahead || lanes == 1 || laneConnections.nonEmpty,
     "multi-lane downstream lookahead requires explicit lane connections; a missing path is unknown, not free")
-  require(!downstreamSpillback || (downstreamLookahead && lanes == 1),
-    "downstream spillback requires single-lane MICRO downstream lookahead (multi-lane handoff is open: G03)")
+  require(!downstreamSpillback || downstreamLookahead, "downstream spillback requires MICRO downstream lookahead")
   require(!carryMicroRemainder || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
     "MICRO boundary remainder requires one physics step per runtime tick")
   require(!carryMicroRemainder || length > speedLimit / 3.6 * microTimeStep,
