@@ -20,7 +20,7 @@ FT = .3048
 # (name, stop bar m, box end m, signal file stem). Stop bar of 1: manual ortho estimate (photo-stopbar.json, +/-0.76 m);
 # others: median front of stopped leaders at observed red (+/- ~2 m: the same method over-estimates the photo value of 1 by 0.6-2.5 m).
 INTERSECTIONS = [('10th', 38.774, 71.7, 'Peachtree_10th_NB'), ('11th', 196.17, 235.8, 'Peachtree_11th_NB'),
-                 ('12th', 359.74, 377.2, 'Peachtree_12th_NB')]
+                 ('12th', 359.74, 377.2, 'Peachtree_12th_NB'), ('13th', 483.8, 503.4, None), ('14th', 600.6, 635.3, 'Peachtree_14th_NB')]
 # Southbound (direction 4) in mirrored coordinates s' = Y0 - local_y, so the same chain code applies. The physical box is the same region as
 # for northbound: SB stop bar = estimate from stopped leaders at observed red (p10 of leader fronts: 72.6 m and 236.9 m; +/-~3 m), box end =
 # northbound stop bar. Order of encounter: 11th then 10th. SB 12th/14th are not set up here.
@@ -139,11 +139,11 @@ def generate(args):
                 category = 'other_road_entry'
             end = None
             if last_box is not None and roads[last_box+1]['offset'] >= link['offset']:
-                end = dict(kind='turn_off_proxy', road=roads[last_box+1], position=3.0)
+                end = dict(kind='turn_off_proxy', road=roads[last_box+1], position=min(3.0, roads[last_box+1]['length'] - 0.1))
             elif last_box is None and S(last) < exit_end - 5:
                 end_place = locate(layout, S(last))
                 if end_place is not None:
-                    end = dict(kind='ends_in_road', road=end_place[0], position=end_place[1])
+                    end = dict(kind='ends_in_road', road=end_place[0], position=min(end_place[1], end_place[0]['length'] - 0.05))
             if end is not None and end['road']['offset'] < link['offset']:
                 excluded['end_before_start'].append(vid); continue
             subjects[vid] = dict(first=first, link=link, position=position, category=category, end=end, lane_row=lane_row)
@@ -159,6 +159,7 @@ def generate(args):
         name, stop, box_end, stem = table[i][:4]
         road_in, conn, road_out = layout[2*i], layout[2*i+1], layout[2*i+2]
         origin = 701 + i
+        if stem is None: continue   # unsignalised intersection (13th): no program, no stop obligation
         programs.append((i, compile_program({origin: read_changes(args.signals/f'{stem}_{args.suffix}.txt')['Thru']},
             [dict(origin=origin, nodeId=junction_node(i), incomingLinkId=road_in['id'], outgoingLinkId=road_out['id'], laneIds=[])],
             args.start_frame, args.end_frame)))
@@ -167,7 +168,7 @@ def generate(args):
         state = dict(startTick=0, scheduleOnTimeManager=False, latitude=33.78, longitude=-84.38+node*.001, links=links)
         if 11 <= node < 11+k:
             i = node-11
-            state['movementSignals'] = [dict(incomingLinkId=layout[2*i]['id'], outgoingLinkId=layout[2*i+2]['id'], origin=701+i, laneIds=[])]
+            if table[i][3] is not None: state['movementSignals'] = [dict(incomingLinkId=layout[2*i]['id'], outgoingLinkId=layout[2*i+2]['id'], origin=701+i, laneIds=[])]
             state['junctionMovements'] = [dict(incomingLinkId=layout[2*i]['id'], outgoingLinkId=layout[2*i+2]['id'], connectorLinkId=layout[2*i+1]['id'])]
         actors.append(actor('Node', node, state))
     def endpoints(link):
@@ -187,7 +188,8 @@ def generate(args):
                 laneConnections=[dict(outgoingLinkId=(layout[layout.index(link)+(2 if link['role'] == 'road' else 1)]['id']),
                                       fromLane=j, toLane=j) for j in range(2)])
             if link['role'] == 'road':
-                state.update(signalControls=[dict(targetLinkId=nxt_road['id'], laneIds=[]) for nxt_road in [layout[layout.index(link)+2]]],
+                state.update(signalControls=([dict(targetLinkId=nxt_road['id'], laneIds=[]) for nxt_road in [layout[layout.index(link)+2]]]
+                                             if table[link['intersection']][3] is not None else []),
                     downstreamConnectors={layout[layout.index(link)+2]['id']: nxt['id']},
                     microEntry=dict(enabled=True, initialSnapshotTick=0) if args.initial_snapshot else dict(enabled=True))
         if link['id'] == layout[-1]['id']:
@@ -246,7 +248,7 @@ def generate(args):
     simulation['timeManagerType'] = args.policy
     (output/'simulation.json').write_text(json.dumps(simulation, indent=2)+'\n')
     signal_sources = [dict(intersection=table[i][0], path=str((args.signals/f'{table[i][3]}_{args.suffix}.txt').resolve()),
-        sha256=hashlib.sha256((args.signals/f'{table[i][3]}_{args.suffix}.txt').read_bytes()).hexdigest()) for i in range(k)]
+        sha256=hashlib.sha256((args.signals/f'{table[i][3]}_{args.suffix}.txt').read_bytes()).hexdigest()) for i in range(k) if table[i][3] is not None]
     (output/'scenario_metadata.json').write_text(json.dumps(dict(status='DEVELOPMENT_ONLY', recording_origin=next(iter(origins)),
         start_frame=args.start_frame, end_frame=args.end_frame, layout=layout, intersections=[dict(name=n, stop_bar_m=s, box_end_m=b)
         for n, s, b, *_ in table[:k]], exit_end_m=exit_end, direction=args.direction, s_origin=origin_s, s_sign=sign, subjects=manifest, sources=sources, signal_sources=signal_sources,
