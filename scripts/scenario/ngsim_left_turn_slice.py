@@ -15,10 +15,24 @@ from ngsim_actor_approach import actor
 from ngsim_observed_signals import compile_program, read_changes
 
 FT = .3048
-NB_STOP, NB_BOX_END, NB_EXIT_END = 38.774, 71.7, 196.17
-SB_STOP = 72.6
-SB_ROAD_LEN, SB_CONN_LEN, SB_EXIT_LEN = NB_EXIT_END - SB_STOP, SB_STOP - NB_STOP, NB_STOP
-Y_C = (NB_STOP + SB_STOP) / 2
+# Sites with both a northbound stop line and a southbound stop line measured (stop lines in NGSIM local_y metres). The domain of a site runs from the
+# previous northbound box end to the next northbound stop line; coordinates are shifted so the northbound road starts at 0 (southbound is mirrored).
+SITES = {
+    '10th': dict(int_id='1', road_start=0.0, nb_stop=38.774, nb_box_end=71.7, nb_exit_end=196.17, sb_stop=72.6, nb_stem='Peachtree_10th_NB', sb_stem='Peachtree_10th_SB'),
+    '11th': dict(int_id='2', road_start=71.7, nb_stop=196.17, nb_box_end=235.8, nb_exit_end=359.74, sb_stop=236.9, nb_stem='Peachtree_11th_NB', sb_stem='Peachtree_11th_SB'),
+    '12th': dict(int_id='3', road_start=235.8, nb_stop=359.74, nb_box_end=377.2, nb_exit_end=483.8, sb_stop=380.4, nb_stem='Peachtree_12th_NB', sb_stem='Peachtree_12th_SB'),
+}
+
+
+def configure(g):
+    """Set the module geometry (shifted coordinates) from a site description; also used by the analyser from scenario metadata."""
+    off = g['road_start']
+    globals().update(OFF=off, INT_ID=g['int_id'], NB_STOP=g['nb_stop']-off, NB_BOX_END=g['nb_box_end']-off, NB_EXIT_END=g['nb_exit_end']-off,
+                     SB_STOP=g['sb_stop']-off)
+    globals().update(SB_ROAD_LEN=NB_EXIT_END-SB_STOP, SB_CONN_LEN=SB_STOP-NB_STOP, SB_EXIT_LEN=NB_STOP, Y_C=(NB_STOP+SB_STOP)/2)
+
+
+configure(SITES['10th'])
 LEFT_LEN, SINK_LEN = 30.0, 60.0
 N_START, N_J, N_END, S_START, S_END, L_END = 1, 2, 3, 4, 5, 6
 A, CT, E, CL, SINK = 11, 12, 13, 14, 15
@@ -58,15 +72,17 @@ def generate(args):
     by_vehicle = defaultdict(list)
     for r in rows:
         by_vehicle[(r['direction'], int(r['vehicle_id']))].append(r)
-    nb_events = read_changes(args.signals/f'Peachtree_10th_NB_{args.suffix}.txt')
-    sb_events = read_changes(args.signals/f'Peachtree_10th_SB_{args.suffix}.txt')
-    program = compile_program({O_NB_THRU: nb_events['Thru'], O_NB_LEFT: union_events(nb_events['Left'], nb_events['Thru']),
+    configure(SITES[args.site])
+    site = SITES[args.site]
+    nb_events = read_changes(args.signals/f"{site['nb_stem']}_{args.suffix}.txt")
+    sb_events = read_changes(args.signals/f"{site['sb_stem']}_{args.suffix}.txt")
+    program = compile_program({O_NB_THRU: nb_events['Thru'], O_NB_LEFT: union_events(nb_events.get('Left', []), nb_events['Thru']),
         O_SB_THRU: sb_events['Thru']},
         [dict(origin=O_NB_THRU, nodeId=N_J, incomingLinkId=A, outgoingLinkId=E, laneIds=[0, 1]),
          dict(origin=O_NB_LEFT, nodeId=N_J, incomingLinkId=A, outgoingLinkId=SINK, laneIds=[2]),
          dict(origin=O_SB_THRU, nodeId=N_J, incomingLinkId=B, outgoingLinkId=X, laneIds=[])], args.start_frame, args.end_frame)
     speed = args.speed_limit_kmh
-    gap = dict(criticalGapSeconds=args.critical_gap, conflictOffsetM=SB_STOP - Y_C)
+    gap = dict(criticalGapSeconds=args.critical_gap, conflictOffsetM=SB_STOP - Y_C, publishPermission=args.publish_permission)
     actors = []
     node_links = {N_START: [A], N_J: [E, CT, SINK, CL, X, CS], N_END: [], S_START: [B], S_END: [], L_END: []}
     for node, links in node_links.items():
@@ -110,7 +126,7 @@ def generate(args):
     subjects, excluded, manifest = {}, defaultdict(list), []
     for (direction, vid), track in sorted(by_vehicle.items()):
         nb = direction == '2'
-        sp = lambda r: float(r['local_y'])*FT if nb else NB_EXIT_END - float(r['local_y'])*FT
+        sp = lambda r: float(r['local_y'])*FT - OFF if nb else NB_EXIT_END - (float(r['local_y'])*FT - OFF)
         seg = [r for r in track if args.start_frame <= int(r['frame_id']) <= args.end_frame and 0.0 <= sp(r) <= NB_EXIT_END
                and r['lane_id'] in ('0', '1', '2', '11')]  # rows with artefact lane ids (9999, 3, 1061) are dropped, not the vehicle
         if not seg: continue
@@ -122,7 +138,7 @@ def generate(args):
         while lead < len(seg)-1 and seg[lead]['lane_id'] == '0' and sp(seg[lead]) < roadlen: lead += 1
         seg = seg[lead:]
         first, last = seg[0], seg[-1]
-        s0, box_i = sp(first), lambda r: r['int_id'] == '1'
+        s0, box_i = sp(first), lambda r: r['int_id'] == INT_ID
         lane_row = next((r for r in seg if r['lane_id'] in ('1', '2', '11')), None)
         if lane_row is None: excluded[direction+':never_in_lane'].append(vid); continue
         road_end = NB_STOP if nb else SB_ROAD_LEN
@@ -179,7 +195,7 @@ def generate(args):
     sim['timeManagerType'] = args.policy
     (output/'simulation.json').write_text(json.dumps(sim, indent=2)+'\n')
     (output/'scenario_metadata.json').write_text(json.dumps(dict(status='DEVELOPMENT_ONLY', start_frame=args.start_frame, end_frame=args.end_frame,
-        subjects=manifest, sources=sources, conflict=not args.no_conflict, critical_gap_s=args.critical_gap, conflict_offset_m=SB_STOP-Y_C,
+        subjects=manifest, sources=sources, site=args.site, geometry=SITES[args.site], conflict=not args.no_conflict, publish_permission=args.publish_permission, critical_gap_s=args.critical_gap, conflict_offset_m=SB_STOP-Y_C,
         left_connector_m=LEFT_LEN, categories={c: sum(1 for s in subjects.values() if s['category'] == c) for c in sorted({s['category'] for s in subjects.values()})},
         by_direction={d: sum(1 for k in subjects if k[0] == d) for d in ('2', '4')}, exclusions={k: dict(count=len(v), vehicles=v) for k, v in excluded.items()},
         assumptions=dict(max_acceleration_mps2=args.max_acceleration, speed_limit_kmh=speed, left_connector_length_m=LEFT_LEN,
@@ -193,6 +209,7 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--raw', type=Path, required=True)
     p.add_argument('--signals', type=Path, required=True)
+    p.add_argument('--site', choices=sorted(SITES), default='10th')
     p.add_argument('--suffix', default='0400-0415')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--start-frame', type=int, default=140)
@@ -202,6 +219,7 @@ if __name__ == '__main__':
     p.add_argument('--critical-gap', type=float, default=3.0)
     p.add_argument('--critical-gap-source', default='protocol fixture default 3.0 s (midday estimate inconclusive: n=2 permissive lefts)')
     p.add_argument('--no-conflict', action='store_true')
+    p.add_argument('--publish-permission', action='store_true', help='anticipatory braking: the Node publishes the conflict permission to the approach Link')
     p.add_argument('--policy', choices=['discrete-event', 'time-warp'], default='discrete-event')
     p.add_argument('--initial-snapshot', action='store_true')
     generate(p.parse_args())

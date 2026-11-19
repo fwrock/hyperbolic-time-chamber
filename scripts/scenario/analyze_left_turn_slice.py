@@ -8,11 +8,11 @@ from collections import defaultdict
 from pathlib import Path
 
 from analyze_ngsim_actor_approach import events
-from ngsim_left_turn_slice import A, B, CL, CS, E, LEFT_LEN, NB_BOX_END, NB_STOP, SB_STOP, SINK, X, Y_C
+import ngsim_left_turn_slice as L
+from ngsim_left_turn_slice import A, B, CL, CS, E, LEFT_LEN, SINK, X
 from ngsim_observed_signals import read_changes
 
 FT = .3048
-FRAC = (Y_C - NB_STOP) / (NB_BOX_END - NB_STOP)
 
 
 def aspect_at(events_, frame):
@@ -27,8 +27,12 @@ def summary(v):
 
 def analyze(scenario, run, signals_dir, suffix):
     meta = json.loads((scenario/'scenario_metadata.json').read_text())
+    L.configure(meta['geometry'])
+    g = meta['geometry']
+    raw_stop, raw_yc, int_id = g['nb_stop'], (g['nb_stop']+g['sb_stop'])/2, g['int_id']
+    frac = (L.Y_C - L.NB_STOP) / (L.NB_BOX_END - L.NB_STOP)
     start = meta['start_frame']
-    sb_sig = read_changes(signals_dir/f'Peachtree_10th_SB_{suffix}.txt')['Thru']
+    sb_sig = read_changes(signals_dir/f"{g['sb_stem']}_{suffix}.txt")['Thru']
     rows = events(run)
     enter, pos_samples, leave = {}, defaultdict(list), {}
     for r in rows:
@@ -43,7 +47,7 @@ def analyze(scenario, run, signals_dir, suffix):
     def reach(car, link, at):
         hit = next((t for t, p in sorted(pos_samples.get((car, link), [])) if p >= at), None)
         return hit if hit is not None else leave.get((car, link))
-    sb_arr = sorted(t for (car, link) in [k for k in enter if k[1] == CS] for t in [reach(car, CS, SB_STOP - Y_C)] if t is not None)
+    sb_arr = sorted(t for (car, link) in [k for k in enter if k[1] == CS] for t in [reach(car, CS, L.SB_STOP - L.Y_C)] if t is not None)
     lefts = [s for s in meta['subjects'] if s['category'] == 'left']
     # observed, same operator as the estimator
     nb_rows, sb_rows = defaultdict(list), defaultdict(list)
@@ -56,18 +60,18 @@ def analyze(scenario, run, signals_dir, suffix):
             elif r['direction'] == '4': sb_rows[int(r['vehicle_id'])].append(row)
     obs_arr = []
     for t in sb_rows.values():
-        t.sort(); box = [r for r in t if r[2] == '1']
+        t.sort(); box = [r for r in t if r[2] == int_id]
         if box and all(r[3] == '1' for r in box):
-            hit = next((r[0] for r in t if r[1] <= Y_C), None)
+            hit = next((r[0] for r in t if r[1] <= raw_yc), None)
             if hit is not None: obs_arr.append(hit - start)
     obs_arr.sort()
     per, g_model, g_obs, g_model_perm, g_obs_perm, stop_err, waits = [], [], [], [], [], [], []
     for s in lefts:
         car, vid = s['native_vehicle'], s['source_vehicle']
         t_obs_rows = sorted(nb_rows[vid])
-        obs_stop = next((f - start for f, y, _, _ in t_obs_rows if y >= NB_STOP), None)
-        obs_c = next((f - start for f, y, _, _ in t_obs_rows if y >= Y_C), t_obs_rows[-1][0] - start if t_obs_rows else None)
-        m_enter = enter.get((car, CL)); m_c = reach(car, CL, FRAC*LEFT_LEN)
+        obs_stop = next((f - start for f, y, _, _ in t_obs_rows if y >= raw_stop), None)
+        obs_c = next((f - start for f, y, _, _ in t_obs_rows if y >= raw_yc), t_obs_rows[-1][0] - start if t_obs_rows else None)
+        m_enter = enter.get((car, CL)); m_c = reach(car, CL, frac*L.LEFT_LEN)
         row = dict(source_vehicle=vid, observed_stop_bar_tick=obs_stop, model_enter_left_connector_tick=m_enter, model_conflict_tick=m_c, observed_conflict_tick=obs_c)
         if obs_stop is not None and m_enter is not None: stop_err.append((m_enter-obs_stop)*.1)
         permissive_obs = obs_c is not None and aspect_at(sb_sig, obs_c + start) in ('Green', 'Yellow')
