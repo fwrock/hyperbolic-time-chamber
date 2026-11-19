@@ -146,7 +146,8 @@ def generate(args):
         origin_node = endpoints(link)[0]
         actors.append(actor('Car', native, dict(startTick=frame-args.start_frame, origin=origin_node, destination=NODE_END,
             actorType='Car', size=float(first['v_length'])*FT, precomputedRoute=route, microDepartPosition=position,
-            microDepartSpeed=float(first['v_vel'])*FT, microDepartLane=lane)))
+            microDepartSpeed=float(first['v_vel'])*FT, microDepartLane=lane,
+            **({'microAcceleration': args.max_acceleration} if args.max_acceleration else {}))))
         manifest.append(dict(source_vehicle=vid, native_vehicle=native, first_frame=frame, link=link['id'], position_m=position,
             speed_mps=float(first['v_vel'])*FT, lane=lane, length_m=float(first['v_length'])*FT, initial_snapshot=frame == args.start_frame))
     data = output/'data'
@@ -166,7 +167,7 @@ def generate(args):
     (output/'scenario_metadata.json').write_text(json.dumps(dict(status='DEVELOPMENT_ONLY', recording_origin=next(iter(origins)),
         start_frame=args.start_frame, end_frame=args.end_frame, layout=layout, intersections=[dict(name=n, stop_bar_m=s, box_end_m=b)
         for n, s, b, _ in INTERSECTIONS[:k]], exit_end_m=exit_end, subjects=manifest, sources=sources, signal_sources=signal_sources,
-        assumptions=dict(speed_limit_kmh=speed, speed_source='assumption (30 mph)' if abs(speed-48.28) < .1 else 'explicit parameter',
+        assumptions=dict(max_acceleration_mps2=args.max_acceleration or 'engine default 2.6', speed_limit_kmh=speed, speed_source='assumption (30 mph)' if abs(speed-48.28) < .1 else 'explicit parameter',
             stop_bar_sources='int 1: ortho manual estimate +/-0.76 m; others: stopped-leader median at observed red, +/-~2 m',
             lanes='2 through lanes; lane index = 2 - NGSIM lane id',
             slice='through-only NB; no cross traffic, opposing flow, turns, pockets, or the intersection after the last modelled one'),
@@ -185,6 +186,7 @@ def main():
     p.add_argument('--start-frame', type=int, default=342)
     p.add_argument('--end-frame', type=int, default=9000)
     p.add_argument('--speed-limit-kmh', type=float, default=48.28)
+    p.add_argument('--max-acceleration', type=float, help='Car maximum acceleration, m/s^2 (default: engine default 2.6)')
     p.add_argument('--policy', choices=['discrete-event', 'time-warp'], default='discrete-event')
     p.add_argument('--initial-snapshot', action='store_true')
     generate(p.parse_args())
