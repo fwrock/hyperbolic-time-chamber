@@ -202,7 +202,7 @@ class ParquetReportData(
           record.put("scenario_id", scenarioId)
           val typed = if (payloadEncoding == "typed-capacity-v1") ParquetCapacityPayload.encode(event.label, event.data) else None
           record.put("capacity_data_v1", typed.orNull)
-          record.put("data", if (typed.nonEmpty) null else JsonUtil.toJson(event.data))
+          record.put("data", if (typed.nonEmpty) null else JsonUtil.toReportJson(event.data))
           // Distributed-run context: reporting node and message-origin node (null when there is none).
           record.put("node", Option(core.cluster.NodeIdentity.originLabel(event.node)).filter(_.nonEmpty).orNull)
           record.put("from_node", Option(core.cluster.NodeIdentity.originLabel(event.fromNode)).filter(_.nonEmpty).orNull)
