@@ -70,3 +70,11 @@ a fila só trabalha com pedidos pendentes. **Desempenho multifaixa saturado não
 - Capacidade por faixa no Node continua nominal por Link (decisão: só mudar se a medição mostrar bloqueio indevido).
 - Saturação além do fixture (muitos carros, filas longas, mais de duas faixas) e medição de desempenho.
 - Conflito/prioridade entre as duas faixas que fundem: aqui a ordem vem do pedido mais antigo, sem regra de prioridade (G04/G05).
+
+
+## Ajuste posterior: destruição entre a concessão e o ACK
+
+Com a liberação adiada ao ACK, um Car destruído **depois da concessão do Node e antes da admissão no Link seguinte** deixaria a posição retida no Link anterior sem liberação (o cancelamento
+de `WaitingCapacity` já liberava, mas esse estado é anterior). `Car.onDestruct` passa a enviar o `LeaveLinkData` ao Link retido uma única vez e a limpar o campo; destruição repetida não reenvia.
+Um teste novo em `CarMicroReplySpec` cobre isso. Mensagens: uma, e só na destruição do ator com posição retida (nenhuma no caminho normal). O restante do cancelamento/replay entre atores reais continua
+verificado apenas pelas execuções Time Warp de ponta a ponta (eventos comprometidos idênticos ao conservativo, com centenas de rollbacks reais por execução).

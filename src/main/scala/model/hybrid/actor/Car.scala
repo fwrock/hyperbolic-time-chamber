@@ -626,6 +626,15 @@ class Car(
     if (state == null) return
 
     signalHandler.cancelPendingCapacityRequest(state)
+    // Destroyed after a capacity grant but before the next Link acknowledged admission: the footprint held on the previous Link
+    // would never be released. (A WaitingCapacity cancel above already released and cleared it.)
+    state.journey.retainedMicroExitLinkId.foreach { approach =>
+      sendMessageTo(entityId = approach, shardId = "hybrid.actor.Link",
+        data = model.hybrid.entity.event.data.LeaveLinkData(state.actorType, state.size,
+          core.enumeration.CreationTypeEnum.LoadBalancedDistributed),
+        eventType = model.hybrid.entity.state.enumeration.EventTypeEnum.LeaveLink.toString)
+    }
+    state.journey.retainedMicroExitLinkId = None
 
     if (state.status != Finished) {
       val fallbackNode = Option(getCurrentNode)

@@ -43,6 +43,7 @@ class CarMicroReplySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
       sentMessages += ((entityId, data)); ()
     }
     def testRetainOn(link: Long): Unit = state.journey.retainedMicroExitLinkId = Some(link)
+    def testDestruct(): Unit = onDestruct(org.htc.protobuf.core.entity.event.control.execution.DestructEvent(actorRef = null))
     def testRetained: Option[Long] = state.journey.retainedMicroExitLinkId
   }
 
@@ -156,5 +157,20 @@ class CarMicroReplySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
     car.underlyingActor.testRetained shouldBe None
     car.underlyingActor.testRollback(1L)
     car.underlyingActor.testRetained shouldBe Some(7L)
+  }
+
+  it should "release the footprint exactly once if the Car is destroyed before the next Link admitted it" in {
+    val tm = TestProbe()
+    val car = TestActorRef(new TestCar(Properties(entityId = "23", reporters = mutable.Map.empty,
+      timeManagers = mutable.Map(TimeManagerTypeEnum.DISCRETE_EVENT -> tm.ref))), "23")
+    tm.awaitAssert(car.underlyingActor.testRecoveryFinished shouldBe true, 5.seconds, 10.millis)
+    car.underlyingActor.testPrepare()
+    car.underlyingActor.testRetainOn(7L)
+    car.underlyingActor.testDestruct()
+    car.underlyingActor.sentMessages.collect { case (7L, d: LeaveLinkData) => d } should have size 1
+    car.underlyingActor.testRetained shouldBe None
+    car.underlyingActor.sentMessages.clear()
+    car.underlyingActor.testDestruct() // a repeated destruction must not release again
+    car.underlyingActor.sentMessages.collect { case (_, d: LeaveLinkData) => d } shouldBe empty
   }
 }
