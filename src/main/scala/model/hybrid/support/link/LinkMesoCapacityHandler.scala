@@ -43,8 +43,9 @@ class LinkMesoCapacityHandler(
   private def physicalCount: Int = state.registered.size - queue.originVehicles.size
   private def updateDensity(): Unit = {
     val speed = SpeedUtil.linkDensitySpeed(state.length,state.capacity,physicalCount.toLong,state.freeSpeed,state.lanes)
-    setStateFn(state.copy(currentSpeed=speed,
-      congestionFactor=SpeedUtil.bprCongestionFactor(physicalCount.toDouble,state.capacity)))
+    val current = state
+    current.currentSpeed = speed
+    current.congestionFactor = SpeedUtil.bprCongestionFactor(physicalCount.toDouble,current.capacity)
   }
 
   private def info(seq: Long, origin: Boolean, entryWait: Double = 0, exitWait: Double = 0): LinkInfoData =
