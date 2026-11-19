@@ -79,7 +79,8 @@ class BusLinkHandler(
       "enter_link"
     )
 
-    val exitTick = tick + time.toLong
+    // Legacy truncated the traversal time; with carried rounding the exit follows the continuous time (at least one tick).
+    val exitTick = if (model.hybrid.util.VehicleSimulationConfig.mesoCarryRounding) model.hybrid.support.car.MesoLinkTiming.exitTick(tick, time, originAtEnd = false, carry = true, state.journey) else tick + time.toLong
     setMesoExitTickFn(Some(exitTick))
     onFinishSpontaneousFn(Some(exitTick))
   }
@@ -131,7 +132,7 @@ class BusLinkHandler(
       finishJourneyFn("reached_destination", state.destination)
       onFinishDestructFn()
     } else {
-      onFinishSpontaneousFn(Some(tick + 1))
+      onFinishSpontaneousFn(Some(if (model.hybrid.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) tick else tick + 1))
     }
   }
 }

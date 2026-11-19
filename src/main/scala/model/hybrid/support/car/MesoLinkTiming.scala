@@ -2,7 +2,12 @@ package org.interscity.htc
 package model.hybrid.support.car
 
 import core.types.Tick
-import model.hybrid.entity.state.CarJourneyState
+
+/** Fields every MESO vehicle keeps so the rounding remainder survives checkpoints. */
+trait MesoTimingState {
+  var mesoRoundingCredit: Double
+  var mesoLastExitTick: Long
+}
 
 /** Exit tick of a MESO link traversal.
   *
@@ -11,7 +16,7 @@ import model.hybrid.entity.state.CarJourneyState
   * a wait at a node (signal or capacity) absorbs the credit. At least one tick per link is kept either way.
   */
 object MesoLinkTiming {
-  def exitTick(tick: Tick, timeTicks: Double, originAtEnd: Boolean, carry: Boolean, journey: CarJourneyState): Tick =
+  def exitTick(tick: Tick, timeTicks: Double, originAtEnd: Boolean, carry: Boolean, journey: MesoTimingState): Tick =
     if (!carry || originAtEnd) {
       journey.mesoRoundingCredit = 0.0
       journey.mesoLastExitTick = -1L

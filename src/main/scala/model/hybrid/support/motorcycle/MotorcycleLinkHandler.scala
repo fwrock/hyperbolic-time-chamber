@@ -67,7 +67,7 @@ class MotorcycleLinkHandler(
       ),
       "enter_link"
     )
-    val exitTick = currentTickFn() + Math.ceil(time).toLong
+    val exitTick = model.hybrid.support.car.MesoLinkTiming.exitTick(currentTickFn(), time, originAtEnd = false, carry = model.hybrid.util.VehicleSimulationConfig.mesoCarryRounding, state)
     setMesoExitTickFn(Some(exitTick))
     onFinishSpontaneousFn(Some(exitTick))
   }
@@ -113,7 +113,7 @@ class MotorcycleLinkHandler(
       onFinishSpontaneousFn(None)
       if (!isPersonCentricFn()) selfDestructFn()
     } else {
-      onFinishSpontaneousFn(Some(currentTickFn() + 1))
+      onFinishSpontaneousFn(Some(if (model.hybrid.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) currentTickFn() else currentTickFn() + 1))
     }
   }
 }

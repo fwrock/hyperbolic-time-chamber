@@ -34,7 +34,7 @@ case class CarJourneyState(
   @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
   var pendingRoadLane: Option[Int] = None,
   var mesoOriginActive: Boolean = false
-) {
+) extends org.interscity.htc.model.hybrid.support.car.MesoTimingState {
   def entryRemainderAt(tick: Tick): Double =
     if (boundaryExitTick.contains(tick) && sumoArrivalSpeed > 0.0) boundaryRemainderSeconds else 0.0
 }

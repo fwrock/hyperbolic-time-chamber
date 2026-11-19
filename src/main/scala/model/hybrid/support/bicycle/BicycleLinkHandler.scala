@@ -56,7 +56,7 @@ class BicycleLinkHandler(
       ),
       "enter_link"
     )
-    val exitTick = currentTickFn() + Math.ceil(time).toLong
+    val exitTick = model.hybrid.support.car.MesoLinkTiming.exitTick(currentTickFn(), time, originAtEnd = false, carry = model.hybrid.util.VehicleSimulationConfig.mesoCarryRounding, state)
     setMesoExitTickFn(Some(exitTick))
     onFinishSpontaneousFn(Some(exitTick))
   }
@@ -102,7 +102,8 @@ class BicycleLinkHandler(
       onFinishSpontaneousFn(None)
       if (!isPersonCentricFn()) selfDestructFn()
     } else {
-      onFinishSpontaneousFn(Some(currentTickFn() + 1))
+      // `htc.meso.immediate-node-transfer` (default on) makes the transfer to the next link immediate; off keeps one tick.
+      onFinishSpontaneousFn(Some(if (model.hybrid.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) currentTickFn() else currentTickFn() + 1))
     }
   }
 }

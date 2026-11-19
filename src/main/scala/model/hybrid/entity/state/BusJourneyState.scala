@@ -20,5 +20,7 @@ case class BusJourneyState(
   var sumoCurrentMicroTimeStepSeconds: Double = 1.0,
   var sumoIsHalting: Boolean = false,
   var sumoRerouteNo: Int = 0,
-  var sumoTripInfoReported: Boolean = false
-)
+  var sumoTripInfoReported: Boolean = false,
+  var mesoRoundingCredit: Double = 0.0,
+  var mesoLastExitTick: Long = -1L
+) extends org.interscity.htc.model.hybrid.support.car.MesoTimingState
