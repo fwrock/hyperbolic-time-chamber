@@ -11,6 +11,20 @@ import core.util.SimulationUtil
   */
 object VehicleSimulationConfig {
 
+  /** MESO: the vehicle moves to the next link at the tick it leaves the previous one (`t' = t`) instead of one tick later.
+    * Read from `htc.meso.immediate-node-transfer` or the `HTC_MESO_IMMEDIATE_NODE_TRANSFER` environment variable (default off).
+    */
+  lazy val mesoImmediateNodeTransfer: Boolean =
+    try com.typesafe.config.ConfigFactory.load().getBoolean("htc.meso.immediate-node-transfer")
+    catch { case _: Exception => sys.env.get("HTC_MESO_IMMEDIATE_NODE_TRANSFER").exists(_.equalsIgnoreCase("true")) }
+
+  /** MESO: carry the tick-rounding remainder of a link traversal into the next link instead of rounding every link up (default off).
+    * Read from `htc.meso.carry-rounding` or the `HTC_MESO_CARRY_ROUNDING` environment variable.
+    */
+  lazy val mesoCarryRounding: Boolean =
+    try com.typesafe.config.ConfigFactory.load().getBoolean("htc.meso.carry-rounding")
+    catch { case _: Exception => sys.env.get("HTC_MESO_CARRY_ROUNDING").exists(_.equalsIgnoreCase("true")) }
+
   /** Simulation end tick - used only when extendSimulationIfPendingEventsAfterEnd is false. When
     * extension is enabled, vehicles are allowed to finish their trips naturally.
     */
