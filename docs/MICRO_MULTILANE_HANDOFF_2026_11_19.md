@@ -51,12 +51,19 @@ a fila só trabalha com pedidos pendentes. **Desempenho multifaixa saturado não
   neste motor (relógio fracionário recusado para as fontes do cenário; o gerador passa `tickDuration` que o escritor atual
   ignora) e o inspetor confere hashes das entradas. Não são evidência nem a favor nem contra.
 
+- **Fusão de duas faixas com admissão atrasada** (`micro_multilane_merge_fixture.py` + `check_micro_multilane_merge.py`; Link 11 com
+  2 faixas e spillback, Link 12 com 1 faixa, fila de admissão e semáforo no fim): 6 carros, as faixas 0 e 1 fundem na faixa 0 do
+  Link 12. Dois carros (103 e 105) ficaram retidos a montante por **96 ticks** (9,6 s) até a admissão; as 192 amostras
+  `micro_exit_wait` batem com esses atrasos e não há amostra depois da admissão (a pegada saiu no ACK). Todos entram e saem de cada
+  Link uma vez, as 6 viagens terminam, os carros retidos não se sobrepõem, e os 3.114 eventos físicos comprometidos são **idênticos**
+  em conservativo e Time Warp, 1 e 2 JVMs. O atraso igual de 96 ticks vem do ciclo do semáforo do fixture, não é medida de
+  comportamento. Não há jar anterior para comparar (ele recusa essa configuração), então a evidência é de invariantes e
+  concordância entre runtimes, não de equivalência com a versão antiga.
+
 ## Não verificado / pendente
 
-- A liberação adiada **não tem teste de unidade no nível do Car**; é coberta só pelo cenário de ponta a ponta acima (sem espera
-  real no destino) e pelos testes de admissão no nível do Link. Falta um cenário onde o destino atrase o ACK e a pegada
-  permaneça a montante por vários ticks.
-- Nenhum cenário multifaixa com spillback foi executado; só construção e admissão em nível de Link.
+- A liberação adiada **não tem teste de unidade no nível do Car**; é coberta pelos dois cenários de ponta a ponta acima.
 - Cancelamento e replay com handoff pendente (antes/depois do ACK) e rollback com a pegada retida e o ACK em voo.
 - Capacidade por faixa no Node continua nominal por Link (decisão: só mudar se a medição mostrar bloqueio indevido).
-- Fusão de duas faixas de origem na mesma faixa de destino sob saturação.
+- Saturação além do fixture (muitos carros, filas longas, mais de duas faixas) e medição de desempenho.
+- Conflito/prioridade entre as duas faixas que fundem: aqui a ordem vem do pedido mais antigo, sem regra de prioridade (G04/G05).
