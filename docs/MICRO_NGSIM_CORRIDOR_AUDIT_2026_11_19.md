@@ -25,7 +25,7 @@ Data: 19/11/2026. Evidência de **desenvolvimento** sobre a gravação PM já ex
 ## Consequência para o escopo (decisão pendente com o autor)
 
 Um corredor autônomo completo exige conversões (inclusive à esquerda a partir de faixas compartilhadas), tráfego oposto (sentido
-sul, direção 3) para brechas permissivas, ruas transversais e bolsos. Isso depende de G04/G05 e de modelar o sentido sul. Excluir os
+sul, **direção 4**; correção: a versão anterior deste texto dizia direção 3) para brechas permissivas, ruas transversais e bolsos. Isso depende de G04/G05 e de modelar o sentido sul. Excluir os
 74% de veículos que convertem altera a dinâmica dos que seguem direto (bloqueio por esquerdistas em faixa compartilhada), então
 um corredor "só through" não é uma validação do corredor. Opções:
 
@@ -34,6 +34,13 @@ um corredor "só through" não é uma validação do corredor. Opções:
 - **B. Aproximações com pouco conflito de conversão**: escolher janelas/aproximações em que a faixa de interesse tem poucas
   conversões, com sinais medidos; exige varredura de janelas e declarar a regra de seleção antes de olhar o erro.
 - **C. Corredor completo** com conversões e tráfego oposto: longo; depende de G04/G05.
+
+## Códigos de direção (verificados pelo sinal das trajetórias, PM)
+
+1 = leste (EB, dx > 0), 2 = norte (NB, dy > 0), 3 = oeste (WB, dx < 0), 4 = sul (SB, dy < 0). Linhas por direção: EB 13.534, NB 196.955,
+WB 10.479, SB 236.444; veículos com ≥ 50 linhas: EB 20, NB 212, WB 14, SB 287. O sentido sul tem **mais** veículos que o norte; é o
+tráfego oposto relevante para conversões à esquerda do norte. O erro de rótulo (direção 3 como sul) estava só neste texto; os
+scripts do auditor usam apenas a direção 2.
 
 ## Limitações
 
