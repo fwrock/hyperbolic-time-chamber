@@ -48,7 +48,7 @@ class Runner:
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--protocol', type=Path, default=HERE/'final_protocol_v1.json')
+    p.add_argument('--protocol', type=Path, default=HERE/'final_protocol_v2.json')
     p.add_argument('--jar', type=Path, required=True)
     p.add_argument('--workspace', type=Path, required=True, help='platform root (contains experiments/)')
     p.add_argument('--work', type=Path, required=True, help='new output directory')
