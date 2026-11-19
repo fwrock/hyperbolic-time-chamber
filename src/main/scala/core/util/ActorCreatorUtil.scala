@@ -261,15 +261,19 @@ object ActorCreatorUtil {
     manager: Props,
     name: String,
     terminateMessage: Any
-  ): ActorRef =
-    system.actorOf(
-      ClusterSingletonManager.props(
-        singletonProps = manager,
-        terminationMessage = terminateMessage,
-        settings = ClusterSingletonManagerSettings(system)
-      ),
-      name = name
-    )
+  ): ActorRef = RuntimeMode.from(system.settings.config) match {
+    case RuntimeMode.Cluster =>
+      system.actorOf(
+        ClusterSingletonManager.props(
+          singletonProps = manager,
+          terminationMessage = terminateMessage,
+          settings = ClusterSingletonManagerSettings(system)
+        ),
+        name = name
+      )
+    case RuntimeMode.SingleNode =>
+      LocalSingletons.register(system, name, system.actorOf(manager, name))
+  }
 
   private def createSingleton[T](
     system: ActorSystem,

@@ -15,13 +15,14 @@ object DistributedUtil {
     system: ActorSystem,
     name: String,
     proxyName: Option[String] = None
-  ): ActorRef = {
-    val props = ClusterSingletonProxy.props(s"/user/$name", ClusterSingletonProxySettings(system))
-    proxyName.fold(factory.actorOf(props))(factory.actorOf(props, _))
+  ): ActorRef = RuntimeMode.from(system.settings.config) match {
+    case RuntimeMode.Cluster =>
+      val props = ClusterSingletonProxy.props(s"/user/$name", ClusterSingletonProxySettings(system))
+      proxyName.fold(factory.actorOf(props))(factory.actorOf(props, _))
+    case RuntimeMode.SingleNode =>
+      LocalSingletons.proxy(factory, system, name, proxyName)
   }
 
-  def createSingletonProxy(system: ActorSystem, name: String): ActorRef = {
-    system.actorOf(ClusterSingletonProxy.props(s"/user/$name", ClusterSingletonProxySettings(system)),
-      s"$name-${java.util.UUID.randomUUID()}-proxy")
-  }
+  def createSingletonProxy(system: ActorSystem, name: String): ActorRef =
+    createSingletonProxyUnder(system, system, name, Some(s"$name-${java.util.UUID.randomUUID()}-proxy"))
 }

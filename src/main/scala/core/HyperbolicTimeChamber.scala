@@ -6,7 +6,6 @@ import org.apache.pekko.actor.{ Actor, ActorSystem, DeadLetter }
 import org.apache.pekko.cluster.Cluster
 import org.apache.pekko.cluster.sharding.ClusterSharding
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings }
 import org.apache.pekko.management.scaladsl.PekkoManagement
 import org.apache.pekko.management.cluster.bootstrap.ClusterBootstrap
 import org.interscity.htc.core.actor.manager.SimulationManager
@@ -106,15 +105,11 @@ object HyperbolicTimeChamber {
 
     actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)
 
-    val simulation = system.actorOf(
-      ClusterSingletonManager.props(
-        singletonProps = Props(
-          SimulationManager()
-        ),
-        terminationMessage = StopSimulationEvent(),
-        settings = ClusterSingletonManagerSettings(system)
-      ),
-      name = SIMULATION_MANAGER_ACTOR_NAME
+    val simulation = util.ActorCreatorUtil.createSingletonManager(
+      system = system,
+      manager = Props(SimulationManager()),
+      name = SIMULATION_MANAGER_ACTOR_NAME,
+      terminateMessage = StopSimulationEvent()
     )
 
     // Everything above is async actor-system setup — start() otherwise returns immediately,

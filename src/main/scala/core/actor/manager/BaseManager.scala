@@ -30,7 +30,7 @@ abstract class BaseManager[T <: BaseState](
   // --- manager metrics (see core.metrics.core.ManagerMetrics) ---
   // Prometheus label for this manager; `kind` tells a cluster singleton (its path is <name>/singleton) from a per-node manager.
   private lazy val managerLabel: String = getClass.getSimpleName
-  private lazy val managerKind: String = if (self.path.name == "singleton") "singleton" else "node"
+  private lazy val managerKind: String = if (self.path.name == "singleton" || self.path.parent.name == "user") "singleton" else "node"
   private lazy val managerMetricsEnabled: Boolean =
     scala.util.Try(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getBoolean("htc.node.manager-metrics")).getOrElse(true)
   private val childCounters = new java.util.HashMap[String, (io.prometheus.client.Counter.Child, io.prometheus.client.Histogram.Child)]()
