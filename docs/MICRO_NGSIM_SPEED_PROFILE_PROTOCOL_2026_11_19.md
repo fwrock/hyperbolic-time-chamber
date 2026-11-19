@@ -56,3 +56,12 @@ Veículos que cobrem a via inteira: PM 116 em movimento e 9 lentos; meio-dia 74 
   mesmas faixas, seguem na frente e formam parte da fila observada; sem eles o modelo tem uma fila mais curta e velocidade de cruzeiro maior. Isso é
   coerente com os dois efeitos, mas outras causas (pedestres, estacionamento, comportamento de amarelo) não foram excluídas.
 - Consequência: **calibrar parâmetros do Car não fecha a diferença restante**; a próxima mudança relevante é modelar os veículos hoje excluídos.
+
+## Correção posterior (mesmo dia): verificação da hipótese dos veículos excluídos
+
+Medi na PM, para as 89 linhas de veículos só em movimento reto na via entre a 10th e a 11th (14.648 linhas), quem é o líder (`preceding`):
+**74,0% seguem outro veículo só em movimento reto, 25,0% seguem um veículo que o cenário exclui e 1,0% não têm líder; a velocidade mediana é 7,9 m/s nos
+dois primeiros casos.** Portanto o líder excluído **não explica diretamente** o cruzeiro lento: os observados andam a 7,9 m/s também atrás de veículos
+que estão no modelo. A frase "hipótese mais simples" acima fica rebaixada: os veículos excluídos podem ainda agir de forma indireta (densidade e
+comprimento da fila: o modelo tem só cerca de 40% dos veículos do sentido norte), mas isso exige teste direto, que é o próximo passo (incluir
+todos os veículos do sentido norte no modelo e repetir o perfil).
