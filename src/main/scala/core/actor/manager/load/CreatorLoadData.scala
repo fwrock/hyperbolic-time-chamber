@@ -4,7 +4,6 @@ package core.actor.manager.load
 import core.actor.BaseActor
 
 import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingletonProxySettings }
 import core.util.{ ActorCreatorUtil, DistributedUtil, IdUtil, StringUtil }
 import core.entity.state.DefaultState
 import core.util.ActorCreatorUtil.createShardRegion
@@ -238,8 +237,7 @@ class CreatorLoadData(
 
   protected def stopForSpatialFailure(reason: String): Unit = {
     logError(s"Spatial creation failed; stopping simulation: $reason")
-    val proxy = context.actorOf(ClusterSingletonProxy.props(s"/user/$SIMULATION_MANAGER_ACTOR_NAME",
-      ClusterSingletonProxySettings(context.system)))
+    val proxy = DistributedUtil.createSingletonProxyUnder(context, context.system, SIMULATION_MANAGER_ACTOR_NAME)
     proxy ! StopSimulationEvent()
   }
 
@@ -344,9 +342,8 @@ class CreatorLoadData(
         loadBalanceProxy = cached
         return Some(loadBalanceProxy)
       }
-      val proxy = context.system.actorOf(ClusterSingletonProxy.props(
-        s"/user/$LOAD_BALANCE_MANAGER_ACTOR_NAME", ClusterSingletonProxySettings(context.system)),
-        s"load-balance-creator-proxy-${java.util.UUID.randomUUID()}")
+      val proxy = DistributedUtil.createSingletonProxyUnder(context.system, context.system,
+        LOAD_BALANCE_MANAGER_ACTOR_NAME, Some(s"load-balance-creator-proxy-${java.util.UUID.randomUUID()}"))
       // Race: only one proxy wins; stop the losers to avoid orphaned actors.
       if (!CreatorLoadData.globalLbProxy.compareAndSet(null, proxy)) context.stop(proxy)
       loadBalanceProxy = CreatorLoadData.globalLbProxy.get()
