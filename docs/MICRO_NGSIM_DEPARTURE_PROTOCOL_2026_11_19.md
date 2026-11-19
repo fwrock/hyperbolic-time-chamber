@@ -31,3 +31,16 @@ operador aplicado à saída simulada da PM).
 
 Dados do meio-dia cobrem 8 min (poucos ciclos); estações com ±0,76 a ±2 m; a velocidade vem do campo `v_vel` do NGSIM (derivada
 das posições); líderes de fila podem ter partida influenciada por fatores não modelados (pedestres, conversões na frente).
+
+## Emenda 1 (antes de qualquer distribuição de resultados)
+
+A primeira execução do extrator devolveu **0 episódios**, sem nenhuma medida, por dois defeitos da regra original, ambos de definição e
+verificados por contagem simples (sem olhar m1, m2 ou m3):
+
+- A janela de 30 m cruza a caixa da interseção, onde `lane_id` vale 0 (3.275 linhas de 3.464 entre a linha e o fim da caixa); a regra
+  exigia faixa 1 ou 2. **Nova regra: `lane_id ∈ {0, 1, 2}` (0 = dentro da interseção).**
+- O campo `preceding` está preenchido em quase todos os veículos parados na linha (4.110 contra 114 sem líder na 10th; 1.709 contra 5 na
+  11th), então `preceding == '0'` não identifica o líder da fila. **Novo critério de líder, o mesmo para dados observados e simulados:
+  nenhum outro veículo NB na mesma faixa, ou na faixa 0, com a frente em `(x, x + 40]` m no quadro `f0`.**
+
+O restante (medidas, decisão e verificação) não muda. A emenda é anterior à leitura de qualquer valor de m1, m2 ou m3.
