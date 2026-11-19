@@ -3,11 +3,12 @@ package model.hybrid.entity.state
 
 import core.entity.state.BaseState
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import org.htc.protobuf.core.entity.actor.Identify
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.core.types.Tick
-import org.interscity.htc.model.hybrid.entity.state.model.{ PendingLinkAccessRequest, SignalState }
+import org.interscity.htc.model.hybrid.entity.state.model.{ NodeJunctionIndex, PendingLinkAccessRequest, SignalState }
 
 import scala.collection.mutable
 
@@ -69,6 +70,10 @@ case class NodeState(
     ) {
   require(junctionMovements.map(m => (m.incomingLinkId, m.outgoingLinkId,m.incomingLane,m.outgoingLane)).distinct.size == junctionMovements.size,
     "junction movements must have unique road and lane pairs")
+  /** Derived from the immutable junction tables; rebuilt per state instance and never serialized. */
+  @JsonIgnore @transient lazy val junction: NodeJunctionIndex =
+    new NodeJunctionIndex(junctionMovements, movementSignals, conflicts)
+
   require(junctionMovements.map(_.connectorLinkId).distinct.size == junctionMovements.size,
     "junction connector must belong to exactly one movement")
   require(conflicts.forall(c => junctionMovements.exists(_.connectorLinkId == c.connectorA) &&
