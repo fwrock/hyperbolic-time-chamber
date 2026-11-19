@@ -21,22 +21,37 @@ FT = .3048
 # others: median front of stopped leaders at observed red (+/- ~2 m: the same method over-estimates the photo value of 1 by 0.6-2.5 m).
 INTERSECTIONS = [('10th', 38.774, 71.7, 'Peachtree_10th_NB'), ('11th', 196.17, 235.8, 'Peachtree_11th_NB'),
                  ('12th', 359.74, 377.2, 'Peachtree_12th_NB')]
+# Southbound (direction 4) in mirrored coordinates s' = Y0 - local_y, so the same chain code applies. The physical box is the same region as
+# for northbound: SB stop bar = estimate from stopped leaders at observed red (p10 of leader fronts: 72.6 m and 236.9 m; +/-~3 m), box end =
+# northbound stop bar. Order of encounter: 11th then 10th. SB 12th/14th are not set up here.
+Y0_SB = 359.74
+INTERSECTIONS_SB = [('11th', Y0_SB-236.9, Y0_SB-196.17, 'Peachtree_11th_SB', '2'), ('10th', Y0_SB-72.6, Y0_SB-38.774, 'Peachtree_10th_SB', '1')]
+INTERSECTIONS_NB = [(n, a, b, c, str(i+1)) for i, (n, a, b, c) in enumerate(INTERSECTIONS)]
 NODE_START, NODE_END = 1, 20
 
 
-def load(raw):
+def direction_table(direction):
+    if direction == '2':
+        return INTERSECTIONS_NB, 0.0, 1.0
+    if direction == '4':
+        return INTERSECTIONS_SB, Y0_SB, -1.0
+    raise ValueError('direction must be 2 (northbound) or 4 (southbound)')
+
+
+def load(raw, direction='2'):
     rows, sources = [], []
     for path in sorted(raw.glob('page-*.json')):
         sources.append(dict(path=str(path.resolve()), sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
-        rows.extend(r for r in json.loads(path.read_text()) if r['direction'] == '2')
+        rows.extend(r for r in json.loads(path.read_text()) if r['direction'] == direction)
     return rows, sources
 
 
-def build_layout(k, exit_end):
+def build_layout(k, exit_end, table=None):
+    table = table or INTERSECTIONS
     """Road/connector table with corridor offsets. Roads end at stop bars, connectors span stop bar to box end."""
     links, start = [], 0.0
     for i in range(k):
-        _, stop, box_end, _ = INTERSECTIONS[i]
+        _, stop, box_end = table[i][0], table[i][1], table[i][2]
         links.append(dict(id=10+2*i, role='road', offset=start, length=stop-start, intersection=i))
         links.append(dict(id=11+2*i, role='connector', offset=stop, length=box_end-stop, intersection=i))
         start = box_end
@@ -59,33 +74,41 @@ def generate(args):
     if output.exists():
         raise FileExistsError(output)
     k = args.intersections
-    exit_end = args.exit_end_m if args.exit_end_m else INTERSECTIONS[k][1] if k < len(INTERSECTIONS) else None
+    table, origin_s, sign = direction_table(args.direction)
+    S = lambda r: origin_s + sign*float(r['local_y'])*FT
+    exit_end = args.exit_end_m if args.exit_end_m else (Y0_SB if args.direction == '4' else (table[k][1] if k < len(table) else None))
     if exit_end is None:
         raise ValueError('Provide --exit-end-m')
-    layout = build_layout(k, exit_end)
+    layout = build_layout(k, exit_end, table)
     roads = [l for l in layout if l['role'] == 'road']
-    rows, sources = load(args.raw)
+    rows, sources = load(args.raw, args.direction)
     origins = {int(r['global_time']) - 100*int(r['frame_id']) for r in rows}
     if len(origins) != 1:
         raise ValueError('Use exactly one recording origin')
     by_vehicle = defaultdict(list)
     for r in rows:
-        if args.start_frame <= int(r['frame_id']) <= args.end_frame and float(r['local_y'])*FT <= exit_end:
+        if args.start_frame <= int(r['frame_id']) <= args.end_frame and 0.0 <= S(r) <= exit_end:
             by_vehicle[int(r['vehicle_id'])].append(r)
     subjects, excluded = {}, defaultdict(list)
-    box_ranges = [(INTERSECTIONS[i][1], INTERSECTIONS[i][2]) for i in range(k)]
+    box_ranges = [(table[i][1], table[i][2]) for i in range(k)]
+    box_ids = [table[i][4] for i in range(k)]
     def box_of(r):
         """Intersection box index (0-based) of a row, or None."""
-        if r['int_id'] != '0' and r['int_id'].isdigit() and 1 <= int(r['int_id']) <= k:
-            return int(r['int_id']) - 1
-        s_ = float(r['local_y'])*FT
+        if r['int_id'] in box_ids:
+            return box_ids.index(r['int_id'])
+        s_ = S(r)
         for i, (lo, hi) in enumerate(box_ranges):
             if lo <= s_ < hi: return i
         return None
     for vid, track in sorted(by_vehicle.items()):
         track.sort(key=lambda r: int(r['frame_id']))
+        # Leading rows labelled lane 0 (inside a box) that already lie on a road, e.g. one frame at the domain edge, are not an entry state.
+        lead = 0
+        while lead < len(track)-1 and track[lead]['lane_id'] == '0' and locate(layout, S(track[lead])) is not None:
+            lead += 1
+        track = track[lead:]
         first = track[0]
-        place = locate(layout, float(first['local_y'])*FT)
+        place = locate(layout, S(first))
         lanes = {r['lane_id'] for r in track}
         through = {r['movement'] for r in track} == {'1'}
         if not lanes <= {'0', '1', '2'}:
@@ -117,8 +140,8 @@ def generate(args):
             end = None
             if last_box is not None and roads[last_box+1]['offset'] >= link['offset']:
                 end = dict(kind='turn_off_proxy', road=roads[last_box+1], position=3.0)
-            elif last_box is None and float(last['local_y'])*FT < exit_end - 5:
-                end_place = locate(layout, float(last['local_y'])*FT)
+            elif last_box is None and S(last) < exit_end - 5:
+                end_place = locate(layout, S(last))
                 if end_place is not None:
                     end = dict(kind='ends_in_road', road=end_place[0], position=end_place[1])
             if end is not None and end['road']['offset'] < link['offset']:
@@ -133,7 +156,7 @@ def generate(args):
         node_of[i] = 10 + i + 1 if i < k else NODE_END
     junction_node = lambda i: 11 + i
     for i in range(k):
-        name, stop, box_end, stem = INTERSECTIONS[i]
+        name, stop, box_end, stem = table[i][:4]
         road_in, conn, road_out = layout[2*i], layout[2*i+1], layout[2*i+2]
         origin = 701 + i
         programs.append((i, compile_program({origin: read_changes(args.signals/f'{stem}_{args.suffix}.txt')['Thru']},
@@ -222,11 +245,11 @@ def generate(args):
         end_tick=args.end_frame-args.start_frame, tick_duration=.1, settings={'htc.time-manager.conservative-transport': 'channel-closed'})
     simulation['timeManagerType'] = args.policy
     (output/'simulation.json').write_text(json.dumps(simulation, indent=2)+'\n')
-    signal_sources = [dict(intersection=INTERSECTIONS[i][0], path=str((args.signals/f'{INTERSECTIONS[i][3]}_{args.suffix}.txt').resolve()),
-        sha256=hashlib.sha256((args.signals/f'{INTERSECTIONS[i][3]}_{args.suffix}.txt').read_bytes()).hexdigest()) for i in range(k)]
+    signal_sources = [dict(intersection=table[i][0], path=str((args.signals/f'{table[i][3]}_{args.suffix}.txt').resolve()),
+        sha256=hashlib.sha256((args.signals/f'{table[i][3]}_{args.suffix}.txt').read_bytes()).hexdigest()) for i in range(k)]
     (output/'scenario_metadata.json').write_text(json.dumps(dict(status='DEVELOPMENT_ONLY', recording_origin=next(iter(origins)),
         start_frame=args.start_frame, end_frame=args.end_frame, layout=layout, intersections=[dict(name=n, stop_bar_m=s, box_end_m=b)
-        for n, s, b, _ in INTERSECTIONS[:k]], exit_end_m=exit_end, subjects=manifest, sources=sources, signal_sources=signal_sources,
+        for n, s, b, *_ in table[:k]], exit_end_m=exit_end, direction=args.direction, s_origin=origin_s, s_sign=sign, subjects=manifest, sources=sources, signal_sources=signal_sources,
         assumptions=dict(desired_speed=('population draw, seed %d, from %s' % (args.speed_seed, args.speed_population)) if args.speed_population else 'road limit for all', max_acceleration_mps2=args.max_acceleration or 'engine default 2.6', speed_limit_kmh=speed, speed_source='assumption (30 mph)' if abs(speed-48.28) < .1 else 'explicit parameter',
             stop_bar_sources='int 1: ortho manual estimate +/-0.76 m; others: stopped-leader median at observed red, +/-~2 m',
             lanes='2 through lanes; lane index = 2 - NGSIM lane id',
@@ -243,6 +266,7 @@ def main():
     p.add_argument('--signals', type=Path, required=True, help='directory with Peachtree_<street>_NB_<suffix>.txt files')
     p.add_argument('--suffix', default='0400-0415')
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--direction', choices=['2', '4'], default='2', help='2 northbound, 4 southbound (mirrored coordinates)')
     p.add_argument('--intersections', type=int, default=2)
     p.add_argument('--exit-end-m', type=float)
     p.add_argument('--start-frame', type=int, default=342)

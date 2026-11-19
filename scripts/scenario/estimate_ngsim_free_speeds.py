@@ -9,12 +9,12 @@ from pathlib import Path
 FT = .3048
 
 
-def estimate(pages):
+def estimate(pages, direction='2'):
     rows = defaultdict(list)
     by_time = defaultdict(list)
     for path in pages:
         for r in json.loads(Path(path).read_text()):
-            if r['direction'] == '2':
+            if r['direction'] == direction:
                 lane = int(r['lane_id']) if r['lane_id'].isdigit() else -1
                 key = int(r['vehicle_id'])
                 row = (int(r['frame_id']), float(r['local_y'])*FT, float(r['v_vel'])*FT, lane, int(r['movement']))
@@ -35,9 +35,10 @@ def estimate(pages):
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--pages', type=Path, required=True)
+    p.add_argument('--direction', default='2')
     p.add_argument('--output', type=Path, required=True)
     a = p.parse_args()
-    population = estimate(sorted(a.pages.glob('page-*.json')))
+    population = estimate(sorted(a.pages.glob('page-*.json')), a.direction)
     v = sorted(x['free_speed_mps'] for x in population)
     result = dict(protocol='docs/MICRO_NGSIM_DESIRED_SPEED_PROTOCOL_2026_11_19.md', n=len(v),
         median=round(statistics.median(v), 2) if v else None, p10=round(v[len(v)//10], 2) if v else None,

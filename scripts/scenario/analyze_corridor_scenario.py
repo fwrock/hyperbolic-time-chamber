@@ -31,6 +31,7 @@ def analyze(scenario, run, compare=None):
     last = meta['layout'][-1]['id']
     exit_end = meta['exit_end_m']
     start, end = meta['start_frame'], meta['end_frame']
+    direction, s_origin, s_sign = meta.get('direction', '2'), meta.get('s_origin', 0.0), meta.get('s_sign', 1.0)
     rows = events(run)
     sim, enter, finished = {}, {}, {}
     for r in rows:
@@ -53,8 +54,8 @@ def analyze(scenario, run, compare=None):
         if hashlib.sha256(path.read_bytes()).hexdigest() != source['sha256']:
             raise ValueError('Raw source changed since generation')
         for row in json.loads(path.read_text()):
-            vid, frame, s = int(row['vehicle_id']), int(row['frame_id']), float(row['local_y'])*FT
-            if row['direction'] == '2' and vid in subjects and subjects[vid]['first_frame'] <= frame <= end and s <= exit_end:
+            vid, frame, s = int(row['vehicle_id']), int(row['frame_id']), s_origin + s_sign*float(row['local_y'])*FT
+            if row['direction'] == direction and vid in subjects and subjects[vid]['first_frame'] <= frame <= end and s <= exit_end:
                 observed.setdefault(vid, []).append((frame-start, s))
     errors, missing = [], 0
     stop_err = {i['name']: [] for i in meta['intersections']}
