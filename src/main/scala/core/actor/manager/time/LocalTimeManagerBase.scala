@@ -624,8 +624,8 @@ abstract class LocalTimeManagerBase(
   protected def currentGvt: Option[Tick] = None
 
   private def sendSpontaneousEventShard(tick: Tick, identity: Identify, generation: Long): Unit = {
-    val actorRef = getShardRef(StringUtil.getModelClassName(identity.classType))
-    actorRef ! core.entity.event.EntityEnvelopeEvent(
+    sendToEntity(
+      StringUtil.getModelClassName(identity.classType),
       IdUtil.format(identity.id),
       SpontaneousEvent(tick = tick, actorRef = self, generation = generation, gvt = currentGvt,
         scheduleRevision = scheduleRevisions(identity.id),
@@ -764,8 +764,8 @@ abstract class LocalTimeManagerBase(
 
     CreationTypeEnum.valueOf(identity.actorType) match {
       case CreationTypeEnum.LoadBalancedDistributed =>
-        val actorRef = getShardRef(StringUtil.getModelClassName(identity.classType))
-        actorRef ! EntityEnvelopeEvent(
+        sendToEntity(
+          StringUtil.getModelClassName(identity.classType),
           IdUtil.format(identity.id),
           DestructEvent(actorRef = self.path.toString)
         )

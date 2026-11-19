@@ -70,6 +70,64 @@ class LocalRegionsSpec extends TestKit(ActorSystem("LocalRegionsSpec",
     )
   }
 
+  "A local entity router" should "keep one sender's messages in order when the entity is born mid-stream" in {
+    val region = LocalRegions.getOrCreate(system, "model.E", Props(new Actor {
+      override def receive: Receive = {
+        case _: ShardRegion.StartEntity =>
+        case n: Int                      => sender() ! n
+      }
+    }))
+    val router = new LocalEntityRouter(system)
+    val total = 500
+    (1 to total).foreach { n =>
+      if (!router.tryDirect("model.E", "seq", Int.box(n), testActor))
+        region.tell(EntityEnvelopeEvent("seq", Int.box(n)), testActor)
+    }
+    receiveN(total, 10.seconds).map(_.asInstanceOf[Int]) shouldBe (1 to total)
+    LocalRegions.entityIndex(system, "model.E").get("seq") should not be null
+    router.tryDirect("model.E", "seq", Int.box(0), testActor) shouldBe false
+  }
+
+  it should "go direct for an entity that was already published" in {
+    val region = LocalRegions.getOrCreate(system, "model.G", Props(new Actor {
+      override def receive: Receive = {
+        case _: ShardRegion.StartEntity =>
+        case n: Int                      => sender() ! n
+      }
+    }))
+    region ! ShardRegion.StartEntity("live")
+    expectMsgType[ShardRegion.StartEntityAck](3.seconds)
+    val router = new LocalEntityRouter(system)
+    (1 to 50).foreach(n => router.tryDirect("model.G", "live", Int.box(n), testActor) shouldBe true)
+    receiveN(50, 5.seconds).map(_.asInstanceOf[Int]) shouldBe (1 to 50)
+  }
+
+  it should "never go direct in cluster mode" in {
+    val clusterSystem = ActorSystem("ClusterModeRouter", ConfigFactory.parseString(
+      "pekko.actor.provider=local\npekko.actor.fail-mixed-versions=off\nhtc.runtime.mode=cluster").withFallback(ConfigFactory.load()))
+    try new LocalEntityRouter(clusterSystem).tryDirect("model.E", "seq", "x", testActor) shouldBe false
+    finally TestKit.shutdownActorSystem(clusterSystem)
+  }
+
+  "The entity index" should "be absent for a region that was never started" in {
+    LocalRegions.entityIndex(system, "model.Nope") shouldBe null
+  }
+
+  it should "drop an entity from the index once it stops" in {
+    val region = LocalRegions.getOrCreate(system, "model.F", Props(new Actor {
+      override def receive: Receive = {
+        case "passivate" => context.parent ! ShardRegion.Passivate("stop")
+        case "stop"      => context.stop(self)
+        case _           =>
+      }
+    }))
+    val index = LocalRegions.entityIndex(system, "model.F")
+    region ! EntityEnvelopeEvent("gone", "hello")
+    awaitAssert(index.get("gone") should not be null, 5.seconds, 50.millis)
+    index.get("gone") ! "passivate"
+    awaitAssert(index.get("gone") shouldBe null, 5.seconds, 50.millis)
+  }
+
   "getShardRef" should "fail clearly for a type that was never started" in {
     an[IllegalStateException] should be thrownBy DistributedUtil.getShardRef("model.Missing", system)
   }

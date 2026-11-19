@@ -525,6 +525,16 @@ abstract class BaseActor[T <: BaseState](
     * @return
     *   The actor reference of the shard region
     */
+  private lazy val localEntityRouter = new core.util.LocalEntityRouter(context.system)
+
+  /** Delivers `payload` to an entity of the named region. In single-node mode a published entity is
+    * told directly (no region hop, no envelope) when that cannot reorder this sender's messages;
+    * otherwise it goes through the region as before.
+    */
+  protected final def sendToEntity(regionName: String, entityId: String, payload: AnyRef): Unit =
+    if (!localEntityRouter.tryDirect(regionName, entityId, payload, self))
+      getShardRef(regionName) ! EntityEnvelopeEvent(entityId, payload)
+
   protected def getShardRef(className: String): ActorRef =
     core.util.DistributedUtil.getShardRef(className, context.system)
 }

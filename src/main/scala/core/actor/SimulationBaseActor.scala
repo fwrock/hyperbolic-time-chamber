@@ -1142,7 +1142,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected def deliverDirectInteraction(receiver: LogicalProcessId, actorType: CreationTypeEnum,
     delivery: DirectExecute): Unit =
     if (actorType == PoolDistributed) getActorPoolRef(receiver.id.toString) ! delivery
-    else getShardRef(IdUtil.format(receiver.model)) ! EntityEnvelopeEvent(receiver.id.toString, delivery)
+    else sendToEntity(IdUtil.format(receiver.model), receiver.id.toString, delivery)
 
   /** Completion transport hook permits injected delayed channels in protocol regressions. */
   protected def publishDirectCompletion(receipt: DirectProcessed): Unit = currentTimeManager ! receipt
@@ -1241,9 +1241,8 @@ abstract class SimulationBaseActor[T <: BaseState](
       submitRuntimeInteraction(entityId, shardId, data, eventType, tick, seq, isAntiMessage, order)
       return
     }
-    val shardingRegion = getShardRef(IdUtil.format(StringUtil.getModelClassName(shardId)))
-
-    shardingRegion ! core.entity.event.EntityEnvelopeEvent(
+    sendToEntity(
+      IdUtil.format(StringUtil.getModelClassName(shardId)),
       IdUtil.format(entityId),
       ActorInteractionEvent(
         tick = tick,
