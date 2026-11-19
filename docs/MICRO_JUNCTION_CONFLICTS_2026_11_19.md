@@ -48,7 +48,7 @@ Só roda quando `conflicts` não está vazio; sem regras o custo é uma verifica
 
 # G05 (primeira parte) — aceitação de brechas com observação causal
 
-Estado: implementado e testado em nível de Node; **não executado entre atores Node e Link reais em cenário integral**.
+Estado: implementado, testado em nível de Node e executado com atores Node e Link reais em um cenário sintético (seção final).
 
 ## O que foi implementado
 
@@ -92,3 +92,28 @@ volume que a assinatura entre Links) e avalia só quando há pedido pendente do 
 - `JunctionConflictSpec` (12 testes no total): desconhecido espera e a assinatura é única; veículo próximo segura e a via livre libera;
   tempo decorrido é creditado; veículo parado na linha e movimento prioritário são tratados como descrito; checkpoint com
   observações e assinatura sem reassinar; validação dos parâmetros.
+
+
+# Cenário integrado com atores reais (G03 + G04 + G05)
+
+`scripts/scenario/micro_junction_conflict_fixture.py` e `check_micro_junction_conflict.py`. Cruzamento sem sinal com dois Links de
+aproximação, dois conectores e duas vias de saída; o movimento prioritário P (11 → conector 30 → 12) e o que cede Y
+(21 → conector 20 → 22) têm caminhos que se cruzam. Regra: prioridade para o 30, brecha crítica 3,0 s, deslocamento ao ponto de
+conflito 8 m, aproximações com lookahead e spillback (G03). Carga: 6 carros prioritários (um a cada 8 s) e 6 que cedem. **Os valores
+de brecha e de deslocamento são parâmetros de engenharia do fixture, não calibração nem dado empírico.**
+
+| Verificação | Resultado |
+| --- | --- |
+| Atores Node e Link reais; conservativo e Time Warp; 1 e 2 JVMs | 4 execuções, 1.368 eventos físicos comprometidos **idênticos** |
+| 12 viagens completas, cada carro entra em suas 3 vias | passa |
+| Ocupações dos conectores conflitantes (entrada no conector até entrada na via de saída) nunca se sobrepõem | passa; **o controle sem regra tem 1 sobreposição** |
+| Cada carro que cede entra no conector pelo menos 24,2 ticks antes da próxima entrada prioritária (3,0 s menos o tempo de 8 m a 50 km/h) | passa; folgas observadas entre 38 e 66 ticks; controle falha |
+| Algum carro que cede espera na linha (≥ 10 ticks de retenção) | passa; controle falha |
+
+O controle (`--no-conflict`, mesmo cenário sem regra no Node) falha exatamente nas três verificações de conflito, o que mostra que o
+verificador detecta a ausência do mecanismo. Não há jar anterior para comparar: o código novo é o único que aceita a configuração.
+
+Limites desta evidência: um cruzamento, um movimento que cede, tráfego leve (8 s entre prioritários), sem sinal, sem esquerda de
+verdade (o conector é uma reta), sem frenagem antecipada, e os carros que cedem em pelotão passam juntos pela mesma brecha (dois
+carros entraram no mesmo intervalo). Os jars incluem as alterações de settings/MESO do workspace
+(`experiments/claude-g05/engine.jar`, sha256 `9de16f31…`).
