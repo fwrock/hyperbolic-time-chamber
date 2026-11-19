@@ -89,7 +89,9 @@ class LinkMesoCapacityHandler(
   }
 
   private def release(p: PendingMesoExit, origin: Boolean, destination: Boolean = false): Unit = {
-    queue.exits = queue.exits.filterNot(_.actorId == p.actorId)
+    // Drain releases the head repeatedly; dropping it by position avoids rescanning the whole queue.
+    queue.exits = if (queue.exits.headOption.exists(_.actorId == p.actorId)) queue.exits.tail
+      else queue.exits.filterNot(_.actorId == p.actorId)
     state.registered.removeActor(p.actorId)
     if (origin) {
       queue.originVehicles = queue.originVehicles.filterNot(_ == p.actorId)
@@ -102,8 +104,8 @@ class LinkMesoCapacityHandler(
       EventTypeEnum.ReceiveLeaveLinkInfo.toString)
   }
 
+  /** The caller removes `p` from `queue.entries`, once per drain instead of once per admission. */
   private def admit(p: PendingMesoEntry): Unit = {
-    queue.entries = queue.entries.filterNot(_.actorId == p.actorId)
     if (p.data.mesoOriginAtEnd) {
       queue.credit -= 1.0
       queue.originVehicles = queue.originVehicles :+ p.actorId
@@ -126,20 +128,26 @@ class LinkMesoCapacityHandler(
   private def drain(): Unit = {
     refresh()
     // Completing a leg does not traverse an outgoing movement. Origin ends were already charged on entry.
-    queue.exits.filter(p => queue.originVehicles.contains(p.actorId) || queue.destinationVehicles.contains(p.actorId))
-      .foreach(p => release(p,queue.originVehicles.contains(p.actorId),queue.destinationVehicles.contains(p.actorId)))
+    val origins = queue.originVehicles.toSet
+    val destinations = queue.destinationVehicles.toSet
+    queue.exits.filter(p => origins.contains(p.actorId) || destinations.contains(p.actorId))
+      .foreach(p => release(p,origins.contains(p.actorId),destinations.contains(p.actorId)))
     refresh()
     while (queue.exits.nonEmpty && queue.credit > epsilon) release(queue.exits.head,false)
-    var physical = queue.entries.find(p => !p.data.mesoOriginAtEnd)
-    while (physical.nonEmpty && physicalCount < config.storageVehicles) {
-      admit(physical.get)
-      physical = queue.entries.find(p => !p.data.mesoOriginAtEnd)
+    val admitted = scala.collection.mutable.Set.empty[Long]
+    val physical = queue.entries.iterator.filter(p => !p.data.mesoOriginAtEnd)
+    while (physicalCount < config.storageVehicles && physical.hasNext) {
+      val p = physical.next()
+      admit(p)
+      admitted += p.actorId
     }
-    var origin = queue.entries.find(_.data.mesoOriginAtEnd)
-    while (origin.nonEmpty && queue.credit > epsilon && originBufferHasSpace) {
-      admit(origin.get)
-      origin = queue.entries.find(_.data.mesoOriginAtEnd)
+    val origin = queue.entries.iterator.filter(_.data.mesoOriginAtEnd)
+    while (queue.credit > epsilon && originBufferHasSpace && origin.hasNext) {
+      val p = origin.next()
+      admit(p)
+      admitted += p.actorId
     }
+    if (admitted.nonEmpty) queue.entries = queue.entries.filterNot(p => admitted.contains(p.actorId))
   }
 
   private def originBufferHasSpace: Boolean = queue.originVehicles.size.toDouble < math.ceil(rate)
