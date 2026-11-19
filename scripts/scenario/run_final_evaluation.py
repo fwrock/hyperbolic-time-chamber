@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import platform
+import statistics
 import subprocess
 import sys
 import time
@@ -48,7 +49,7 @@ class Runner:
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--protocol', type=Path, default=HERE/'final_protocol_v2.json')
+    p.add_argument('--protocol', type=Path, default=HERE/'final_protocol_v3.json')
     p.add_argument('--jar', type=Path, required=True)
     p.add_argument('--workspace', type=Path, required=True, help='platform root (contains experiments/)')
     p.add_argument('--work', type=Path, required=True, help='new output directory')
@@ -88,30 +89,42 @@ def main():
         if sc['kind'] == 'corridor':
             pop_key = [u for u in sc['uses'] if u.startswith('desired_speed')][0]
             population = derived[pop_key]['path']
-            analyses = []
+            analyses, run_level = [], {}
             for seed in sc['seeds']:
-                tag = f"{sc['name']}-s{seed}" if seed is not None else sc['name']
+                stem = f"{sc['name']}-s{seed}" if seed is not None else sc['name']
                 extra = ['--speed-population', population, '--speed-seed', seed] if (population and seed is not None) else []
-                run.py('ngsim_corridor_scenario.py', *base_args, *extra, '--output', run.work/f'{tag}-in')
-                status = run.run_engine(run.work/f'{tag}-in/simulation.json', run.work/f'{tag}-run', 1, conf)
-                outcome['runs'].append(dict(seed=seed, **status))
-                if status['engine_completed']:
-                    run.py('analyze_corridor_scenario.py', '--scenario', run.work/f'{tag}-in', '--run', run.work/f'{tag}-run', '--output', run.work/f'{tag}-analysis.json')
-                    analyses.append(run.work/f'{tag}-analysis.json')
+                run.py('ngsim_corridor_scenario.py', *base_args, *extra, '--output', run.work/f'{stem}-in')
+                for rep in range(sc.get('repeats', 1)):
+                    tag = f'{stem}-r{rep}'
+                    status = run.run_engine(run.work/f'{stem}-in/simulation.json', run.work/f'{tag}-run', 1, conf)
+                    outcome['runs'].append(dict(seed=seed, repeat=rep, **status))
+                    if status['engine_completed']:
+                        run.py('analyze_corridor_scenario.py', '--scenario', run.work/f'{stem}-in', '--run', run.work/f'{tag}-run', '--output', run.work/f'{tag}-analysis.json')
+                        analyses.append(run.work/f'{tag}-analysis.json')
+                        raw = json.loads((run.work/f'{tag}-analysis.json').read_text())['raw']['stop_bar_error_s']
+                        for name, items in raw.items():
+                            if items: run_level.setdefault(name, []).append(statistics.median(e for _, e in items))
             if analyses:
                 outcome['aggregate'] = aggregate(analyses, protocol['bootstrap']['resamples'], protocol['bootstrap']['seed'])
-                outcome['categories'] = json.loads((run.work/f"{sc['name']}-s{sc['seeds'][0]}-in/scenario_metadata.json" if sc['seeds'][0] is not None else run.work/f"{sc['name']}-in/scenario_metadata.json").read_text())['categories']
+                first = sc['seeds'][0]
+                outcome['categories'] = json.loads((run.work/(f"{sc['name']}-s{first}-in" if first is not None else f"{sc['name']}-in")/'scenario_metadata.json').read_text())['categories']
+                outcome['run_level_median_error_s'] = {k: dict(runs=len(v), values=[round(x, 3) for x in v], min=round(min(v), 3), max=round(max(v), 3),
+                    sd=round(statistics.stdev(v), 3) if len(v) > 1 else None) for k, v in run_level.items()}
             first = sc['seeds'][0]
-            tag0 = f"{sc['name']}-s{first}" if first is not None else sc['name']
-            extra0 = ['--speed-population', population, '--speed-seed', first] if (population and first is not None) else []
-        else:
-            tag0 = sc['name']; extra0 = ['--critical-gap', derived['left_critical_gap']['value']]
-            run.py('ngsim_left_turn_slice.py', *base_args, *extra0, '--output', run.work/f'{tag0}-in')
-            status = run.run_engine(run.work/f'{tag0}-in/simulation.json', run.work/f'{tag0}-run', 1, conf)
-            outcome['runs'].append(dict(seed=None, **status))
-            if status['engine_completed']:
-                run.py('analyze_left_turn_slice.py', '--scenario', run.work/f'{tag0}-in', '--run', run.work/f'{tag0}-run', '--signals', sig, '--suffix', ev_suffix, '--output', run.work/f'{tag0}-analysis.json')
-                outcome['left_turn'] = {k: v for k, v in json.loads((run.work/f'{tag0}-analysis.json').read_text()).items() if k != 'per_vehicle'}
+            tag0 = (f"{sc['name']}-s{first}-r0" if first is not None else f"{sc['name']}-r0")
+        elif sc['kind'] == 'left_turn':
+            extra0 = ['--critical-gap', derived['left_critical_gap']['value']]
+            run.py('ngsim_left_turn_slice.py', *base_args, *extra0, '--output', run.work/f"{sc['name']}-in")
+            repeats = []
+            for rep in range(sc.get('repeats', 1)):
+                tag = f"{sc['name']}-r{rep}"
+                status = run.run_engine(run.work/f"{sc['name']}-in/simulation.json", run.work/f'{tag}-run', 1, conf)
+                outcome['runs'].append(dict(seed=None, repeat=rep, **status))
+                if status['engine_completed']:
+                    run.py('analyze_left_turn_slice.py', '--scenario', run.work/f"{sc['name']}-in", '--run', run.work/f'{tag}-run', '--signals', sig, '--suffix', ev_suffix, '--output', run.work/f'{tag}-analysis.json')
+                    repeats.append({k: v for k, v in json.loads((run.work/f'{tag}-analysis.json').read_text()).items() if k != 'per_vehicle'})
+            outcome['left_turn_repeats'] = repeats
+            if repeats: outcome['left_turn'] = repeats[0]
             for ctrl in sc.get('controls', []):
                 ct = f"{sc['name']}-{ctrl['name']}"
                 run.py('ngsim_left_turn_slice.py', *base_args, *extra0, *ctrl['args'], '--output', run.work/f'{ct}-in')
@@ -119,6 +132,29 @@ def main():
                 if cs['engine_completed']:
                     run.py('analyze_left_turn_slice.py', '--scenario', run.work/f'{ct}-in', '--run', run.work/f'{ct}-run', '--signals', sig, '--suffix', ev_suffix, '--output', run.work/f'{ct}-analysis.json')
                     outcome.setdefault('controls', {})[ctrl['name']] = {k: v for k, v in json.loads((run.work/f'{ct}-analysis.json').read_text()).items() if k != 'per_vehicle'}
+            tag0 = f"{sc['name']}-r0"
+        else:  # left_sites
+            rows = []
+            for site in sc['sites']:
+                for cond in sc['conditions']:
+                    stem = f"left_sites-{site['site']}-{cond['name']}"
+                    run.py('ngsim_left_turn_slice.py', '--raw', ev, '--signals', sig, '--suffix', ev_suffix, '--max-acceleration', accel, '--critical-gap', derived['left_critical_gap']['value'],
+                           '--site', site['site'], '--start-frame', site['start_frame'], *sc['args'], *cond['args'], '--output', run.work/f'{stem}-in')
+                    meta = json.loads((run.work/f'{stem}-in/scenario_metadata.json').read_text())
+                    lefts = {x['native_vehicle'] for x in meta['subjects'] if x['category'] == 'left'}
+                    for rep in range(sc.get('repeats', 1)):
+                        tag = f'{stem}-r{rep}'
+                        status = run.run_engine(run.work/f'{stem}-in/simulation.json', run.work/f'{tag}-run', 1, conf)
+                        outcome['runs'].append(dict(site=site['site'], condition=cond['name'], repeat=rep, **status))
+                        if not status['engine_completed']: continue
+                        run.py('analyze_left_turn_slice.py', '--scenario', run.work/f'{stem}-in', '--run', run.work/f'{tag}-run', '--signals', sig, '--suffix', ev_suffix, '--output', run.work/f'{tag}-analysis.json')
+                        d = json.loads((run.work/f'{tag}-analysis.json').read_text())
+                        held = sum(1 for r in events(run.work/f'{tag}-run') if r['event_type'] == 'micro_exit_wait' and int(r['data']['car_id']) in lefts and int(r['data']['link_id']) == 11)
+                        rows.append(dict(site=site['site'], condition=cond['name'], repeat=rep, lefts=d['left_turners_with_approach'], model_entered=d['model_entered_left_connector'],
+                            violations=d['exclusion_violations_left_vs_sb_through'], gap=d.get('model_gap_s_all'), below=d['model_gaps_below_critical'], stop=d.get('stop_bar_crossing_error_s'), held=held))
+            outcome['rows'] = rows
+            results['scenarios'][sc['name']] = outcome
+            continue
         # 3. runtime invariance on the first seed
         if sc.get('invariance_variants') and outcome['runs'] and outcome['runs'][0]['engine_completed']:
             reference = canonical(events(run.work/f'{tag0}-run'))
