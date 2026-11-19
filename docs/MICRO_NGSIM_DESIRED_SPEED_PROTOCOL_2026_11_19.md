@@ -32,3 +32,32 @@ reação, `sigma` nem o teto de via neste protocolo.
 
 Meio-dia cobre 8 min e poucos veículos; p90 sobre linhas sem líder mistura trechos ainda acelerando; população sem relação com classe de
 veículo; conversões, pedestres e estacionamento ficam fora; a PM já foi vista em agregado.
+
+## Resultados
+
+**População do meio-dia (estimação como congelada):** n = 43 veículos, velocidade livre mediana 12,71 m/s (45,8 km/h), p10 10,17, p90 15,49.
+Cumpre as condições de validade do protocolo (n ≥ 30, mediana entre 6 e 13,5 m/s). Parte da população (acima de 13,4 m/s) fica limitada pelo teto
+de via de 48,28 km/h.
+
+**Incidente de execução, antes de ler resultados válidos:** a primeira rodada das cinco sementes teve **3 de 5 execuções abortadas** (sementes 3, 4 e 5:
+`MICRO spillback entry has no physical room; origin injection or handoff requires admission` no Link do conector da 11th). A causa estava no meu
+gerador: conectores sem fila de admissão (`microEntry`), que o contrato do G03 exige quando a faixa pode ficar fisicamente cheia. Corrigi o gerador
+(`microEntry` habilitado nos conectores), movi as saídas inválidas para `experiments/claude-g01/invalid-no-connector-admission/` e refiz as **cinco**
+sementes. As sementes 1 e 2 deram os mesmos números antes e depois; os números abaixo vêm só das execuções corrigidas (todas com `engineCompleted`).
+
+**Verificação na PM (80 veículos, interseções 1 e 2; aceleração 1,72 m/s² nas duas condições):**
+
+| Medida | A: sem velocidade desejada por veículo | B: sementes 1, 2, 3, 4, 5 | Mediana de B (faixa) | Observado |
+| --- | --- | --- | --- | --- |
+| Erro mediano na linha da 11th (s) | −6,8 | −6,1, −6,5, −5,9, −5,0, −5,3 | −5,9 (−6,5 a −5,0) | 0 |
+| Tempo de via, mediana (s) | 9,8 | 11,6, 11,3, 11,9, 12,4, 12,9 | 11,9 (11,3 a 12,9) | 15,4 |
+| Dentro de ±5 s na 11th (de 77) | 24 | 29, 26, 30, 36, 33 | 30 | |
+| Escorregões de ciclo na 11th | 3 | 4, 3, 4, 3, 3 | 3 | |
+| Execuções concluídas (de 80 veículos) | 79 | 79 em todas | | |
+
+**Conclusão (limitada):** sortear a velocidade desejada da população do meio-dia **reduz a diferença de tempo de via de 5,6 s para ≈ 3,5 s**
+(mediana entre sementes), e o erro na linha da 11th de −6,8 para −5,9 s. É uma melhora real e consistente nas cinco sementes, mas
+**explica pouco mais da metade do que faltava**. A população tem mediana de 12,7 m/s, perto do teto de 13,4 m/s, então a velocidade de cruzeiro
+sozinha não pode produzir a velocidade média observada de ≈ 8,2 m/s na via: o restante (≈ 3,5 s) vem de outro efeito, ainda não localizado
+(perda de velocidade logo após a caixa, aproximação da linha seguinte, conversões que freiam o fluxo, pedestres ou estacionamento). Nenhuma
+dessas causas foi testada. Limites: 43 veículos e 8 minutos na estimação; sem limiar de aprovação; a PM já foi vista em agregado.

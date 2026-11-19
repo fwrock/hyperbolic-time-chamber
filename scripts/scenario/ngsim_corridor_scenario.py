@@ -129,6 +129,8 @@ def generate(args):
             state['microEntry'] = dict(enabled=True, initialSnapshotTick=0) if args.initial_snapshot else dict(enabled=True)
         if link['role'] == 'connector':
             i = link['intersection']
+            # Queued admission is required to enter a spillback Link when its lane may be physically full (G03 contract).
+            state['microEntry'] = dict(enabled=True)
             state['junctionGeometry'] = dict(nodeId=junction_node(i), incomingLinkId=layout[2*i]['id'],
                 outgoingLinkId=layout[2*i+2]['id'], lengthMeters=link['length'], speedLimitMps=speed/3.6,
                 shape=[dict(x=0, y=0), dict(x=link['length'], y=0)])
@@ -138,6 +140,12 @@ def generate(args):
         actors.append(actor('TrafficSignal', 700+i, dict(startTick=0, nodes=[junction_node(i)], program=program),
                             {'node': dict(id=junction_node(i), classType='hybrid.actor.Node')}))
     manifest = []
+    speeds = None
+    if args.speed_population:
+        import random
+        population = [x['free_speed_mps'] for x in json.loads(args.speed_population.read_text())['population']]
+        rng = random.Random(args.speed_seed)
+        speeds = {vid: rng.choice(population) for vid in sorted(subjects)}  # population draw; never the vehicle's own observation
     for vid, (first, (link, position)) in sorted(subjects.items()):
         frame, lane, native = int(first['frame_id']), 2-int(first['lane_id']), 10000+vid
         later = [l for l in roads if l['offset'] > link['offset']]
@@ -147,7 +155,8 @@ def generate(args):
         actors.append(actor('Car', native, dict(startTick=frame-args.start_frame, origin=origin_node, destination=NODE_END,
             actorType='Car', size=float(first['v_length'])*FT, precomputedRoute=route, microDepartPosition=position,
             microDepartSpeed=float(first['v_vel'])*FT, microDepartLane=lane,
-            **({'microAcceleration': args.max_acceleration} if args.max_acceleration else {}))))
+            **({'microAcceleration': args.max_acceleration} if args.max_acceleration else {}),
+            **({'microDesiredMaxSpeed': speeds[vid]} if speeds else {}))))
         manifest.append(dict(source_vehicle=vid, native_vehicle=native, first_frame=frame, link=link['id'], position_m=position,
             speed_mps=float(first['v_vel'])*FT, lane=lane, length_m=float(first['v_length'])*FT, initial_snapshot=frame == args.start_frame))
     data = output/'data'
@@ -167,7 +176,7 @@ def generate(args):
     (output/'scenario_metadata.json').write_text(json.dumps(dict(status='DEVELOPMENT_ONLY', recording_origin=next(iter(origins)),
         start_frame=args.start_frame, end_frame=args.end_frame, layout=layout, intersections=[dict(name=n, stop_bar_m=s, box_end_m=b)
         for n, s, b, _ in INTERSECTIONS[:k]], exit_end_m=exit_end, subjects=manifest, sources=sources, signal_sources=signal_sources,
-        assumptions=dict(max_acceleration_mps2=args.max_acceleration or 'engine default 2.6', speed_limit_kmh=speed, speed_source='assumption (30 mph)' if abs(speed-48.28) < .1 else 'explicit parameter',
+        assumptions=dict(desired_speed=('population draw, seed %d, from %s' % (args.speed_seed, args.speed_population)) if args.speed_population else 'road limit for all', max_acceleration_mps2=args.max_acceleration or 'engine default 2.6', speed_limit_kmh=speed, speed_source='assumption (30 mph)' if abs(speed-48.28) < .1 else 'explicit parameter',
             stop_bar_sources='int 1: ortho manual estimate +/-0.76 m; others: stopped-leader median at observed red, +/-~2 m',
             lanes='2 through lanes; lane index = 2 - NGSIM lane id',
             slice='through-only NB; no cross traffic, opposing flow, turns, pockets, or the intersection after the last modelled one'),
@@ -187,6 +196,8 @@ def main():
     p.add_argument('--end-frame', type=int, default=9000)
     p.add_argument('--speed-limit-kmh', type=float, default=48.28)
     p.add_argument('--max-acceleration', type=float, help='Car maximum acceleration, m/s^2 (default: engine default 2.6)')
+    p.add_argument('--speed-population', type=Path, help='JSON from estimate_ngsim_free_speeds.py; per-vehicle desired speed drawn from it')
+    p.add_argument('--speed-seed', type=int, default=1)
     p.add_argument('--policy', choices=['discrete-event', 'time-warp'], default='discrete-event')
     p.add_argument('--initial-snapshot', action='store_true')
     generate(p.parse_args())
