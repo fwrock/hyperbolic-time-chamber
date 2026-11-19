@@ -69,5 +69,10 @@ case class Simulation(
   partial: Option[PartialSimulation] = None,
   /** Optional what-if modifications applied while loading (before the partial filter). */
   modifications: Option[ModificationsSimulation] = None,
-  loadFilter: Option[LoadFilterSimulation] = None
+  loadFilter: Option[LoadFilterSimulation] = None,
+  /** Optional HTC configuration overrides (nested objects or fully qualified htc.* keys).
+    * Omitted settings retain application.conf/environment defaults. Installed on every JVM
+    * before startup consumers; API overrides take priority. Actor state remains in its sources.
+    */
+  settings: Map[String, Any] = Map.empty
 )

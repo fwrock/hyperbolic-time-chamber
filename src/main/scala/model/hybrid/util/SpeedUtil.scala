@@ -3,6 +3,26 @@ package model.hybrid.util
 
 object SpeedUtil {
 
+  /** Evaluate entry speed against either the inclusive or pre-entry vehicle count. LinkInfoData
+    * carries the inclusive count. Excluding the newly admitted vehicle gives an isolated vehicle
+    * free-flow speed even when sampled geometric storage rounds to one slot. Capacity remains an
+    * occupancy reference, never vehicles/hour. Speeds retain km/h units.
+    */
+  def linkEntryDensitySpeed(
+    length: Double,
+    capacity: Double,
+    numberOfCars: Long,
+    freeSpeed: Double,
+    lanes: Int = 1,
+    includeEnteringVehicle: Boolean = MesoTrafficConfig.includeEnteringVehicle
+  ): Double = linkDensitySpeed(
+    length,
+    capacity,
+    math.max(0L, numberOfCars - (if (includeEnteringVehicle) 0L else 1L)),
+    freeSpeed,
+    lanes
+  )
+
   /** BPR (Bureau of Public Roads, 1964) volume-delay function — the standard link-performance
     * congestion multiplier for traffic assignment/routing cost, still the default volume-delay
     * function in most static and dynamic traffic assignment tools. `alpha`/`beta` default to the
@@ -10,10 +30,16 @@ object SpeedUtil {
     *
     * Deliberately separate from [[linkDensitySpeed]]: that function drives the actual simulated
     * vehicle speed (an ad hoc alpha=beta=1 density-speed relationship); this one is the routing
-    * *cost* signal published in [[org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost]],
-    * which is meant to penalize near-/over-capacity links more sharply than linear.
+    * *cost* signal published in
+    * [[org.interscity.htc.model.hybrid.entity.state.model.DynamicLinkCost]], which is meant to
+    * penalize near-/over-capacity links more sharply than linear.
     */
-  def bprCongestionFactor(volume: Double, capacity: Double, alpha: Double = 0.15, beta: Double = 4.0): Double =
+  def bprCongestionFactor(
+    volume: Double,
+    capacity: Double,
+    alpha: Double = 0.15,
+    beta: Double = 4.0
+  ): Double =
     if (capacity <= 0) 1.0
     else 1.0 + alpha * math.pow(volume / capacity, beta)
 

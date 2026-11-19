@@ -1,20 +1,19 @@
 package org.interscity.htc
 package core.api
 
-import com.typesafe.config.{ Config, ConfigFactory, ConfigValueType }
+import com.typesafe.config.{ Config, ConfigFactory, ConfigResolveOptions, ConfigValueType }
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import scala.jdk.CollectionConverters.*
 
-/** Thread-safe registry for htc.* setting overrides provided via the REST API.
+/** Thread-safe registry for htc.* scenario settings and REST API overrides.
   *
   * Override priority (highest → lowest):
-  *   1. Values stored here (set via PUT /api/v1/settings) 2. Environment variables (HTC_*) 3.
-  *      application.conf defaults
+  *   1. REST API overrides 2. simulation.json settings 3. Environment variables (HTC_*)
+  *   4. application.conf defaults
   *
-  * When the API is NOT used, this registry is empty and has zero effect — all configuration
-  * continues to come from application.conf / env vars as usual.
+  * Without API or scenario overrides, configuration comes from application.conf / env vars.
   *
   * Actors that want to honour API overrides should use the helper methods [[getInt]],
   * [[getString]], [[getBoolean]] instead of reading directly from `context.system.settings.config`.
@@ -184,9 +183,14 @@ object SimulatorSettingsRegistry {
     )
     .toMap
   private val overrides = new ConcurrentHashMap[String, String]()
+  private case class ScenarioLayer(config: Config, values: Map[String, String])
+  @volatile private var scenario = ScenarioLayer(ConfigFactory.empty(), Map.empty)
   private val version = new AtomicLong(0L)
 
   private lazy val baseConfig: Config = ConfigFactory.load()
+  /** Declared types/defaults independent of environment string substitutions. */
+  private[htc] lazy val declaredDefaults: Config = ConfigFactory.parseResources("application.conf")
+    .resolve(ConfigResolveOptions.defaults().setUseSystemEnvironment(false).setAllowUnresolved(true))
 
   /** Keys that are only read while the process boots (REST server, cluster); changing them through
     * the API is accepted but has no effect until the engine restarts.
@@ -197,6 +201,8 @@ object SimulatorSettingsRegistry {
   val options: Map[String, List[String]] = {
     val reporters = List("csv", "json", "clickhouse", "parquet", "kafka")
     Map(
+      "htc.mobility.meso.entry-density" -> List("inclusive", "existing-vehicles"),
+      "htc.mobility.mode-choice.private-cost-model" -> List("shared-dynamic", "car-dynamic-bicycle-static"),
       "htc.load-balance-manager.strategy" -> List("hybrid", "type-aware", "geo-affinity", "default", "disabled"),
       "htc.node.label-strategy" -> List("rank", "animals", "cities"),
       "htc.report-manager.default-strategy" -> reporters,
@@ -231,15 +237,22 @@ object SimulatorSettingsRegistry {
   def clear(key: String): Unit = { overrides.remove(key); version.incrementAndGet() }
   def clearAll(): Unit = { overrides.clear(); version.incrementAndGet() }
 
-  def get(key: String): Option[String] = Option(overrides.get(key))
+  /** Atomically replace the scenario layer; omitted values never leak from a previous scenario. */
+  def installScenario(config: Config): Unit = {
+    val values = config.entrySet().asScala.map(e => e.getKey -> renderValue(config, e.getKey)).toMap
+    scenario = ScenarioLayer(config, values)
+    version.incrementAndGet()
+  }
+
+  def get(key: String): Option[String] = Option(overrides.get(key)).orElse(scenario.values.get(key))
   def getAll: Map[String, String] = overrides.asScala.toMap
 
-  /** Layered view of `base` with every API override applied on top, so any `htc.*` key can be
+  /** Layered view of `base` with scenario settings and API overrides applied on top, so any `htc.*` key can be
     * adjusted without each reader being wired individually. Readers must call this per use (not
     * cache it in a `val` created before the simulation starts) to see later changes.
     */
   def overlay(base: Config): Config = {
-    if (overrides.isEmpty) base
+    if (overrides.isEmpty && scenario.config.isEmpty) base
     else {
       val v = version.get()
       overlays.synchronized {
@@ -251,7 +264,8 @@ object SimulatorSettingsRegistry {
           overrides.asScala.foreach {
             case (k, raw) => map.put(k, toConfigValue(base, k, raw))
           }
-          val result = ConfigFactory.parseMap(map, "htc-api-overrides").withFallback(base).resolve()
+          val result = ConfigFactory.parseMap(map, "htc-api-overrides")
+            .withFallback(scenario.config).withFallback(base).resolve()
           overlays.put(base, result)
           result
         }
@@ -259,7 +273,7 @@ object SimulatorSettingsRegistry {
     }
   }
 
-  /** `ConfigFactory.load()` plus API overrides. */
+  /** `ConfigFactory.load()` plus scenario settings and API overrides. */
   def effective: Config = overlay(baseConfig)
 
   // identity-keyed (Config.equals is a deep compare); few distinct bases exist per JVM
@@ -267,7 +281,7 @@ object SimulatorSettingsRegistry {
   private var overlayVersion = -1L
 
   private def toConfigValue(base: Config, key: String, raw: String): AnyRef =
-    if (typeOf(base, key) == "list") parseList(raw) else raw
+    if (typeOf(declaredDefaults, key) == "list" || typeOf(base, key) == "list") parseList(raw) else raw
 
   private[api] def parseList(raw: String): java.util.List[String] = {
     val s = raw.trim
@@ -331,7 +345,7 @@ object SimulatorSettingsRegistry {
     if (!key.startsWith("htc.")) Some(s"only htc.* settings can be adjusted (got '$key'); pekko.* is fixed at JVM start")
     else if (key.length <= 4 || key.endsWith(".")) Some(s"invalid key '$key'")
     else {
-      val t = typeOf(baseConfig, key)
+      val t = typeOf(declaredDefaults, key)
       scala.util.Try {
         t match {
           case "number" =>
@@ -359,9 +373,9 @@ object SimulatorSettingsRegistry {
     }
   }
 
-  /** Effective value: API override > env var > application.conf */
+  /** Effective value: API > simulation.json > env var > application.conf */
   def effectiveValue(key: String): String =
-    Option(overrides.get(key))
+    get(key)
       .orElse(
         catalogByPath
           .get(key)
@@ -377,6 +391,7 @@ object SimulatorSettingsRegistry {
   /** Source of the effective value. */
   def effectiveSource(key: String): String =
     if (overrides.containsKey(key)) "api_override"
+    else if (scenario.values.contains(key)) "simulation_json"
     else
       catalogByPath
         .get(key)
@@ -389,13 +404,13 @@ object SimulatorSettingsRegistry {
 
   /** Int setting: checks registry override before `fallbackConfig`. */
   def getInt(path: String, fallbackConfig: Config): Int =
-    Option(overrides.get(path)).map(_.toInt).getOrElse(fallbackConfig.getInt(path))
+    get(path).map(_.toInt).getOrElse(fallbackConfig.getInt(path))
 
   /** String setting: checks registry override before `fallbackConfig`. */
   def getString(path: String, fallbackConfig: Config): String =
-    Option(overrides.get(path)).getOrElse(fallbackConfig.getString(path))
+    get(path).getOrElse(fallbackConfig.getString(path))
 
   /** Boolean setting: checks registry override before `fallbackConfig`. */
   def getBoolean(path: String, fallbackConfig: Config): Boolean =
-    Option(overrides.get(path)).map(_.toBoolean).getOrElse(fallbackConfig.getBoolean(path))
+    get(path).map(_.toBoolean).getOrElse(fallbackConfig.getBoolean(path))
 }

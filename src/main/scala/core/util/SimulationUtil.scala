@@ -5,7 +5,7 @@ import core.util.JsonUtil.{ fromJson, readJsonFile }
 import core.exception.SimulationEnvConfigFoundException
 import core.api.{ApiConfigRegistry, SimulatorSettingsRegistry}
 
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
 import org.interscity.htc.core.entity.configuration.{ Simulation, SimulationWrapper }
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.cluster.sharding.ShardRegion
@@ -15,6 +15,7 @@ import org.interscity.htc.core.util.ActorCreatorUtil.createShardRegion
 import java.util.UUID
 import java.io.{ BufferedInputStream, FileInputStream }
 import scala.language.postfixOps
+import scala.jdk.CollectionConverters.*
 
 object SimulationUtil {
 
@@ -57,7 +58,14 @@ object SimulationUtil {
       configuration.transitRoutesFile.map("htc.mobility.transit-routes-file" -> _)
 
   def installLocalScenarioSettings(configuration: Simulation): Unit = {
-    SimulatorSettingsRegistry.setAll(localScenarioSettings(configuration))
+    val resources = localScenarioSettings(configuration)
+    val settings = ScenarioSettings.read(configuration, resources)
+    SimulatorSettingsRegistry.installScenario(
+      ConfigFactory.parseMap(resources.view.mapValues(_.asInstanceOf[AnyRef]).toMap.asJava)
+        .withValue("htc.simulation.duration", ConfigValueFactory.fromAnyRef(Long.box(configuration.duration)))
+        .withValue(SimulationClock.Setting,
+          ConfigValueFactory.fromAnyRef(Double.box(SimulationClock.validateScenario(configuration).secondsPerTick)))
+        .withFallback(settings))
     core.cache.CalculationCache.configure(configuration.calculationCache)
   }
 
@@ -85,8 +93,7 @@ object SimulationUtil {
   def loadSimulationConfigFromFileOrEnv(): Simulation = {
     val applicationConfig = org.interscity.htc.core.api.SimulatorSettingsRegistry.effective.getString("htc.simulation.config-file")
     if (applicationConfig != null && applicationConfig.nonEmpty) {
-      val content = readJsonFile(applicationConfig)
-      fromJson[Simulation](content)
+      loadSimulationConfig(applicationConfig)
     } else {
       loadFromEnvironmentVariable("HTC_SIMULATION_CONFIG_FILE")
     }
@@ -94,12 +101,12 @@ object SimulationUtil {
 
   private def loadFromEnvironmentVariable(envVar: String): Simulation =
     sys.env.get(envVar) match {
-      case Some(file) => fromJson[Simulation](readJsonFile(file))
+      case Some(file) => loadSimulationConfig(file)
       case None       => throw new SimulationEnvConfigFoundException(envVar)
     }
 
   def loadFronApplicationConfig(configFile: String): Simulation =
-    fromJson[Simulation](readJsonFile(configFile))
+    loadSimulationConfig(configFile)
 
   def startShardsAtBoot(system: ActorSystem, apiWaitEnabled: Boolean): Unit = {
     // API settings must be installed before a shard region captures its routing policy.
@@ -109,6 +116,8 @@ object SimulationUtil {
 
   def startShards(system: ActorSystem, configuration: String = null): Unit = {
     val simulationConfig = loadSimulationConfig(configuration)
+    // Each JVM must install the scenario before allocation/routing captures process-wide settings.
+    installLocalScenarioSettings(simulationConfig)
     val allocation = core.actor.manager.loadbalance.allocation.AllocationRuntime(system)
     allocation.validateSettings()
     val customBalancing = allocation.enabled
@@ -117,9 +126,6 @@ object SimulationUtil {
     if (customBalancing) core.actor.manager.loadbalance.strategy.LoadBalanceSettings.read(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(system.settings.config))
     if (model.hybrid.util.AccountedRoutingConfig.enabled)
       validateAccountedRoutingSources(simulationConfig, model.hybrid.util.AccountedRoutingConfig.workerIds)
-    // Remote shard actors can initialize lazy process-wide resources before the
-    // SimulationManager's singleton runs; its registry writes reach only its own JVM.
-    installLocalScenarioSettings(simulationConfig)
     allocation.start()
 
     // Register shard regions for all actor types declared in actorsDataSources.

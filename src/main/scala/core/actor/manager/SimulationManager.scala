@@ -95,13 +95,7 @@ class SimulationManager(
   }
 
   override def onStart(): Unit = {
-    val apiEnabled = sys.env
-      .getOrElse(
-        "HTC_API_ENABLED",
-        try org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config).getString("htc.api.enabled")
-        catch { case _: Exception => "false" }
-      )
-      .equalsIgnoreCase("true")
+    val apiEnabled = config.getBoolean("htc.api.enabled")
 
     if (apiEnabled) {
       logInfo(
@@ -413,10 +407,9 @@ class SimulationManager(
         timeManager = createSingletonProxy(LOAD_MANAGER_ACTOR_NAME),
         startRealTime = configuration.startRealTime,
         scenarioId = configuration.id.filter(_.nonEmpty)
-          .orElse(sys.env.get("HTC_SIMULATION_ID").filter(_.nonEmpty))
           .orElse(scala.util.Try(config.getString("htc.simulation.id")).toOption.filter(_.nonEmpty))
           .getOrElse(configuration.name),
-        executionId = requestedReportExecutionId.orElse(sys.env.get("HTC_REPORT_RUN_ID"))
+        executionId = requestedReportExecutionId.orElse(scala.util.Try(config.getString("htc.report-manager.run-id")).toOption.filter(_.nonEmpty))
       ),
       name = REPORT_MANAGER_ACTOR_NAME,
       terminateMessage = StopSimulationEvent()

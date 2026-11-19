@@ -710,3 +710,6 @@ This system was developed for research in **urban mobility** and **traffic simul
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+Scenario-level engine options can be set in `simulation.json.settings`, with defaults for omitted keys.
+See [simulation settings and precedence](docs/SIMULATION_SETTINGS.md).

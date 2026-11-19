@@ -5,7 +5,7 @@ import core.types.Tick
 import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.entity.state.CarState
 import org.interscity.htc.model.hybrid.entity.state.enumeration.MovableStatusEnum.{Finished, Moving, Parked}
-import org.interscity.htc.model.hybrid.util.SpeedUtil.linkDensitySpeed
+import org.interscity.htc.model.hybrid.util.SpeedUtil.linkEntryDensitySpeed
 
 /** Handles MESO link enter/leave events for Car actors.
   *
@@ -75,7 +75,7 @@ class CarLinkHandler(
     setLinkEntryTickFn(Some(tick))
 
     state.journey.mesoOriginActive = data.mesoOriginAtEnd
-    val speed = if (data.mesoOriginAtEnd) 0.0 else linkDensitySpeed(
+    val speed = if (data.mesoOriginAtEnd) 0.0 else linkEntryDensitySpeed(
       length       = data.linkLength,
       capacity     = data.linkCapacity,
       numberOfCars = data.linkNumberOfCars,
