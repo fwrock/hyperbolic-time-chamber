@@ -15,8 +15,6 @@ import core.actor.manager.time.partition.NodeLocalTimeManager
 import core.types.Tick
 import core.util.ManagerConstantsUtil.{GLOBAL_TIME_MANAGER_ACTOR_NAME, REPORT_MANAGER_ACTOR_NAME}
 import org.apache.pekko.actor.{ActorRef, ExtendedActorSystem, Props, Terminated}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
-import org.apache.pekko.routing.RoundRobinPool
 import org.apache.pekko.cluster.{Cluster, MemberStatus}
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
@@ -100,9 +98,8 @@ class ChannelClosedGlobalTimeManager(duration: Tick, extendAfterEnd: Boolean, ma
       require(expectedWorkers > 0, "node-local node count must be positive")
       require(!SimulatorSettingsRegistry.getBoolean("htc.load-balance-manager.enabled", config),
         "node-local-tick requires live load balancing disabled")
-      timeManagersPool = context.actorOf(ClusterRouterPool(RoundRobinPool(0),
-        ClusterRouterPoolSettings(expectedWorkers, 1, allowLocalRoutees = true))
-        .props(localTimeManagerProps()), name = "node-local-time-managers")
+      timeManagersPool = core.util.ActorCreatorUtil.createRouterPool(
+        context, context.system, localTimeManagerProps(), "node-local-time-managers", expectedWorkers, 1)
       simulationManager ! TimeManagerRegisterEvent(timeManagersPool, runtimeCoordinatorForActors)
     }
   }

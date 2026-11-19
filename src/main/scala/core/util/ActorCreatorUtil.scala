@@ -1,7 +1,7 @@
 package org.interscity.htc
 package core.util
 
-import org.apache.pekko.actor.{ ActorRef, ActorSystem, Props }
+import org.apache.pekko.actor.{ ActorRef, ActorRefFactory, ActorSystem, Props }
 import core.actor.BaseActor
 import core.entity.event.{ Command, EntityEnvelopeEvent }
 import core.entity.event.control.migration.MigrationHandoffStopEvent
@@ -295,6 +295,30 @@ object ActorCreatorUtil {
       ),
       name = s"${name}-proxy"
     )
+
+  /** Single-node mode has no cluster router to supply routees, so the local pool is sized to what a
+    * one-node cluster would have created: the global count capped by the per-node cap.
+    */
+  def createRouterPool(
+    factory: ActorRefFactory,
+    system: ActorSystem,
+    routee: Props,
+    name: String,
+    totalInstances: Int,
+    maxInstancesPerNode: Int,
+    allowLocalRoutees: Boolean = true
+  ): ActorRef = {
+    val router = RuntimeMode.from(system.settings.config) match {
+      case RuntimeMode.Cluster =>
+        ClusterRouterPool(
+          RoundRobinPool(0),
+          ClusterRouterPoolSettings(totalInstances, maxInstancesPerNode, allowLocalRoutees)
+        ).props(routee)
+      case RuntimeMode.SingleNode =>
+        RoundRobinPool(Math.max(1, Math.min(totalInstances, maxInstancesPerNode))).props(routee)
+    }
+    factory.actorOf(router, name)
+  }
 
   def createPoolActor(
     system: ActorSystem,

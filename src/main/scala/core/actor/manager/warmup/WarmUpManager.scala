@@ -8,8 +8,6 @@ import core.entity.state.DefaultState
 import core.runtime.accounting.RuntimeFailure
 import core.util.ManagerConstantsUtil.WARM_UP_MANAGER_ACTOR_NAME
 import org.apache.pekko.actor.{ActorRef, Props, Terminated}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
-import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
 import scala.collection.mutable
 import scala.util.control.NonFatal
@@ -32,9 +30,8 @@ class WarmUpManager(val simulationManager: ActorRef, val expectedWorkers: Int)
   override def onStart(): Unit = {
     require(expectedWorkers > 0, "warm-up needs at least one worker")
     val perNode = SimulatorSettingsRegistry.getInt("htc.warmup.max-workers-per-node", org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config))
-    context.actorOf(ClusterRouterPool(RoundRobinPool(0), ClusterRouterPoolSettings(
-      totalInstances = expectedWorkers, maxInstancesPerNode = perNode, allowLocalRoutees = true
-    )).props(WarmUpWorker.props(self)), name = "warm-up-worker-pool")
+    org.interscity.htc.core.util.ActorCreatorUtil.createRouterPool(
+      context, context.system, WarmUpWorker.props(self), "warm-up-worker-pool", expectedWorkers, perNode)
   }
 
   private def fail(reason: String): Unit = if (!failed && !completed) {
