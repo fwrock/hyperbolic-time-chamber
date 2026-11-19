@@ -8,7 +8,9 @@ import model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
 import model.hybrid.entity.event.node.LinkAccessData
 import model.hybrid.entity.state.NodeState
 import model.hybrid.entity.state.enumeration.LinkCapacityStateEnum
-import model.hybrid.entity.state.model.{GapAcceptance, JunctionConflict, JunctionMovement, MicroBoundarySnapshot, MicroBoundaryVehicle, MicroLaneBoundary}
+import model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
+import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{Green, Red}
+import model.hybrid.entity.state.model.{SignalState, MovementSignalBinding, GapAcceptance, JunctionConflict, JunctionMovement, MicroBoundarySnapshot, MicroBoundaryVehicle, MicroLaneBoundary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scala.collection.mutable
@@ -30,7 +32,7 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
     def subscriptions = raw.collect { case (id, _: SubscribeMicroBoundaryData) => id }.toList
     val handler = new NodeEventHandler(() => s, () => "9", () => tick, mutable.Map.empty, (_, _) => (),
       (id, _, d, _) => { raw += ((id, d)); () }, _ => None, _ => (), _ => ())
-    private def event(id: Long, seq: Long) = ActorInteractionEvent(tick, tick, id, "hybrid.actor.Car", id.toString,
+    def event(id: Long, seq: Long) = ActorInteractionEvent(tick, tick, id, "hybrid.actor.Car", id.toString,
       "hybrid.actor.Car", data = "unused", resourceId = "test", seq = seq)
     def request(vehicle: Long, approach: Long, target: Long): Unit =
       handler.handleRequestLinkAccess(event(vehicle, vehicle), RequestLinkAccessData(target, signalAlreadyCleared = true,
@@ -170,5 +172,32 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
     an[IllegalArgumentException] should be thrownBy JunctionConflict(20, 30, None, "x", Some(GapAcceptance(4, 10)))
     an[IllegalArgumentException] should be thrownBy GapAcceptance(0, 10)
     an[IllegalArgumentException] should be thrownBy GapAcceptance(4, -1)
+  }
+
+  "A red priority movement" should "not block a yielding crossing, and releases its waiter when it turns red" in {
+    val base = node(gapRule)
+    val withSignal = base.copy(movementSignals = List(MovementSignalBinding(3, 4, 801)))
+    withSignal.signals(801L) = SignalState(Green, 10, 100)
+    val h = new Harness(withSignal)
+    h.tick = 2; h.request(11, 1, 2)
+    h.tick = 3; h.handler.handleBoundaryUpdate(3, snapshot(2, near)) // a priority car 1.3 s away with a green signal
+    h.grants shouldBe empty
+    h.tick = 4
+    h.handler.handleReceiveSignalChangeStatus(h.event(801, 801), TrafficSignalChangeStatusData(SignalState(Red, 50, 200), 200, 801))
+    h.grants.map(_._1) shouldBe List(11L) // the priority approach is red: its queue is no gap threat
+  }
+
+  it should "hold the crossing again when the priority movement is green with a vehicle too close" in {
+    val withSignal = node(gapRule).copy(movementSignals = List(MovementSignalBinding(3, 4, 801)))
+    withSignal.signals(801L) = SignalState(Red, 50, 200)
+    val h = new Harness(withSignal)
+    h.tick = 2; h.request(11, 1, 2)
+    h.tick = 3; h.handler.handleBoundaryUpdate(3, snapshot(2, near))
+    h.grants.map(_._1) shouldBe List(11L) // red priority: granted at once
+    h.request(12, 1, 2)
+    h.free(20)
+    h.handler.handleReceiveSignalChangeStatus(h.event(801, 801), TrafficSignalChangeStatusData(SignalState(Green, 50, 300), 300, 801))
+    h.tick = 4; h.request(13, 1, 2)
+    h.waits should contain(13L) // now green with a near vehicle: unknown/near means wait
   }
 }

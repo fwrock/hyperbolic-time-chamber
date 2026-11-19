@@ -117,3 +117,12 @@ Limites desta evidência: um cruzamento, um movimento que cede, tráfego leve (8
 verdade (o conector é uma reta), sem frenagem antecipada, e os carros que cedem em pelotão passam juntos pela mesma brecha (dois
 carros entraram no mesmo intervalo). Os jars incluem as alterações de settings/MESO do workspace
 (`experiments/claude-g05/engine.jar`, sha256 `9de16f31…`).
+
+
+## Ajuste posterior (mesmo dia): prioridade em vermelho não é ameaça de brecha
+
+Para esquerdas permissivas contra um movimento prioritário com sinal, o G05 original tratava um veículo prioritário parado no vermelho como se fosse arrancar
+(chegada pela aceleração a partir do repouso) e bloquearia a esquerda durante todo o vermelho. Agora, **se o movimento prioritário está em Vermelho no Node, sua
+aproximação não é ameaça de brecha**; Amarelo continua contando, e aspecto desconhecido é tratado como ameaça. Quando o sinal do movimento prioritário muda,
+os pedidos que cedem a ele são reavaliados (`drainYieldersOfOrigin`). Dois testes novos em `JunctionConflictSpec`. Limite: a decisão usa o aspecto do Node no
+momento da avaliação; um veículo prioritário que já cruzou no amarelo continua sendo contabilizado pela ocupação do conector.

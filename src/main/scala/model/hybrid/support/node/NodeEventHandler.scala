@@ -285,7 +285,11 @@ class NodeEventHandler(
     */
   private def gapAccepted(priority: Long, gap: model.hybrid.entity.state.model.GapAcceptance): Boolean =
     priorityMovement(priority).exists { movement =>
-      state.boundaryObservations.get(movement.incomingLinkId).flatMap(_.before(currentTickFn())).exists { snapshot =>
+      // A priority movement that currently shows Red cannot send a vehicle into the conflict: its approach is no gap threat.
+      // Yellow still counts (a vehicle may cross); an unknown aspect is treated as a threat.
+      val redNow = signalFor(movement.incomingLinkId, movement.outgoingLinkId, movement.incomingLane)
+        .exists(_.state == Red)
+      redNow || state.boundaryObservations.get(movement.incomingLinkId).flatMap(_.before(currentTickFn())).exists { snapshot =>
         val lanes = if (snapshot.laneBoundaries.isEmpty) List((None: Option[Int], snapshot.vehicle))
           else snapshot.laneBoundaries.map(l => (Some(l.laneId), l.frontmost))
         val elapsed = (currentTickFn() - snapshot.tick) * snapshot.stepSeconds
@@ -296,6 +300,16 @@ class NodeEventHandler(
             val arrival = (-v.velocity + math.sqrt(v.velocity * v.velocity + 2 * a * distance)) / a
             arrival - elapsed >= gap.criticalGapSeconds
           }
+      }
+    }
+
+  /** A priority movement turning Red (or Green) changes what its yielding movements may do: re-evaluate their waiters. */
+  private def drainYieldersOfOrigin(origin: Long): Unit =
+    state.movementSignals.filter(_.origin == origin).flatMap { binding =>
+      state.junctionMovements.filter(m => m.incomingLinkId == binding.incomingLinkId && m.outgoingLinkId == binding.outgoingLinkId)
+    }.map(_.connectorLinkId).distinct.foreach { priority =>
+      state.conflicts.filter(_.priorityConnector.contains(priority)).map(_.other(priority)).distinct.sorted.foreach { yielding =>
+        if (state.capacityWaitQueue.get(yielding).exists(_.nonEmpty)) drainConflictGroup(yielding)
       }
     }
 
@@ -396,6 +410,7 @@ class NodeEventHandler(
               m.outgoingLinkId == movement.outgoingLinkId).foreach(m => tryDrainCapacityQueue(m.connectorLinkId))
           }
         }
+        changes.map(_.phaseOrigin).distinct.foreach(drainYieldersOfOrigin)
       } else changes.foreach(change => handleReceiveSignalChangeStatus(event,
         TrafficSignalChangeStatusData(change.signalState,change.nextTick,change.phaseOrigin)))
       return
@@ -416,6 +431,8 @@ class NodeEventHandler(
         }
       }
 
+
+      drainYieldersOfOrigin(data.phaseOrigin)
 
       val outgoingLinksForThisPhase = state.connections.collect {
         case (linkId, identify) if identify.id == data.phaseOrigin => linkId
