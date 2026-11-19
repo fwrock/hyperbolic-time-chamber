@@ -226,7 +226,8 @@ class LinkVehicleFlowHandler(
       data.initialPosition + entryVelocity * data.initialRemainderSeconds)
     val availablePosition = getLinkStateFn().vehiclesByLane.get(assignedLane).toSeq.flatMap(_.iterator)
       .map(v => v.position - v.vehicleLength - data.minGap.getOrElse(2.0)).minOption.getOrElse(state.length)
-    require(!state.downstreamSpillback || availablePosition >= -1e-9,
+    // A measured snapshot may be tighter than the desired gap; its physical overlap is checked by MicroEntryAdmission.snapshotReason.
+    require(preserveSnapshotPosition || !state.downstreamSpillback || availablePosition >= -1e-9,
       "MICRO spillback entry has no physical room; origin injection or handoff requires admission")
     val entryPosition = if (preserveSnapshotPosition) requestedPosition
       else math.max(0.0, math.min(requestedPosition, availablePosition))

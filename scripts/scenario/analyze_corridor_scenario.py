@@ -46,7 +46,7 @@ def analyze(scenario, run, compare=None):
             else:
                 position = d['position']
             sim[native, tick] = layout[link]['offset'] + position
-    subjects = {s['source_vehicle']: s for s in meta['subjects']}
+    subjects = {s['source_vehicle']: s for s in meta['subjects'] if s.get('category', 'through_only') == 'through_only'}
     observed = {}
     for source in meta['sources']:
         path = Path(source['path'])

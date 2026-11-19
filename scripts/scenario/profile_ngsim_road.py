@@ -38,9 +38,10 @@ def simulated(scenario, run):
     meta = json.loads((scenario/'scenario_metadata.json').read_text())
     layout = {l['id']: l for l in meta['layout']}
     tracks = defaultdict(list)
+    keep = {x['native_vehicle'] for x in meta['subjects'] if x.get('category', 'through_only') == 'through_only'}
     for r in events(run):
         d = r['data']
-        if r['event_type'] == 'micro_update':
+        if r['event_type'] == 'micro_update' and int(d['car_id']) in keep:
             tracks[int(d['car_id'])].append((int(r['tick']), layout[int(d['link_id'])]['offset'] + d['position'], d['velocity']))
     out = []
     for vid, t in tracks.items():

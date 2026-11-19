@@ -77,4 +77,15 @@ class MicroMultilaneHandoffSpec extends AnyFlatSpec with Matchers {
     road.acks(2) should have size 1
     road.state.vehiclesByLane(0).count(_.actorId == 2) shouldBe 1
   }
+
+  it should "restore a tight measured snapshot on a spillback Link even when it is closer than the desired gap" in {
+    val state = link().copy(microEntry = MicroEntryConfig(enabled = true, initialSnapshotTick = Some(0L)))
+    val road = new Road(state)
+    road.enter(1, lane = 0, seq = 1, position = 30) // front at 30 m
+    road.enter(2, lane = 0, seq = 2, position = 25) // front at 25 m: 0.5 m bumper gap, below the 2 m desired gap
+    road.acks(1) should have size 1
+    road.acks(2) should have size 1
+    road.state.pendingMicroEntries shouldBe empty
+    road.state.vehiclesByLane(0).map(_.position).toList.sorted shouldBe List(25.0, 30.0)
+  }
 }

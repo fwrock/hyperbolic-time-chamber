@@ -73,15 +73,57 @@ def generate(args):
         if args.start_frame <= int(r['frame_id']) <= args.end_frame and float(r['local_y'])*FT <= exit_end:
             by_vehicle[int(r['vehicle_id'])].append(r)
     subjects, excluded = {}, defaultdict(list)
+    box_ranges = [(INTERSECTIONS[i][1], INTERSECTIONS[i][2]) for i in range(k)]
+    def box_of(r):
+        """Intersection box index (0-based) of a row, or None."""
+        if r['int_id'] != '0' and r['int_id'].isdigit() and 1 <= int(r['int_id']) <= k:
+            return int(r['int_id']) - 1
+        s_ = float(r['local_y'])*FT
+        for i, (lo, hi) in enumerate(box_ranges):
+            if lo <= s_ < hi: return i
+        return None
     for vid, track in sorted(by_vehicle.items()):
         track.sort(key=lambda r: int(r['frame_id']))
         first = track[0]
         place = locate(layout, float(first['local_y'])*FT)
-        if {r['movement'] for r in track} != {'1'}: excluded['not_through_only'].append(vid)
-        elif not {r['lane_id'] for r in track} <= {'0', '1', '2'}: excluded['pocket_or_unknown_lane'].append(vid)
-        elif place is None: excluded['first_observed_inside_box'].append(vid)
-        elif first['lane_id'] not in ('1', '2'): excluded['first_observed_lane_unknown'].append(vid)
-        else: subjects[vid] = (first, place)
+        lanes = {r['lane_id'] for r in track}
+        through = {r['movement'] for r in track} == {'1'}
+        if not lanes <= {'0', '1', '2'}:
+            excluded['pocket_or_unknown_lane'].append(vid)
+        elif not args.include_all:
+            if not through: excluded['not_through_only'].append(vid)
+            elif place is None: excluded['first_observed_inside_box'].append(vid)
+            elif first['lane_id'] not in ('1', '2'): excluded['first_observed_lane_unknown'].append(vid)
+            else: subjects[vid] = dict(first=first, link=place[0], position=place[1], category='through_only', end=None)
+        else:
+            last = track[-1]
+            first_box, last_box = box_of(first), box_of(last)
+            lane_row = next((r for r in track if r['lane_id'] in ('1', '2')), None)
+            if lane_row is None:
+                excluded['never_in_lane_1_or_2'].append(vid); continue
+            if place is not None and first['lane_id'] in ('1', '2'):
+                link, position, entry = place[0], place[1], 'road'
+            elif first_box is not None:
+                road_after = roads[first_box+1]
+                link, position, entry = road_after, 0.0, 'side_entry'
+            else:
+                excluded['first_observed_unplaceable'].append(vid); continue
+            if place is not None and first['lane_id'] in ('1', '2') and through:
+                category = 'through_only'
+            elif entry == 'side_entry':
+                category = 'side_entry'
+            else:
+                category = 'other_road_entry'
+            end = None
+            if last_box is not None and roads[last_box+1]['offset'] >= link['offset']:
+                end = dict(kind='turn_off_proxy', road=roads[last_box+1], position=3.0)
+            elif last_box is None and float(last['local_y'])*FT < exit_end - 5:
+                end_place = locate(layout, float(last['local_y'])*FT)
+                if end_place is not None:
+                    end = dict(kind='ends_in_road', road=end_place[0], position=end_place[1])
+            if end is not None and end['road']['offset'] < link['offset']:
+                excluded['end_before_start'].append(vid); continue
+            subjects[vid] = dict(first=first, link=link, position=position, category=category, end=end, lane_row=lane_row)
     if not subjects:
         raise ValueError('No eligible vehicles')
     speed = args.speed_limit_kmh
@@ -146,19 +188,28 @@ def generate(args):
         population = [x['free_speed_mps'] for x in json.loads(args.speed_population.read_text())['population']]
         rng = random.Random(args.speed_seed)
         speeds = {vid: rng.choice(population) for vid in sorted(subjects)}  # population draw; never the vehicle's own observation
-    for vid, (first, (link, position)) in sorted(subjects.items()):
-        frame, lane, native = int(first['frame_id']), 2-int(first['lane_id']), 10000+vid
-        later = [l for l in roads if l['offset'] > link['offset']]
-        route = [dict(linkId=link['id'], nodeId=junction_node(link['intersection']) if link['intersection'] < k else NODE_END)] + [
-            dict(linkId=l['id'], nodeId=junction_node(l['intersection']) if l['intersection'] < k else NODE_END) for l in later]
+    for vid, sub in sorted(subjects.items()):
+        first, link, position = sub['first'], sub['link'], sub['position']
+        lane_src = sub.get('lane_row', first)
+        frame, lane, native = int(first['frame_id']), 2-int(lane_src['lane_id']), 10000+vid
+        end = sub['end']
+        last_road = end['road'] if end else roads[-1]
+        path = [l for l in roads if link['offset'] <= l['offset'] <= last_road['offset']]
+        route = [dict(linkId=l['id'], nodeId=junction_node(l['intersection']) if l['intersection'] < k else NODE_END) for l in path]
         origin_node = endpoints(link)[0]
-        actors.append(actor('Car', native, dict(startTick=frame-args.start_frame, origin=origin_node, destination=NODE_END,
+        extra = {}
+        if end is not None:
+            extra['microArrivalPosition'] = end['position']
+        # A synthesized side-street injection is not a measured position: it never takes part in the exact initial snapshot (tick 0).
+        start_tick = frame-args.start_frame if sub['category'] != 'side_entry' else max(1, frame-args.start_frame)
+        actors.append(actor('Car', native, dict(startTick=start_tick, origin=origin_node, destination=NODE_END,
             actorType='Car', size=float(first['v_length'])*FT, precomputedRoute=route, microDepartPosition=position,
             microDepartSpeed=float(first['v_vel'])*FT, microDepartLane=lane,
             **({'microAcceleration': args.max_acceleration} if args.max_acceleration else {}),
-            **({'microDesiredMaxSpeed': speeds[vid]} if speeds else {}))))
+            **({'microDesiredMaxSpeed': speeds[vid]} if speeds else {}), **extra)))
         manifest.append(dict(source_vehicle=vid, native_vehicle=native, first_frame=frame, link=link['id'], position_m=position,
-            speed_mps=float(first['v_vel'])*FT, lane=lane, length_m=float(first['v_length'])*FT, initial_snapshot=frame == args.start_frame))
+            speed_mps=float(first['v_vel'])*FT, lane=lane, length_m=float(first['v_length'])*FT, initial_snapshot=frame == args.start_frame,
+            category=sub['category'], end=(dict(kind=end['kind'], road=end['road']['id'], position_m=end['position']) if end else None)))
     data = output/'data'
     counts = shard_and_write_actors(actors, data)
     nodes = [NODE_START, NODE_END] + [junction_node(i) for i in range(k)]
@@ -180,7 +231,9 @@ def generate(args):
             stop_bar_sources='int 1: ortho manual estimate +/-0.76 m; others: stopped-leader median at observed red, +/-~2 m',
             lanes='2 through lanes; lane index = 2 - NGSIM lane id',
             slice='through-only NB; no cross traffic, opposing flow, turns, pockets, or the intersection after the last modelled one'),
-        exclusions={n: dict(count=len(v), vehicles=v) for n, v in excluded.items()}, eligible=len(subjects)), indent=2)+'\n')
+        exclusions={n: dict(count=len(v), vehicles=v) for n, v in excluded.items()}, eligible=len(subjects),
+        categories={c: sum(1 for x in subjects.values() if x['category'] == c) for c in sorted({x['category'] for x in subjects.values()})},
+        include_all=args.include_all), indent=2)+'\n')
     print(json.dumps(dict(intersections=k, eligible=len(subjects), excluded={n: len(v) for n, v in excluded.items()}), indent=1))
 
 
@@ -198,6 +251,7 @@ def main():
     p.add_argument('--max-acceleration', type=float, help='Car maximum acceleration, m/s^2 (default: engine default 2.6)')
     p.add_argument('--speed-population', type=Path, help='JSON from estimate_ngsim_free_speeds.py; per-vehicle desired speed drawn from it')
     p.add_argument('--speed-seed', type=int, default=1)
+    p.add_argument('--include-all', action='store_true', help='protocol docs/MICRO_NGSIM_ALL_NB_PROTOCOL_2026_11_19.md')
     p.add_argument('--policy', choices=['discrete-event', 'time-warp'], default='discrete-event')
     p.add_argument('--initial-snapshot', action='store_true')
     generate(p.parse_args())
