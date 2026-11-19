@@ -18,3 +18,20 @@ entre interseções. Sem sementes (nada aleatório). Sem limiar de aprovação. 
 ## Limitações declaradas
 
 Sem velocidade desejada por veículo; aceleração do sul suposta igual à do norte; linhas de retenção estimadas; o arquivo de sinal SB da 10th e da 11th é idêntico ao NB (possível erro da fonte); sem a 14th como interseção do sul.
+
+## Resultados (jar reprodutível `experiments/claude-release/engine.jar`, commit `8b7568d`; uma execução, sem aleatoriedade)
+
+271 veículos incluídos: 92 `through_only`, 55 `side_entry`, 124 `other_road_entry`; **146 excluídos** (142 de bolso ou faixa desconhecida, 4 nunca nas faixas 1 ou 2). A execução concluiu sem erro (`engineCompleted`); 154 veículos de todas as categorias terminaram a rota.
+
+| Interseção (ordem de encontro) | Veículos | Erro mediano na linha (s) | Dentro de ±5 s | Um ciclo depois (> 20 s) | Erro mediano do tempo de via anterior (s) |
+| --- | --- | --- | --- | --- | --- |
+| 13th (sem sinal) | 68 | −2,1 (−2,7 a −1,6) | 93% (87 a 99) | 0% | |
+| 12th | 72 | −4,7 (−6,0 a −4,3) | 49% (36 a 60) | 3% (0 a 7) | −2,65 (−3,5 a −1,85) |
+| 11th | 71 | −2,8 (−4,1 a −1,6) | 65% (54 a 76) | 1% (0 a 4) | +1,9 (+0,3 a +2,8) |
+| 10th | 67 | −4,2 (−7,1 a −1,4) | 33% (22 a 45) | **21%** (12 a 31) | −1,5 (−4,7 a +0,1) |
+
+(Intervalos de 95% por reamostragem de veículos; erro = modelo menos observado, negativo = o modelo chega antes.)
+
+**Leitura (limitada):** o sul, como o norte, chega às linhas **2 a 5 s antes** do observado em todas as interseções, e o viés **não cresce de forma monótona** ao longo do corredor. O sinal do SB da 10th concentra os escorregões de ciclo
+(21%), como na versão de duas interseções (22%); como o arquivo SB da 10th é idêntico ao NB byte a byte, a primeira suspeita continua sendo a fonte do sinal e não o modelo, **sem teste que a confirme**. Sem velocidade desejada por veículo (população
+inválida) e com a aceleração do norte suposta no sul. Desenvolvimento em dados já vistos; sem limiar de aprovação. O sentido norte e o sul rodam em cenários **separados**: as esquerdas contra o sul reto só foram combinadas na 10th (protocolo `LEFT_TURN`).

@@ -30,11 +30,18 @@ INTERSECTIONS_NB = [(n, a, b, c, str(i+1)) for i, (n, a, b, c) in enumerate(INTE
 NODE_START, NODE_END = 1, 20
 
 
-def direction_table(direction):
+Y0_SB_FULL = 638.2
+# Full southbound corridor (13th, 12th, 11th, 10th) in s' = 638.2 - local_y. Stop bars: p10 of stopped-leader fronts at observed red
+# (12th 380.4 m, 11th 236.9, 10th 72.6; +/-~3 m); 13th unsignalised with the region start as a marker; no 14th approach was observed.
+INTERSECTIONS_SB_FULL = [('13th', Y0_SB_FULL-503.4, Y0_SB_FULL-483.8, None, '4'), ('12th', Y0_SB_FULL-380.4, Y0_SB_FULL-359.74, 'Peachtree_12th_SB', '3'),
+                         ('11th', Y0_SB_FULL-236.9, Y0_SB_FULL-196.17, 'Peachtree_11th_SB', '2'), ('10th', Y0_SB_FULL-72.6, Y0_SB_FULL-38.774, 'Peachtree_10th_SB', '1')]
+
+
+def direction_table(direction, full=False):
     if direction == '2':
         return INTERSECTIONS_NB, 0.0, 1.0
     if direction == '4':
-        return INTERSECTIONS_SB, Y0_SB, -1.0
+        return (INTERSECTIONS_SB_FULL, Y0_SB_FULL, -1.0) if full else (INTERSECTIONS_SB, Y0_SB, -1.0)
     raise ValueError('direction must be 2 (northbound) or 4 (southbound)')
 
 
@@ -74,9 +81,9 @@ def generate(args):
     if output.exists():
         raise FileExistsError(output)
     k = args.intersections
-    table, origin_s, sign = direction_table(args.direction)
+    table, origin_s, sign = direction_table(args.direction, args.sb_full)
     S = lambda r: origin_s + sign*float(r['local_y'])*FT
-    exit_end = args.exit_end_m if args.exit_end_m else (Y0_SB if args.direction == '4' else (table[k][1] if k < len(table) else None))
+    exit_end = args.exit_end_m if args.exit_end_m else ((Y0_SB_FULL if args.sb_full else Y0_SB) if args.direction == '4' else (table[k][1] if k < len(table) else None))
     if exit_end is None:
         raise ValueError('Provide --exit-end-m')
     layout = build_layout(k, exit_end, table)
@@ -269,6 +276,7 @@ def main():
     p.add_argument('--suffix', default='0400-0415')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--direction', choices=['2', '4'], default='2', help='2 northbound, 4 southbound (mirrored coordinates)')
+    p.add_argument('--sb-full', action='store_true', help='southbound 13th..10th table (protocol FULL_SB_CORRIDOR)')
     p.add_argument('--intersections', type=int, default=2)
     p.add_argument('--exit-end-m', type=float)
     p.add_argument('--start-frame', type=int, default=342)
