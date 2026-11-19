@@ -57,7 +57,8 @@ trait MicroSimulationStrategy {
     laneRestrictions: Map[Int,String] = Map.empty,
     movementSignals: Map[(Long,Int),TrafficSignalPhaseStateEnum] = Map.empty,
     laneChangedFn: (Long,Int,Int,String) => Unit = (_,_,_,_) => (),
-    observedFn: (VehicleInLane,VehicleInLane,Int,Double) => Unit = (_,_,_,_) => ()
+    observedFn: (VehicleInLane,VehicleInLane,Int,Double) => Unit = (_,_,_,_) => (),
+    downstreamLaneLeader: (Long,Int,Long) => Option[VehicleInLane] = (_,_,_) => None
   ): Seq[MicroVehicleUpdate]
 
   /** Initializes the strategy with link-specific parameters. Called once when the link enters MICRO

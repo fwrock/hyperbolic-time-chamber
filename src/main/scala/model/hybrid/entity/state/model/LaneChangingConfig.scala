@@ -26,6 +26,15 @@ final case class LaneChangingConfig(
   require(strategicCooldownSeconds.isFinite && strategicCooldownSeconds >= 0, "invalid strategic cooldown")
 }
 
-final case class LaneConnection(outgoingLinkId: Long, fromLane: Int, toLane: Int) {
-  require(fromLane >= 0 && toLane >= 0, "lane connection indices must be nonnegative")
+/** Origin lane -> lane of the first downstream Link -> lane of the exit road.
+  *
+  * `toLane` is the lane on the first Link seen after this one (the junction connector when the
+  * approach declares `downstreamConnectors`, otherwise the exit road itself). `exitLane` is the lane
+  * on the exit road behind a connector; when absent it equals `toLane`, i.e. the lane index is kept.
+  */
+final case class LaneConnection(outgoingLinkId: Long, fromLane: Int, toLane: Int,
+                                @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
+                                exitLane: Option[Int] = None) {
+  require(fromLane >= 0 && toLane >= 0 && exitLane.forall(_ >= 0), "lane connection indices must be nonnegative")
+  def roadLane: Int = exitLane.getOrElse(toLane)
 }

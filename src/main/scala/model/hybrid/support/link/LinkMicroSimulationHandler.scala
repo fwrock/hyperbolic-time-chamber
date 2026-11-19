@@ -34,7 +34,9 @@ class LinkMicroSimulationHandler(
   metricsReporter:             LinkMetricsReporter,
   logDebugFn:                  String => Unit,
   downstreamLeadersFn: Tick => Map[Long, model.hybrid.entity.state.model.VehicleInLane] = _ => Map.empty,
-  reportFn: (Map[String,Any],String) => Unit = (_,_) => ()
+  reportFn: (Map[String,Any],String) => Unit = (_,_) => (),
+  downstreamLaneLeaderFn: Tick => (Long,Int,Long) => Option[model.hybrid.entity.state.model.VehicleInLane] =
+    _ => (_,_,_) => None
 ) {
 
   private val microSimulationStrategy: MicroSimulationStrategy = DefaultMicroSimulationStrategy()
@@ -84,6 +86,7 @@ class LinkMicroSimulationHandler(
         vehicleWaitingSeconds    = vehicleWaitingSeconds,
         signalAtExit             = getSignalAtExitFn(),
         downstreamLeaders        = downstreamLeadersFn(tick),
+        downstreamLaneLeader     = downstreamLaneLeaderFn(tick),
         stopLineGapM             = state.stopLineGapM,
         retainExits              = state.downstreamSpillback,
         laneChanging = state.laneChanging,

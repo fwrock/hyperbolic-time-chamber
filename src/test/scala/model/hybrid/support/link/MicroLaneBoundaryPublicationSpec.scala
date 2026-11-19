@@ -57,7 +57,8 @@ class MicroLaneBoundaryPublicationSpec extends AnyFlatSpec with Matchers with Be
     )
     handler.subscribe(20, "hybrid.actor.Node")
     val snapshot = sent.head
-    snapshot.supported shouldBe false // Publication does not enable legacy multilane following.
+    snapshot.supported shouldBe true // G02: multi-lane is consumable only through per-lane occupancy (see LinkFollowingHandler.receive).
+    snapshot.laneBoundaries should have size 3
     snapshot.laneCount shouldBe 3
     snapshot.vehicle.get.id shouldBe 3
     snapshot.laneBoundaries.map(_.laneId) shouldBe List(0, 1, 2)

@@ -13,7 +13,8 @@ object MobilLaneChangeStrategy {
     lanes: mutable.Map[Int, mutable.Queue[VehicleInLane]], config: LaneChangingConfig,
     connections: List[LaneConnection], restrictions: Map[Int, String],
     length: Double, speedMps: Double, deltaSeconds: Double, timeSeconds: Double, tick: Long,
-    changed: (Long, Int, Int, String) => Unit
+    changed: (Long, Int, Int, String) => Unit,
+    downstreamLaneLeader: (Long, Int, Long) => Option[VehicleInLane] = (_, _, _) => None
   ): Map[Long,VehicleInLane] = {
     val yielding = mutable.Map.empty[Long,VehicleInLane]
     val model = MobilLaneChange(politeness = config.politeness, safeDeceleration = config.safeDeceleration,
@@ -27,8 +28,14 @@ object MobilLaneChangeStrategy {
       val behind = others.filter(_.position < vehicle.position).maxByOption(v => (v.position, -v.actorId))
       (ahead, behind)
     }
-    def safe(lane: Int, vehicle: VehicleInLane): Boolean = {
+    // Safety and incentive must see the leader of the lane's own downstream path, not only the
+    // same-Link leader; same-Link vehicles are always nearer, so they win whenever present.
+    def withDownstream(lane: Int, vehicle: VehicleInLane) = {
       val (ahead, behind) = neighbours(lane, vehicle)
+      (ahead.orElse(downstreamLaneLeader(vehicle.nextLinkId, lane, vehicle.actorId)), behind)
+    }
+    def safe(lane: Int, vehicle: VehicleInLane): Boolean = {
+      val (ahead, behind) = withDownstream(lane, vehicle)
       val frontSafe = ahead.forall { leader =>
         val gap = vehicle.gapTo(leader)
         gap >= math.max(config.minGapMeters,vehicle.minGap) && {
@@ -58,14 +65,14 @@ object MobilLaneChangeStrategy {
           maxAcceleration = vehicle.maxAcceleration, maxDeceleration = vehicle.maxDeceleration,
           minGap = math.max(config.minGapMeters,vehicle.minGap), reactionTime = vehicle.reactionTime,
           desiredVelocity = vehicle.desiredSpeed(speedMps), vehicleLength = vehicle.vehicleLength)
-        val (oldAhead, oldBehind) = neighbours(currentLane, vehicle)
+        val (oldAhead, oldBehind) = withDownstream(currentLane, vehicle)
         val targets = Vector(currentLane-1, currentLane+1).filter(lanes.contains)
         val candidates = targets.flatMap { target =>
           val inReach = !strategic || targetGoal.exists(goal => math.abs(goal-target) < math.abs(goal-currentLane))
           val routeSafe = allowed.isEmpty || allowed(target) || length - vehicle.position > config.strategicLookaheadMeters || strategic
           if (!ready || !inReach || !routeSafe || !safe(target, vehicle) || !model.isLaneAvailable(state,target,restrictions)) None
           else {
-            val (ahead, behind) = neighbours(target, vehicle)
+            val (ahead, behind) = withDownstream(target, vehicle)
             def front(v: VehicleInLane) = (v.actorId.toString, vehicle.gapTo(v), v.velocity)
             def back(v: VehicleInLane) = (v.actorId.toString, vehicle.rearPosition-v.position, v.velocity)
             val decision = model.evaluateLaneChange(state,currentLane,oldAhead.map(front),oldBehind.map(back),

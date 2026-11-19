@@ -124,10 +124,12 @@ case class LinkState(
   require(signalControls.forall(_.laneIds.forall(l => l >= 0 && l < lanes)), "invalid signal control lane")
   require(exitSpeedLimitsMps.values.forall(v => v.isFinite && v > 0.0), "exit speed limits must be positive m/s")
   require(stopLineGapM.isFinite && stopLineGapM >= 0 && stopLineGapM < length, "invalid signal stop-line gap")
-  require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && lanes == 1 && microTicksPerGlobalTick == 1),
-    "downstream lookahead requires single-lane MICRO with one physics step per runtime tick")
-  require(!downstreamSpillback || downstreamLookahead,
-    "downstream spillback requires single-lane MICRO downstream lookahead")
+  require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
+    "downstream lookahead requires MICRO with one physics step per runtime tick")
+  require(!downstreamLookahead || lanes == 1 || laneConnections.nonEmpty,
+    "multi-lane downstream lookahead requires explicit lane connections; a missing path is unknown, not free")
+  require(!downstreamSpillback || (downstreamLookahead && lanes == 1),
+    "downstream spillback requires single-lane MICRO downstream lookahead (multi-lane handoff is open: G03)")
   require(!carryMicroRemainder || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
     "MICRO boundary remainder requires one physics step per runtime tick")
   require(!carryMicroRemainder || length > speedLimit / 3.6 * microTimeStep,

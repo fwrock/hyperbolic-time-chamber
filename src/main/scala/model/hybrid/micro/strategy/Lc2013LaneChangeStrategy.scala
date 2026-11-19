@@ -13,7 +13,8 @@ object Lc2013LaneChangeStrategy {
     lanes: mutable.Map[Int,mutable.Queue[VehicleInLane]], config: LaneChangingConfig,
     connections: List[LaneConnection], restrictions: Map[Int,String], length: Double,
     speedMps: Double, deltaSeconds: Double, timeSeconds: Double, tick: Long,
-    changed: (Long,Int,Int,String) => Unit
+    changed: (Long,Int,Int,String) => Unit,
+    downstreamLaneLeader: (Long,Int,Long) => Option[VehicleInLane] = (_,_,_) => None
   ): Map[Long,VehicleInLane] = {
     val yielding=mutable.Map.empty[Long,VehicleInLane]
     val initial=lanes.toVector.sortBy(_._1).flatMap((lane,q) => q.map(v => (lane,v))).sortBy(_._2.actorId)
@@ -31,19 +32,24 @@ object Lc2013LaneChangeStrategy {
       (others.filter(_.position>=v.position).minByOption(o => (o.position,o.actorId)),
         others.filter(_.position<v.position).maxByOption(o => (o.position,-o.actorId)))
     }
+    // Same-Link vehicles are always nearer than the downstream path leader, so they win when present.
+    def withDownstream(lane: Int,v: VehicleInLane) = {
+      val (front,rear)=neighbours(lane,v)
+      (front.orElse(downstreamLaneLeader(v.nextLinkId,lane,v.actorId)),rear)
+    }
     def follow(v: VehicleInLane,leader: VehicleInLane): Double =
       KraussModel.deterministic.calculateSafeVelocity(v.velocity,v.desiredSpeed(speedMps),
         math.max(0,v.gapTo(leader)),leader.velocity,v.maxAcceleration,v.maxDeceleration,
         math.max(config.minGapMeters,v.minGap),v.reactionTime,deltaSeconds)
     def safe(lane: Int,v: VehicleInLane): Boolean = {
-      val (front,rear)=neighbours(lane,v)
+      val (front,rear)=withDownstream(lane,v)
       front.forall(o => v.gapTo(o)>=math.max(config.minGapMeters,v.minGap) &&
         follow(v,o)>=v.velocity-v.maxDeceleration*deltaSeconds) &&
       rear.forall(o => o.gapTo(v)>=math.max(config.minGapMeters,o.minGap) &&
         follow(o,v)>=o.velocity-math.min(config.safeDeceleration,o.maxDeceleration)*deltaSeconds)
     }
     def predicted(lane: Int,v: VehicleInLane): Double =
-      math.min(v.desiredSpeed(speedMps),neighbours(lane,v)._1.fold(v.desiredSpeed(speedMps))(follow(v,_)))
+      math.min(v.desiredSpeed(speedMps),withDownstream(lane,v)._1.fold(v.desiredSpeed(speedMps))(follow(v,_)))
     def advise(follower: VehicleInLane,requester: VehicleInLane): Unit =
       if (follower.lc2013.cooperative>0 && config.cooperativeStrategicChanges) {
         yielding.get(follower.actorId) match {

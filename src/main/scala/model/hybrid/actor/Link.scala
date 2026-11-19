@@ -237,6 +237,7 @@ class Link(
     metricsReporter               = metricsReporter,
     logDebugFn                    = msg => logDebug(msg),
     downstreamLeadersFn           = tick => followingHandler.leaders(tick),
+    downstreamLaneLeaderFn        = tick => (road, lane, self) => followingHandler.laneLeader(tick, road, lane, self),
     reportFn = (data,label) => report(data,label)
   )
 

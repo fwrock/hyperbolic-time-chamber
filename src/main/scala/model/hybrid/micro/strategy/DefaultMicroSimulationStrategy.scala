@@ -66,7 +66,8 @@ class DefaultMicroSimulationStrategy(
     laneRestrictions: Map[Int,String] = Map.empty,
     movementSignals: Map[(Long,Int),TrafficSignalPhaseStateEnum] = Map.empty,
     laneChangedFn: (Long,Int,Int,String) => Unit = (_,_,_,_) => (),
-    observedFn: (VehicleInLane,VehicleInLane,Int,Double) => Unit = (_,_,_,_) => ()
+    observedFn: (VehicleInLane,VehicleInLane,Int,Double) => Unit = (_,_,_,_) => (),
+    downstreamLaneLeader: (Long,Int,Long) => Option[VehicleInLane] = (_,_,_) => None
   ): Seq[MicroVehicleUpdate] = {
     val lastUpdateByVehicle = mutable.LinkedHashMap[Long, MicroVehicleUpdate]()
     val nSubTicks = math.max(1, microTicksPerGlobalTick)
@@ -76,10 +77,10 @@ class DefaultMicroSimulationStrategy(
       val strategicYieldLeaders = laneChanging.model match {
         case model.hybrid.entity.state.model.LaneChangingModel.Mobil =>
           MobilLaneChangeStrategy.execute(vehiclesByLane,laneChanging,laneConnections,laneRestrictions,
-            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn)
+            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn,downstreamLaneLeader)
         case model.hybrid.entity.state.model.LaneChangingModel.Lc2013 =>
           Lc2013LaneChangeStrategy.execute(vehiclesByLane,laneChanging,laneConnections,laneRestrictions,
-            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn)
+            linkLength,speedLimit/3.6,microTimeStep,physicalStart,tick,laneChangedFn,downstreamLaneLeader)
         case _ => Map.empty[Long,VehicleInLane]
       }
       vehiclesByLane.toVector.sortBy(_._1).foreach {
