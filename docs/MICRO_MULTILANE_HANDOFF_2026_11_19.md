@@ -60,10 +60,13 @@ a fila só trabalha com pedidos pendentes. **Desempenho multifaixa saturado não
   comportamento. Não há jar anterior para comparar (ele recusa essa configuração), então a evidência é de invariantes e
   concordância entre runtimes, não de equivalência com a versão antiga.
 
+- **Car, nível de unidade** (`CarMicroReplySpec`): com pegada retida, o `LeaveLinkData` só sai no ACK de admissão, uma vez; um ACK
+  repetido não libera de novo; um rollback que desfaz o ACK restaura a pegada retida. Nos cenários Time Warp houve rollbacks reais
+  (cerca de 290 linhas de log por execução) e os eventos comprometidos continuaram idênticos aos do conservativo.
+
 ## Não verificado / pendente
 
-- A liberação adiada **não tem teste de unidade no nível do Car**; é coberta pelos dois cenários de ponta a ponta acima.
-- Cancelamento e replay com handoff pendente (antes/depois do ACK) e rollback com a pegada retida e o ACK em voo.
+- Cancelamento modelado e replay com handoff pendente, e rollback com o ACK em voo entre atores reais (o rollback do estado do Car está testado; o do Link com a pegada retida e o ACK em trânsito só pelo cenário Time Warp).
 - Capacidade por faixa no Node continua nominal por Link (decisão: só mudar se a medição mostrar bloqueio indevido).
 - Saturação além do fixture (muitos carros, filas longas, mais de duas faixas) e medição de desempenho.
 - Conflito/prioridade entre as duas faixas que fundem: aqui a ordem vem do pedido mais antigo, sem regra de prioridade (G04/G05).
