@@ -3,12 +3,12 @@ package model.hybrid.support.node
 
 import core.entity.event.ActorInteractionEvent
 import core.util.JsonUtil
-import model.hybrid.entity.event.data.link.LinkCapacityFreedData
+import model.hybrid.entity.event.data.link.{LinkCapacityFreedData, SubscribeMicroBoundaryData}
 import model.hybrid.entity.event.data.vehicle.RequestLinkAccessData
 import model.hybrid.entity.event.node.LinkAccessData
 import model.hybrid.entity.state.NodeState
 import model.hybrid.entity.state.enumeration.LinkCapacityStateEnum
-import model.hybrid.entity.state.model.{JunctionConflict, JunctionMovement}
+import model.hybrid.entity.state.model.{GapAcceptance, JunctionConflict, JunctionMovement, MicroBoundarySnapshot, MicroBoundaryVehicle, MicroLaneBoundary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scala.collection.mutable
@@ -25,9 +25,11 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
 
   private class Harness(var s: NodeState) {
     var tick = 1L
-    val sent = mutable.Buffer.empty[(Long, LinkAccessData)]
+    val raw = mutable.Buffer.empty[(Long, AnyRef)]
+    def sent = raw.collect { case (id, a: LinkAccessData) => (id, a) }
+    def subscriptions = raw.collect { case (id, _: SubscribeMicroBoundaryData) => id }.toList
     val handler = new NodeEventHandler(() => s, () => "9", () => tick, mutable.Map.empty, (_, _) => (),
-      (id, _, d, _) => { sent += ((id, d.asInstanceOf[LinkAccessData])); () }, _ => None, _ => (), _ => ())
+      (id, _, d, _) => { raw += ((id, d)); () }, _ => None, _ => (), _ => ())
     private def event(id: Long, seq: Long) = ActorInteractionEvent(tick, tick, id, "hybrid.actor.Car", id.toString,
       "hybrid.actor.Car", data = "unused", resourceId = "test", seq = seq)
     def request(vehicle: Long, approach: Long, target: Long): Unit =
@@ -95,5 +97,78 @@ class JunctionConflictSpec extends AnyFlatSpec with Matchers {
     an[IllegalArgumentException] should be thrownBy JunctionConflict(20, 30, None, " ")
     an[IllegalArgumentException] should be thrownBy node(List(JunctionConflict(20, 99, None, "x")))
     an[IllegalArgumentException] should be thrownBy JunctionConflict(20, 30, Some(40), "x")
+  }
+
+  // G05: connector 30 (priority) is fed by approach link 3 (length 100 m); its conflict point is 10 m past the stop line.
+  private val gapRule = List(JunctionConflict(20, 30, Some(30), "test-rule", Some(GapAcceptance(4.0, 10.0))))
+  private def snapshot(tick: Long, vehicle: Option[MicroBoundaryVehicle]) = MicroBoundarySnapshot(3, tick, tick + 1, 100, vehicle,
+    laneBoundaries = List(MicroLaneBoundary(0, vehicle, vehicle)))
+  private def far = Some(MicroBoundaryVehicle(70, 0.0, 10.0, 4.5)) // 110 m away at 10 m/s
+  private def near = Some(MicroBoundaryVehicle(71, 95.0, 10.0, 4.5)) // 15 m away: arrives in about 1.3 s
+
+  "Gap acceptance" should "treat a missing observation as unknown, subscribe once, and grant when the gap is observed" in {
+    val h = new Harness(node(gapRule))
+    h.tick = 2; h.request(11, 1, 2)
+    h.waits shouldBe List(11L)
+    h.tick = 3; h.request(12, 1, 2)
+    h.subscriptions shouldBe List(3L) // exactly one subscription despite two evaluations
+    h.tick = 4
+    h.handler.handleBoundaryUpdate(3, snapshot(3, far))
+    h.grants.map(_._1) shouldBe List(11L, 12L) // same movement: one observed gap releases both (documented limitation)
+  }
+
+  it should "hold a crossing while a priority vehicle is too close and release it when the road clears" in {
+    val h = new Harness(node(gapRule))
+    h.tick = 2; h.request(11, 1, 2)
+    h.tick = 3; h.handler.handleBoundaryUpdate(3, snapshot(2, near))
+    h.grants shouldBe empty
+    h.tick = 4; h.handler.handleBoundaryUpdate(3, snapshot(3, None))
+    h.grants.map(_._1) shouldBe List(11L)
+  }
+
+  it should "credit the time elapsed since the observation to the approaching vehicle" in {
+    val h = new Harness(node(gapRule))
+    h.tick = 2
+    h.handler.handleBoundaryUpdate(3, snapshot(0, None)) // ignored until requested
+    h.request(11, 1, 2) // requests the observation
+    h.handler.handleBoundaryUpdate(3, snapshot(1, Some(MicroBoundaryVehicle(72, 27.5, 10.0, 4.5)))) // about 5 s away at tick 1
+    h.tick = 3
+    h.free(20) // re-evaluate at tick 3 (0.2 s later): still accepted
+    h.grants.map(_._1) shouldBe List(11L)
+    h.tick = 40
+    h.request(12, 1, 2) // 3.9 s after the observation: effective arrival about 1.1 s
+    h.free(20)
+    h.grants.map(_._1) shouldBe List(11L)
+    h.waits should contain(12L)
+  }
+
+  it should "ignore a priority vehicle already waiting at the stop line and never test the priority movement itself" in {
+    val h = new Harness(node(gapRule))
+    h.tick = 2; h.request(11, 1, 2)
+    h.tick = 3; h.handler.handleBoundaryUpdate(3, snapshot(2, Some(MicroBoundaryVehicle(73, 100.0, 0.0, 4.5, pendingExit = true))))
+    h.grants.map(_._1) shouldBe List(11L)
+    val h2 = new Harness(node(gapRule))
+    h2.request(12, 3, 4)
+    h2.grants shouldBe List((12L, 30L)) // priority movement: no gap test, no observation needed
+    h2.subscriptions shouldBe empty
+  }
+
+  it should "survive a checkpoint with its observations and subscription" in {
+    val h = new Harness(node(gapRule))
+    h.tick = 2; h.request(11, 1, 2)
+    h.handler.handleBoundaryUpdate(3, snapshot(2, near))
+    val restored = JsonUtil.fromJson[NodeState](JsonUtil.toJson(h.s))
+    restored.observationsRequested shouldBe List(3L)
+    restored.boundaryObservations(3L).snapshots.map(_.tick) shouldBe List(2L)
+    val h2 = new Harness(restored)
+    h2.tick = 5; h2.handler.handleBoundaryUpdate(3, snapshot(4, None))
+    h2.grants.map(_._1) shouldBe List(11L)
+    h2.subscriptions shouldBe empty // restored Node does not subscribe again
+  }
+
+  it should "reject gap acceptance without a priority or with invalid parameters" in {
+    an[IllegalArgumentException] should be thrownBy JunctionConflict(20, 30, None, "x", Some(GapAcceptance(4, 10)))
+    an[IllegalArgumentException] should be thrownBy GapAcceptance(0, 10)
+    an[IllegalArgumentException] should be thrownBy GapAcceptance(4, -1)
   }
 }

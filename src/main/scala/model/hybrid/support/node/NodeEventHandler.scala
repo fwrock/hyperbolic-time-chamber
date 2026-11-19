@@ -2,9 +2,9 @@ package org.interscity.htc
 package model.hybrid.support.node
 
 import org.interscity.htc.model.hybrid.entity.state.NodeState
-import org.interscity.htc.model.hybrid.entity.state.model.{ PendingLinkAccessRequest, SignalState }
+import org.interscity.htc.model.hybrid.entity.state.model.{ MicroBoundaryHistory, MicroBoundarySnapshot, PendingLinkAccessRequest, SignalState }
 import org.interscity.htc.model.hybrid.entity.event.data.bus.RegisterBusStopData
-import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkCapacityFreedData, LinkSignalStateData, RegisterLinkCapacityData }
+import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkCapacityFreedData, LinkSignalStateData, RegisterLinkCapacityData, SubscribeMicroBoundaryData }
 import org.interscity.htc.model.hybrid.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.hybrid.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.hybrid.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
@@ -193,6 +193,7 @@ class NodeEventHandler(
     val capacityKnown = state.availableCapacity.contains(admissionLinkId)
     val hasCapacity = !capacityKnown || state.availableCapacity(admissionLinkId) > 0
     val key = (currentTickFn(), event.actorRefId, event.seq)
+    junction.foreach(j => ensureObserved(j.linkId))
     if (hasCapacity && !conflictBlocked(junction.map(_.linkId), key)) {
       if (capacityKnown) state.availableCapacity(admissionLinkId) -= 1
       sendGrant(event.actorRefId, event.shardRefId, event.seq, data.targetLinkId, junction,movement.flatMap(_.outgoingLane))
@@ -253,8 +254,62 @@ class NodeEventHandler(
           state.capacityWaitQueue.get(other).exists(_.exists { p =>
             val theirs = (p.requestedTick, p.actorRefId, p.requestSeq)
             otherWins || (rule.priorityConnector.isEmpty && Ordering[(Long, Long, Long)].lt(theirs, mine))
-          })
+          }) ||
+          (otherWins && rule.gapAcceptance.exists(gap => !gapAccepted(other, gap)))
       }
+    }
+
+  /** The priority approach link of a connector's movement, when known. */
+  private def priorityMovement(connector: Long) = state.junctionMovements.find(_.connectorLinkId == connector)
+
+  /** Request an observation stream from the priority approach link, once; checkpointed so a restored
+    * Node neither repeats nor forgets it. The initial publication answers the subscription.
+    */
+  private def ensureObserved(connector: Long): Unit =
+    state.conflicts.filter(_.involves(connector)).foreach { rule =>
+      val other = rule.other(connector)
+      if (rule.priorityConnector.contains(other) && rule.gapAcceptance.nonEmpty) {
+        priorityMovement(other).map(_.incomingLinkId).filterNot(state.observationsRequested.contains).foreach { link =>
+          state.observationsRequested = (link :: state.observationsRequested).sorted
+          sendMessageFn(link, "hybrid.actor.Link", SubscribeMicroBoundaryData(),
+            EventTypeEnum.SubscribeMicroBoundary.toString)
+        }
+      }
+    }
+
+  /** Gap acceptance: every vehicle observed at the front of a priority-approach lane must need at
+    * least the critical gap to reach the conflict point. No observation yet means unknown, which never
+    * releases a crossing. The observation is strictly earlier than the current tick, so the elapsed time
+    * is credited to the approaching vehicle. A vehicle already waiting at the stop line is not a gap
+    * threat: its request is ordered by the queue and excluded by occupancy.
+    */
+  private def gapAccepted(priority: Long, gap: model.hybrid.entity.state.model.GapAcceptance): Boolean =
+    priorityMovement(priority).exists { movement =>
+      state.boundaryObservations.get(movement.incomingLinkId).flatMap(_.before(currentTickFn())).exists { snapshot =>
+        val lanes = if (snapshot.laneBoundaries.isEmpty) List((None: Option[Int], snapshot.vehicle))
+          else snapshot.laneBoundaries.map(l => (Some(l.laneId), l.frontmost))
+        val elapsed = (currentTickFn() - snapshot.tick) * snapshot.stepSeconds
+        lanes.filter { case (lane, _) => movement.incomingLane.forall(l => lane.forall(_ == l)) }
+          .flatMap(_._2).filterNot(_.pendingExit).forall { v =>
+            val distance = math.max(0.0, snapshot.length - v.position) + gap.conflictOffsetM
+            val a = gap.assumedAccelerationMps2
+            val arrival = (-v.velocity + math.sqrt(v.velocity * v.velocity + 2 * a * distance)) / a
+            arrival - elapsed >= gap.criticalGapSeconds
+          }
+      }
+    }
+
+  /** A published observation can only improve or worsen a gap; re-evaluate every waiter it concerns. */
+  def handleBoundaryUpdate(source: Long, snapshot: MicroBoundarySnapshot): Unit =
+    if (state != null && state.observationsRequested.contains(source)) {
+      val history = state.boundaryObservations.getOrElse(source, MicroBoundaryHistory())
+      history.accept(snapshot)
+      state.boundaryObservations(source) = history
+      val concerned = state.conflicts.filter(_.gapAcceptance.nonEmpty).flatMap { rule =>
+        val yielding = rule.other(rule.priorityConnector.get)
+        Option.when(priorityMovement(rule.priorityConnector.get).exists(_.incomingLinkId == source))(yielding)
+      }.distinct.sorted
+      concerned.foreach(c => if (state.capacityWaitQueue.get(c).exists(_.nonEmpty)) drainConflictGroup(c))
     }
 
   /** Grants waiting requests across a connector and the connectors it conflicts with, one at a

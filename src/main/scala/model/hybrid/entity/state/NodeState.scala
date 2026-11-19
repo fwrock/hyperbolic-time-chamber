@@ -53,7 +53,11 @@ case class NodeState(
   @JsonDeserialize(contentAs = classOf[model.JunctionConflict])
   conflicts: List[model.JunctionConflict] = Nil,
   @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Integer])
-  occupiedConnectors: mutable.Map[Long, Int] = mutable.Map.empty
+  occupiedConnectors: mutable.Map[Long, Int] = mutable.Map.empty,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[model.MicroBoundaryHistory])
+  boundaryObservations: mutable.Map[Long, model.MicroBoundaryHistory] = mutable.Map.empty,
+  @JsonDeserialize(contentAs = classOf[java.lang.Long])
+  var observationsRequested: List[Long] = Nil
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,

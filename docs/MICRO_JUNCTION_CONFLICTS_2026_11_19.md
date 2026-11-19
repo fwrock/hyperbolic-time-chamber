@@ -45,3 +45,50 @@ Só roda quando `conflicts` não está vazio; sem regras o custo é uma verifica
 - `JunctionConflictSpec` (6 testes): exclusão com liberação única, prioridade sobre pedido posterior, desempate por idade,
   conectores sem regra inalterados, checkpoint JSON com ocupação e esperas, validação de configuração.
 - Dois testes antigos de `NodeEventHandlerSpec` tiveram a expectativa atualizada porque o pedido pendente agora guarda `requestedTick`.
+
+# G05 (primeira parte) — aceitação de brechas com observação causal
+
+Estado: implementado e testado em nível de Node; **não executado entre atores Node e Link reais em cenário integral**.
+
+## O que foi implementado
+
+- `GapAcceptance(criticalGapSeconds, conflictOffsetM, assumedAccelerationMps2)` dentro de `JunctionConflict` (exige conector com
+  prioridade). Todos os valores são parâmetros explícitos com unidade; **nenhum é calibrado** e nenhum tem valor padrão afirmado
+  como empírico (a aceleração padrão 2,6 m/s² é a mesma suposição do Car nativo).
+- O Node assina, uma vez e com a assinatura em checkpoint (`observationsRequested`), as publicações de fronteira da via de aproximação
+  do movimento prioritário, reaproveitando o canal de G02 (`SubscribeMicroBoundaryData`, assinante Node). As observações ficam
+  em `boundaryObservations` (duas coortes de ticks, como nos Links) e só se usa uma observação **estritamente anterior ao tick atual**.
+- Regra de decisão para o conector que cede: para o veículo da frente de cada faixa da aproximação prioritária (pode ser filtrada
+  pela faixa do movimento), estima-se a chegada mais cedo ao ponto de conflito com aceleração constante a partir da velocidade
+  observada: `t = (-v + sqrt(v² + 2 a d)) / a`, `d = (L − x) + offset`. O tempo decorrido desde a observação é creditado ao veículo
+  que se aproxima. A passagem só é concedida se `t − decorrido ≥ criticalGapSeconds` para todos.
+- **Observação desconhecida não libera a passagem** (sem snapshot, o pedido espera). Um veículo prioritário já parado na linha
+  (`pendingExit`) não conta como ameaça de brecha: o pedido dele é ordenado pela fila e excluído pela ocupação.
+- Cada publicação recebida reavalia os pedidos pendentes interessados (`drainConflictGroup`); sem observação nova não há reavaliação
+  extra. O movimento prioritário nunca passa pelo teste de brecha. Sem `gapAcceptance` o comportamento é o do G04.
+
+## Custo
+
+Sem `gapAcceptance` configurado, nada muda. Com ele, o Node recebe uma publicação por tick da aproximação prioritária (o mesmo
+volume que a assinatura entre Links) e avalia só quando há pedido pendente do movimento que cede. Não medido.
+
+## Limitações conhecidas
+
+- **Só o veículo da frente de cada faixa** é testado (a publicação traz traseiro e dianteiro por faixa). É conservador para
+  chegadas atrás de um veículo que vira para outro lado, mas ignora o tempo de passagem do próprio veículo que cede.
+- **Pelotão que cede:** vários pedidos do mesmo movimento são liberados juntos por uma única brecha observada, sem exigir brecha
+  maior para os seguidores (teste documenta). O limite prático hoje é a capacidade do conector.
+- O Node não publica a permissão ao Link de aproximação: o veículo que cede só espera depois de chegar ao fim do Link, sem
+  antecipar a frenagem (ver G04). Para antecipar, a permissão do movimento teria de ser publicada como aspecto, como os sinais.
+- Chegada estimada com aceleração constante e sem teto de velocidade; não há modelo de veículo parado em fila a montante do prioritário.
+- Valores de brecha crítica, deslocamento ao ponto de conflito e a regra de prioridade têm de vir de fonte declarada
+  (`source`); nada gera esses parâmetros a partir de dados ainda.
+- Não verifiquei o HCM nem a documentação do SUMO nesta sessão. A forma "tempo até o ponto de conflito contra brecha crítica" é o
+  conceito geral de aceitação de brechas; não afirmo equivalência com nenhum simulador.
+
+## Evidência
+
+- Suíte completa: 1.131 testes passam e 1 falha, a mesma de antes e sem relação (`SettingsRoutesHttpSpec`).
+- `JunctionConflictSpec` (12 testes no total): desconhecido espera e a assinatura é única; veículo próximo segura e a via livre libera;
+  tempo decorrido é creditado; veículo parado na linha e movimento prioritário são tratados como descrito; checkpoint com
+  observações e assinatura sem reassinar; validação dos parâmetros.
