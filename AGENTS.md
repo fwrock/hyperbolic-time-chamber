@@ -5,7 +5,7 @@ Multi-agent discrete-event simulator for urban digital twins. Part of the HTC Di
 ## Stack
 
 - **Scala 3.3.5** — functional style, case classes, enums, extension methods
-- **Apache Pekko 1.5** — classic actors (not typed), cluster sharding, persistence (LevelDB/Redis snapshots), Kafka connectors, Pekko HTTP
+- **Apache Pekko 1.5** — classic actors (not typed), cluster sharding (or the single-node runtime, see Runtime Modes), migration snapshots (in-memory/Redis), Kafka connectors, Pekko HTTP
 - **Serialization** — Kryo (default), Protobuf (control plane messages), Jackson (JSON state), Avro (Redpanda/Kafka events), Parquet (output)
 - **Broker** — Redpanda (Kafka-protocol compatible, no Zookeeper, built-in schema registry); `pekko-connectors-kafka` connects unchanged
 - **Observability** — Prometheus (`io.prometheus`), ClickHouse, structured `report()` calls
@@ -35,13 +35,30 @@ src/main/scala/
 ## Actor Hierarchy
 
 ```
-PersistentActor (Pekko)
-  └── BaseActor[T <: BaseState]          — persistence, shard routing, StringPool interning
+Actor (Pekko, classic)
+  └── BaseActor[T <: BaseState]          — shard routing, StringPool interning (not persistent: nothing was ever persisted)
         └── SimulationBaseActor[T]       — Lamport clock, currentTick, report(), sendMessageTo()
               ├── Movable[T <: MovableState]  — route calculation, link traversal (meso)
               │     └── Car / Bus / Subway    — concrete vehicle actors
               └── managers (TimeManager, ReportManager, LoadBalanceManager, ...)
 ```
+
+## Runtime Modes
+
+`htc.runtime.mode` (env `HTC_RUNTIME_MODE`, startup-only): `cluster` (default) or `single-node`.
+
+- `single-node` is one JVM without sharding, singleton or cluster-router machinery. Entities are
+  children of one `LocalRegion` per model type, singleton managers are plain actors, pools are plain
+  `RoundRobinPool`s, and published entities are told directly. The node still joins itself as a
+  one-member cluster so `Cluster(system)` readers keep working. It rejects
+  `htc.load-balance-manager.enabled=true` (no second node to balance to).
+- Every mode switch lives in `ActorCreatorUtil` (`createShardRegion`, `createSingletonManager`,
+  `createRouterPool`) and `DistributedUtil` (`getShardRef`, `createSingletonProxyUnder`). Never build
+  `ClusterSharding`, `ClusterSingleton*` or `ClusterRouterPool` inline; add the switch to those
+  factories. The mode is pinned per `ActorSystem` by `RuntimeMode.forSystem`.
+- Deliver to entities with `BaseActor.sendToEntity`. A sender that ever routed to an entity through
+  its region stays on the region for that entity, which keeps its own messages in order.
+- Details, results and limits: `docs/SINGLE_NODE_RUNTIME.md`.
 
 ## Critical Patterns
 
