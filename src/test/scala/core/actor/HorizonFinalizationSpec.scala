@@ -28,7 +28,7 @@ class HorizonFinalizationSpec extends AnyFlatSpec with Matchers with BeforeAndAf
     ConfigFactory.parseString("pekko.actor.provider=local\npekko.actor.fail-mixed-versions=off\nhtc.report-manager.default-strategy=json")
       .withFallback(ConfigFactory.load()))
   override def afterAll(): Unit = { system.terminate(); () }
-  private class LP(props: Properties, illegalEffect: Boolean, waiting: Boolean) extends SimulationBaseActor[HorizonState](props) {
+  private class LP(props: Properties, illegalEffect: Boolean, waiting: Boolean, sameTickWake: Boolean = false) extends SimulationBaseActor[HorizonState](props) {
     def ready: Boolean = recoveryFinished
     override protected def onHorizonFinalization(horizon: Long): Unit = {
       if (illegalEffect) scheduleEvent(horizon + 1L)
@@ -39,12 +39,12 @@ class HorizonFinalizationSpec extends AnyFlatSpec with Matchers with BeforeAndAf
         sendMessageTo(99L, "example.Peer", "request")
         registerAwaitedReply("peer", "request")
       }
-      onFinishSpontaneous(if (waiting) None else Some(100L))
+      onFinishSpontaneous(if (waiting) None else if (sameTickWake) Some(currentTick) else Some(100L))
     }
   }
   private var identity = 500L
   private case class Rig(lp: TestActorRef[LP], global: TestProbe, owner: TestProbe, sink: TestProbe)
-  private def rig(policy: String, illegalEffect: Boolean = false, waiting: Boolean = false): Rig = {
+  private def rig(policy: String, illegalEffect: Boolean = false, waiting: Boolean = false, sameTickWake: Boolean = false, eventTick: Long = 5L): Rig = {
     identity += 1L
     val global = TestProbe(); val owner = TestProbe(); val sink = TestProbe(); val creator = TestProbe()
     owner.ignoreMsg {
@@ -55,7 +55,7 @@ class HorizonFinalizationSpec extends AnyFlatSpec with Matchers with BeforeAndAf
     val props = Properties(entityId = identity.toString, actorType = CreationTypeEnum.PoolDistributed,
       runtimeCoordinator = Some(global.ref), defaultTimeManagerType = policy,
       timeManagers = mutable.Map(policy -> owner.ref), reporters = mutable.Map(ReportTypeEnum.parquet -> sink.ref))
-    val lp = TestActorRef(new LP(props, illegalEffect, waiting), identity.toString)
+    val lp = TestActorRef(new LP(props, illegalEffect, waiting, sameTickWake), identity.toString)
     creator.awaitAssert(lp.underlyingActor.ready shouldBe true, 5.seconds, 10.millis)
     lp ! InitializeEvent(identity.toString, creator.ref, InitializeData(HorizonState(), "test", creator.ref,
       mutable.Map(ReportTypeEnum.parquet -> sink.ref), timeManagers = mutable.Map(policy -> owner.ref),
@@ -63,7 +63,7 @@ class HorizonFinalizationSpec extends AnyFlatSpec with Matchers with BeforeAndAf
     global.expectMsgType[JoinRuntime]
     global.send(lp, RuntimeJoined("epoch", global.ref, owner.ref, distributed = policy == TimeManagerTypeEnum.TIME_WARP))
     creator.expectMsgType[InitializeEntityAckEvent]
-    val event = SpontaneousEvent(5L, owner.ref, generation = 1L, order = Some(EventOrder(5L, 0L, "wake")))
+    val event = SpontaneousEvent(eventTick, owner.ref, generation = 1L, order = Some(EventOrder(eventTick, 0L, "wake")))
     if (policy == TimeManagerTypeEnum.TIME_WARP) {
       owner.send(lp, SetRuntimeHorizon(10L))
       owner.send(lp, SetOptimisticExecutionLimits(0L, 10L, core.runtime.OptimisticExecutionLimits()))
@@ -79,7 +79,7 @@ class HorizonFinalizationSpec extends AnyFlatSpec with Matchers with BeforeAndAf
     } else {
       owner.send(lp, ConservativeDelivery("epoch", 1L, event))
       owner.expectMsgType[ConservativeInputAccepted]
-      owner.send(lp, ExecuteConservativeBatch(1L, 5L, 0L))
+      owner.send(lp, ExecuteConservativeBatch(1L, eventTick, 0L))
       if (waiting) owner.expectMsgType[RouteInteraction]
       owner.expectMsgType[RouteControl]
       owner.expectMsgType[ConservativeBatchProcessed]
@@ -123,5 +123,19 @@ class HorizonFinalizationSpec extends AnyFlatSpec with Matchers with BeforeAndAf
     r.global.expectNoMessage(100.millis)
     r.owner.expectMsgType[PublishConservativeReport].event.tick shouldBe 10L
     r.owner.expectMsg(ConservativeProcessRetired(2L))
+  }
+
+  it should "censor a same-tick wake requested at the inclusive horizon, which a one-wake-per-tick scheduler defers beyond it" in {
+    val r = rig(TimeManagerTypeEnum.DISCRETE_EVENT, sameTickWake = true, eventTick = 10L)
+    r.owner.send(r.lp, RetireConservativeProcess(2L, true, Some(10L)))
+    r.global.expectNoMessage(100.millis)
+    r.owner.expectMsgType[PublishConservativeReport].event.tick shouldBe 10L
+    r.owner.expectMsg(ConservativeProcessRetired(2L))
+  }
+
+  it should "still reject a pending wake inside the horizon that is not a same-tick request at the cap" in {
+    val r = rig(TimeManagerTypeEnum.DISCRETE_EVENT, sameTickWake = true, eventTick = 9L)
+    r.owner.send(r.lp, RetireConservativeProcess(2L, true, Some(10L)))
+    r.global.expectMsgType[RuntimeFailure].reason should include ("horizon reporting before all in-horizon work")
   }
 }
