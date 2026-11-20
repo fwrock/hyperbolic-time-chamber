@@ -129,12 +129,12 @@ on the HTC side only, using the existing `current-5000/htc-input` scenario, this
 `run_cluster_validation.py --nodes 1 --measure` (four visible logical processors, 4 GiB heap).
 MATSim was not rerun.
 
-| | Wall time | Load + warmup + progressive load |
-|---|---|---|
-| single-node (this branch's jar) | 164.0 s | 24.2 + 11.7 + 22.9 s |
-| cluster (this branch's jar) | 158.1 s | 28.8 + 16.0 + 23.2 s |
-| Recorded v4-direct run (older jar, cluster) | 204.7 s | not recorded |
-| MATSim, recorded v4-direct run | 36.7 s | not recorded |
+| | Wall time | Before the simulation starts (load + warmup + post-load) | Progressive load (runs during the simulation) |
+|---|---|---|---|
+| single-node (this branch's jar) | 164.0 s | 24.2 + 11.7 + 0.7 = 36.6 s | 22.9 s |
+| cluster (this branch's jar) | 158.1 s | 28.8 + 16.0 + 0.8 = 45.5 s | 23.2 s |
+| Recorded v4-direct run (older jar, cluster) | 204.7 s | not recorded | not recorded |
+| MATSim, recorded v4-direct run | 36.7 s | not recorded | not recorded |
 
 Both runs completed (`CONSERVATIVE-COMPLETE`), with about 31,300 rounds and 3.7 million
 time-manager callbacks each, and similar parquet volume (75.2 MB and 74.8 MB; row content was
@@ -150,16 +150,38 @@ What this does and does not show:
   changes on the branch (plain `BaseActor`, report JSON fast path, primitive-keyed time-manager
   maps). The recorded run used an older jar and was not repeated on this machine, so the size
   of that gain is approximate.
-- HTC remains about 4.3 times slower than MATSim's recorded time. Roughly 60 s (about 37%) of
-  the wall time is spent before the simulation starts (load, warmup, progressive load). The
-  rest, about 90 to 100 s, is the time-manager round protocol; this split is derived from the
-  phase log and was not profiled separately.
-- Entity transport is not what dominates: the runtime mode only changes how entities are
-  reached, and the round and callback volume is the same in both modes.
+- HTC remains about 4.3 times slower than MATSim's recorded time. Only load, warmup and
+  post-load happen before the simulation starts: 36.6 s in single-node and 45.5 s in cluster
+  (22% and 29% of the wall time). Progressive loading starts together with the simulation
+  (`simulation_start_request_sent_to_gtm` right after `progressive_loader_start_sent`; the 5,000
+  cars are born during the run), so it is not start-up overhead. The remaining 110 to 130 s is
+  the simulation itself; the split is derived from the phase log and was not profiled.
+- Single-node prepared faster (36.6 s against 45.5 s) but the simulation part was slower
+  (about 127 s against 113 s). With one run per mode this cannot be told apart from noise.
+- Entity transport is not what dominates, and the region is not on the hot path: the counter
+  shows 3,145,442 deliveries, all `direct`, with zero `region_new` and `region_pinned`, even
+  though the cars are born during the run. It matches the 3,145,442 callback children in the
+  time-manager accounting.
 
-Candidate targets for time, not yet investigated: the roughly 60 s preparation phase for 5,000
-vehicles, and the 3.7 million callbacks for 5,000 trips (callbacks without useful work, or
-batching).
+What the preparation spends its time on (single-node run):
+
+| Step | Time | Note |
+|---|---|---|
+| Load 52,256 nodes + 88,471 links | 24.2 s | about 140,000 entities, about 5,800 per second; the first 50,000 nodes alone took 17.7 s |
+| `CityMapUtil.warmUp` | 6.9 s | CompactGraph 1.4 s, ALT landmark index 4.6 s, SCC 0.6 s |
+| Rest of the warmup phase | 4.8 s | outside `warmUp`; not identified |
+| Post-load registration | 0.7 s | |
+
+The routing indexes built by `warmUp` (CompactGraph, ALT landmarks, SCC) are used only by
+`GPSUtil.calcRouteCompact`. In this scenario every route is fixed:
+`htc_gps_route_source_total` shows 5,000 `precomputed` and no `gps_calculated`, so none of
+those 6.9 s was used. ALT speeds up route queries; it does not shorten the preparation.
+
+Candidate targets for time, not yet investigated or implemented: the 24 s entity loading (the
+region creates the entities of a type serially; whether that or per-entity state parsing is the
+bottleneck was not profiled), building the routing indexes lazily when no route is requested
+(up to 6.9 s, about 4% of the wall time), and the 3.7 million time-manager callbacks for 5,000
+trips (callbacks without useful work, or batching).
 
 ## Limits and open items
 
