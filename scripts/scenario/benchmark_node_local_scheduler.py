@@ -58,12 +58,22 @@ def extract_measurements(rows, expected_nodes=2):
                 remoteBytes=sum(v['bytes'] for v in traffic.values()),
                 schedulingRemoteMessages=traffic.get('scheduling', {}).get('messages', 0),
                 schedulingRemoteBytes=traffic.get('scheduling', {}).get('bytes', 0),
+                reportingRemoteMessages=traffic.get('reporting', {}).get('messages', 0),
+                reportingRemoteBytes=traffic.get('reporting', {}).get('bytes', 0),
                 trafficByCategory=dict(traffic),
                 placementCounts=[dict(node=node, actorType=kind, actors=count)
                                  for (node, kind), count in sorted(placements.items())])
 
 
-def write_override(path, strategy, workers):
+SCHEDULER_ARMS = ('cluster-pool', 'node-local-tick')
+REPORTER_ARMS = ('reporters-cluster-pool', 'reporters-node-local')
+
+
+def write_override(path, arm, workers):
+    """Scheduler arms vary the scheduling strategy; reporter arms fix node-local-tick and vary report placement."""
+    reporters = arm in REPORTER_ARMS
+    strategy = 'node-local-tick' if reporters else arm
+    placement = f'htc.report-manager.placement="{arm[len("reporters-"):]}"\n' if reporters else ''
     path.write_text(f'''htc.time-manager.scheduling-strategy="{strategy}"
 htc.time-manager.conservative-transport="direct"
 htc.time-manager.total-instances={2 * workers}
@@ -73,7 +83,7 @@ htc.time-manager.node-local.workers-per-node={workers}
 htc.load-balance-manager.enabled=false
 htc.node.label-strategy="rank"
 htc.report-manager.json.batch-size=1000
-pekko.remote.artery.advanced.instruments=["org.interscity.htc.core.metrics.RemoteTrafficInstrument"]
+{placement}pekko.remote.artery.advanced.instruments=["org.interscity.htc.core.metrics.RemoteTrafficInstrument"]
 ''')
 
 
@@ -101,21 +111,22 @@ def one_run(args, name, strategy, port, warmup):
         jarSha256=receipt['jarSha256'], outcome=outcome)
     (directory / 'comparison-measurements.json').write_text(json.dumps(measurement, indent=2) + '\n')
     print(json.dumps({k: measurement[k] for k in ('name', 'simulationSeconds',
-        'completionSeconds', 'remoteMessages', 'remoteBytes', 'schedulingRemoteMessages')}), flush=True)
+        'completionSeconds', 'remoteMessages', 'remoteBytes', 'schedulingRemoteMessages',
+        'reportingRemoteMessages', 'reportingRemoteBytes')}), flush=True)
     return measurement
 
 
-def summarize(records):
+def summarize(records, arms=SCHEDULER_ARMS):
     """Retain all runs and ranges; small paired pilots do not justify general speed claims."""
     fields = ('simulationSeconds', 'completionSeconds', 'synchronizationSeconds', 'cpuSeconds',
               'peakRssBytes', 'remoteMessages', 'remoteBytes', 'schedulingRemoteMessages',
-              'schedulingRemoteBytes')
+              'schedulingRemoteBytes', 'reportingRemoteMessages', 'reportingRemoteBytes')
     result = {}
-    for strategy in ('cluster-pool', 'node-local-tick'):
+    for strategy in arms:
         rows = [r for r in records if r['strategy'] == strategy and not r['warmup']]
         result[strategy] = {field: dict(median=statistics.median(r[field] for r in rows),
             minimum=min(r[field] for r in rows), maximum=max(r[field] for r in rows)) for field in fields}
-    reference, candidate = result['cluster-pool'], result['node-local-tick']
+    reference, candidate = result[arms[0]], result[arms[1]]
     reductions = {field: 100 * (reference[field]['median'] - candidate[field]['median']) /
                   reference[field]['median'] if reference[field]['median'] else None for field in fields}
     return dict(byStrategy=result, reductionPercent=reductions)
@@ -133,12 +144,14 @@ def main():
     parser.add_argument('--base-port', type=int, default=28600)
     parser.add_argument('--timeout', type=float, default=180)
     parser.add_argument('--cpu-ids', required=True, help='Four distinct available logical CPUs')
+    parser.add_argument('--compare', choices=('scheduler', 'reporters'), default='scheduler',
+                        help='scheduler: cluster-pool vs node-local-tick; reporters: report placement cluster-pool vs node-local')
     args = parser.parse_args()
     if args.repetitions < 1 or args.warmup_pairs < 0 or args.workers_per_node < 1:
         parser.error('repetitions/workers must be positive; warm-up count must be nonnegative')
     args.jar, args.simulation, args.output = args.jar.resolve(), args.simulation.resolve(), args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
-    manifest = dict(jar=str(args.jar), simulation=str(args.simulation), mode=args.mode,
+    manifest = dict(compare=args.compare, jar=str(args.jar), simulation=str(args.simulation), mode=args.mode,
         scenarioSha256=hashlib.sha256(args.simulation.read_bytes()).hexdigest(),
         cpuIds=args.cpu_ids, workersPerNode=args.workers_per_node, nodes=2,
         repetitions=args.repetitions, warmupPairs=args.warmup_pairs,
@@ -147,12 +160,13 @@ def main():
         timing='GTM simulation_loop stopwatch and launch-to-engine-stop; teardown excluded',
         scope='single-host loopback two-JVM pilot; not multi-host network throughput')
     (args.output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    for strategy in ('cluster-pool', 'node-local-tick'):
+    arms = REPORTER_ARMS if args.compare == 'reporters' else SCHEDULER_ARMS
+    for strategy in arms:
         write_override(args.output / (strategy + '.conf'), strategy, args.workers_per_node)
     records = []
     for pair in range(args.warmup_pairs + args.repetitions):
         warmup = pair < args.warmup_pairs
-        order = ('cluster-pool', 'node-local-tick') if pair % 2 == 0 else ('node-local-tick', 'cluster-pool')
+        order = arms if pair % 2 == 0 else tuple(reversed(arms))
         cohort = []
         for index, strategy in enumerate(order):
             name = f'{"warmup" if warmup else "measured"}-{pair:02d}-{strategy}'
@@ -166,7 +180,7 @@ def main():
                 raise RuntimeError(f'paired mobility mismatch: {field}')
     if len({r['jarSha256'] for r in records}) != 1:
         raise RuntimeError('executable changed between runs')
-    summary = summarize(records)
+    summary = summarize(records, arms)
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps(summary, indent=2), flush=True)
 
