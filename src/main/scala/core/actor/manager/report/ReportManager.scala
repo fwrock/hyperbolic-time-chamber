@@ -18,8 +18,6 @@ import core.util.ManagerConstantsUtil
 import core.util.ManagerConstantsUtil.{ POOL_REPORT_DATA_ACTOR_NAME_PREFIX, REPORT_MANAGER_ACTOR_NAME }
 
 import org.apache.pekko.actor.{ ActorRef, Props }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
-import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
 
 import java.time.LocalDateTime
@@ -159,16 +157,9 @@ class ReportManager(
     val reporterProps = Props(reportType.clazz, getSelfProxy, startRealTime, reportRun.simulationId, reportRun.scenarioId)
       .withDispatcher("pekko.actor.io-dispatcher")
 
-    context.actorOf(
-      ClusterRouterPool(
-        local = RoundRobinPool(0),
-        settings = ClusterRouterPoolSettings(
-          totalInstances = totalInstances,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees = true
-        )
-      ).props(reporterProps),
-      name = s"$POOL_REPORT_DATA_ACTOR_NAME_PREFIX-$reportType"
+    core.util.ActorCreatorUtil.createRouterPool(
+      context, context.system, reporterProps,
+      s"$POOL_REPORT_DATA_ACTOR_NAME_PREFIX-$reportType", totalInstances, maxInstancesPerNode
     )
   }
 

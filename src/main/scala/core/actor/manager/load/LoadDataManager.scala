@@ -11,8 +11,6 @@ import core.enumeration.{LoadingStrategyEnum, ReportTypeEnum}
 import core.util.ManagerConstantsUtil.{LOAD_MANAGER_ACTOR_NAME, POOL_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME, POST_LOAD_REGISTRATION_MANAGER_ACTOR_NAME}
 
 import org.apache.pekko.actor.{ActorRef, Props}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
-import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, StopSimulationEvent}
 import org.interscity.htc.core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry
 import org.interscity.htc.core.modifications.ScenarioModifications
@@ -309,56 +307,40 @@ class LoadDataManager(
   private def createCreatorLoadData(amountDataSources: Int): ActorRef = {
     val totalInstances = Math.max(1, amountDataSources)
     val maxInstancesPerNode = Math.max(1, Math.max(10, amountDataSources / 8))
-    context.actorOf(
-      ClusterRouterPool(
-        local = RoundRobinPool(0),
-        settings = ClusterRouterPoolSettings(
-          totalInstances = totalInstances,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees = true
-        )
-      ).props(
-        CreatorLoadData.props(
-          CreatorProperties(
-            entityId = "creator-load-data",
-            loadDataManager = getSelfProxy,
-            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
-            runtimeCoordinator = runtimeCoordinator,
-            reporters = reporters,
-            postLoadCoordinator = postLoadRegistrationManagerProxy,
-            postLoadRegistrationClasses = postLoadRegistrationClassesConfig
-          )
+    core.util.ActorCreatorUtil.createRouterPool(
+      context, context.system,
+      CreatorLoadData.props(
+        CreatorProperties(
+          entityId = "creator-load-data",
+          loadDataManager = getSelfProxy,
+          timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+          runtimeCoordinator = runtimeCoordinator,
+          reporters = reporters,
+          postLoadCoordinator = postLoadRegistrationManagerProxy,
+          postLoadRegistrationClasses = postLoadRegistrationClassesConfig
         )
       ),
-      name = POOL_CREATOR_LOAD_DATA_ACTOR_NAME
+      POOL_CREATOR_LOAD_DATA_ACTOR_NAME, totalInstances, maxInstancesPerNode
     )
   }
 
   private def createCreatorPoolLoadData(amountDataSources: Int): ActorRef = {
     val totalInstances = Math.max(1, amountDataSources)
     val maxInstancesPerNode = Math.max(1, Math.max(10, amountDataSources / 8))
-    context.actorOf(
-      ClusterRouterPool(
-        local = RoundRobinPool(0),
-        settings = ClusterRouterPoolSettings(
-          totalInstances = totalInstances,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees = true
-        )
-      ).props(
-        CreatorPoolLoadData.props(
-          CreatorProperties(
-            entityId = "creator-pool-load-data",
-            loadDataManager = getSelfProxy,
-            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
-            runtimeCoordinator = runtimeCoordinator,
-            reporters = reporters,
-            postLoadCoordinator = postLoadRegistrationManagerProxy,
-            postLoadRegistrationClasses = postLoadRegistrationClassesConfig
-          )
+    core.util.ActorCreatorUtil.createRouterPool(
+      context, context.system,
+      CreatorPoolLoadData.props(
+        CreatorProperties(
+          entityId = "creator-pool-load-data",
+          loadDataManager = getSelfProxy,
+          timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+          runtimeCoordinator = runtimeCoordinator,
+          reporters = reporters,
+          postLoadCoordinator = postLoadRegistrationManagerProxy,
+          postLoadRegistrationClasses = postLoadRegistrationClassesConfig
         )
       ),
-      name = POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME
+      POOL_CREATOR_POOL_LOAD_DATA_ACTOR_NAME, totalInstances, maxInstancesPerNode
     )
   }
 

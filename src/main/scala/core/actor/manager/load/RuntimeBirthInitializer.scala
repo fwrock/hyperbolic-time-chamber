@@ -11,7 +11,6 @@ import core.entity.control.loadbalance.SpatialEntityData
 import core.entity.event.control.loadbalance.{ BatchShardAssignmentResponse, RegisterSpatialEntitiesBatchEvent }
 import core.util.ManagerConstantsUtil.LOAD_BALANCE_MANAGER_ACTOR_NAME
 import org.apache.pekko.actor.{Actor, ActorRef, Props}
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonProxy, ClusterSingletonProxySettings }
 import org.apache.pekko.cluster.sharding.ShardRegion
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
 import scala.collection.mutable
@@ -25,8 +24,7 @@ class RuntimeBirthInitializer(owner: ActorRef, coordinator: ActorRef, target: Lo
   private val publicationId = java.util.UUID.randomUUID().toString
   override def preStart(): Unit = {
     if (core.actor.manager.loadbalance.allocation.AllocationRuntime(context.system).enabled) {
-      val proxy = context.actorOf(ClusterSingletonProxy.props(s"/user/$LOAD_BALANCE_MANAGER_ACTOR_NAME",
-        ClusterSingletonProxySettings(context.system)))
+      val proxy = core.util.DistributedUtil.createSingletonProxyUnder(context, context.system, LOAD_BALANCE_MANAGER_ACTOR_NAME)
       val position = SpatialPositionUtil.resolve(data.stateJson, org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(context.system.settings.config))
       proxy ! RegisterSpatialEntitiesBatchEvent(Vector(SpatialEntityData(target.id.toString,
         position._1, position._2, entityClassType = target.model)), publicationId)

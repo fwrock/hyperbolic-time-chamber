@@ -1,12 +1,12 @@
 package org.interscity.htc
 package core
 
+import com.typesafe.config.ConfigFactory
 import org.apache.pekko.actor.Props
 import org.apache.pekko.actor.{ Actor, ActorSystem, DeadLetter }
 import org.apache.pekko.cluster.Cluster
 import org.apache.pekko.cluster.sharding.ClusterSharding
 import org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent
-import org.apache.pekko.cluster.singleton.{ ClusterSingletonManager, ClusterSingletonManagerSettings }
 import org.apache.pekko.management.scaladsl.PekkoManagement
 import org.apache.pekko.management.cluster.bootstrap.ClusterBootstrap
 import org.interscity.htc.core.actor.manager.SimulationManager
@@ -14,7 +14,7 @@ import org.interscity.htc.core.api.ConfigApiServer
 import org.interscity.htc.core.metrics.MetricsServer
 import org.interscity.htc.core.metrics.system.InfrastructureMetrics
 import org.interscity.htc.core.util.ManagerConstantsUtil.SIMULATION_MANAGER_ACTOR_NAME
-import org.interscity.htc.core.util.{ ManagerConstantsUtil, SimulationUtil }
+import org.interscity.htc.core.util.{ ManagerConstantsUtil, RuntimeMode, SimulationUtil }
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -55,7 +55,25 @@ object HyperbolicTimeChamber {
     val metricsPort = core.api.SimulatorSettingsRegistry.effective.getInt("htc.metrics.port")
     core.metrics.MetricsServer.start(metricsPort)
 
-    val system = ActorSystem("hyperbolic-time-chamber")
+    val baseConfig = ConfigFactory.load()
+    val runtimeMode = RuntimeMode.from(baseConfig)
+    require(
+      runtimeMode == RuntimeMode.Cluster || !baseConfig.getBoolean("htc.load-balance-manager.enabled"),
+      "htc.runtime.mode=single-node has no second node to balance to; set htc.load-balance-manager.enabled=false"
+    )
+    // A single-node run is a one-member cluster that joins itself; the Cluster extension stays
+    // so existing membership readers keep working, but no peer or seed node is ever contacted.
+    val system = runtimeMode match {
+      case RuntimeMode.Cluster => ActorSystem("hyperbolic-time-chamber")
+      case RuntimeMode.SingleNode =>
+        ActorSystem(
+          "hyperbolic-time-chamber",
+          ConfigFactory
+            .parseString("pekko.cluster.min-nr-of-members = 1\npekko.cluster.seed-nodes = []")
+            .withFallback(baseConfig)
+        )
+    }
+    RuntimeMode.fix(system, runtimeMode)
 
     ConfigApiServer.start(system)
 
@@ -76,16 +94,19 @@ object HyperbolicTimeChamber {
         system.log.warning("RandomSeedManager will be initialized with timestamp-based seed")
     }
 
-    PekkoManagement(system).start()
-    ClusterBootstrap(system).start()
+    if (runtimeMode == RuntimeMode.Cluster) {
+      PekkoManagement(system).start()
+      ClusterBootstrap(system).start()
+    }
 
     val cluster = Cluster(system)
+    if (runtimeMode == RuntimeMode.SingleNode) cluster.join(cluster.selfAddress)
 
     // Who am I in this distributed run (rank + label); stamped on every outgoing message, see NodeIdentity.
     core.cluster.NodeIdentity.start(system)
     core.metrics.ExecutionTimingCollector(system)
 
-    ClusterSharding(system)
+    if (runtimeMode == RuntimeMode.Cluster) ClusterSharding(system)
 
     cluster.registerOnMemberUp {
       system.log.info(s"Member is up: ${cluster.selfMember}")
@@ -104,17 +125,14 @@ object HyperbolicTimeChamber {
         throw error
     }
 
-    actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)
+    if (runtimeMode == RuntimeMode.Cluster)
+      actor.manager.loadbalance.migration.MigrationWindowSubscriber.startOnNode(system)
 
-    val simulation = system.actorOf(
-      ClusterSingletonManager.props(
-        singletonProps = Props(
-          SimulationManager()
-        ),
-        terminationMessage = StopSimulationEvent(),
-        settings = ClusterSingletonManagerSettings(system)
-      ),
-      name = SIMULATION_MANAGER_ACTOR_NAME
+    val simulation = util.ActorCreatorUtil.createSingletonManager(
+      system = system,
+      manager = Props(SimulationManager()),
+      name = SIMULATION_MANAGER_ACTOR_NAME,
+      terminateMessage = StopSimulationEvent()
     )
 
     // Everything above is async actor-system setup — start() otherwise returns immediately,

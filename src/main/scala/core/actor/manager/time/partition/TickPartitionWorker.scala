@@ -12,7 +12,8 @@ import scala.util.control.NonFatal
 class TickPartitionWorker(dispatcher: ActorRef, maxInFlight: Int) extends Actor {
   require(maxInFlight > 0, "partition dispatch limit must be positive")
   private val scheduled = mutable.TreeMap.empty[Long, mutable.LinkedHashMap[Long, TickWake]]
-  private val stored = mutable.Map.empty[(Long, Long), TickWake]
+  // By tick so a tick advance drops its prefix instead of scanning every stored wake.
+  private val stored = mutable.TreeMap.empty[Long, mutable.LongMap[TickWake]]
   private val waiting = mutable.Set.empty[(Long, Long)]
   private val slots = mutable.Set.empty[DirectWorkId]
   private val roots = mutable.Set.empty[DirectWorkId]
@@ -55,11 +56,11 @@ class TickPartitionWorker(dispatcher: ActorRef, maxInFlight: Int) extends Actor 
     case StoreWake(run, wake) =>
       check(run)
       require(sender() == dispatcher && tick.forall(_ <= wake.tick), "invalid partition schedule")
-      val key = wake.identity.id -> wake.tick
-      stored.get(key) match {
+      val atTick = stored.getOrElseUpdate(wake.tick, mutable.LongMap.empty[TickWake])
+      atTick.get(wake.identity.id) match {
         case Some(previous) => require(previous == wake, "conflicting stored wake")
         case None =>
-          stored(key) = wake
+          atTick(wake.identity.id) = wake
           scheduled.getOrElseUpdate(wake.tick, mutable.LinkedHashMap.empty)(wake.identity.id) = wake
       }
       dispatcher ! WakeStored(epoch, wake)
@@ -74,9 +75,7 @@ class TickPartitionWorker(dispatcher: ActorRef, maxInFlight: Int) extends Actor 
         )
         ledger.begin(next)
         tick = Some(next)
-        stored.filterInPlace(
-          (key, _) => key._2 >= next
-        )
+        stored.rangeUntil(next).keysIterator.toList.foreach(stored.remove)
       }
       active = Some(next)
       claim()

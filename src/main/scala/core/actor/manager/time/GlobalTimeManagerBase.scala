@@ -8,8 +8,7 @@ import core.api.SimulatorSettingsRegistry
 import core.metrics.core.{ExecutionTimingMetrics, TimedOperation}
 
 import org.apache.pekko.actor.{ActorRef, Props}
-import org.apache.pekko.cluster.routing.{ClusterRouterPool, ClusterRouterPoolSettings}
-import org.apache.pekko.routing.{Broadcast, RoundRobinPool}
+import org.apache.pekko.routing.Broadcast
 
 /** Base for the cluster-wide singleton time-manager coordinator, holding the plumbing that's
   * identical regardless of synchronization strategy — creating and reaching the pool of local time
@@ -89,16 +88,9 @@ abstract class GlobalTimeManagerBase(
       s"Creating LocalTM pool: totalInstances=$totalInstances, " +
         s"maxInstancesPerNode=$maxInstancesPerNode"
     )
-    timeManagersPool = context.actorOf(
-      ClusterRouterPool(
-        RoundRobinPool(0),
-        ClusterRouterPoolSettings(
-          totalInstances = totalInstances,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees = true
-        )
-      ).props(localTimeManagerProps()),
-      name = POOL_TIME_MANAGER_ACTOR_NAME
+    timeManagersPool = core.util.ActorCreatorUtil.createRouterPool(
+      context, context.system, localTimeManagerProps(), POOL_TIME_MANAGER_ACTOR_NAME,
+      totalInstances, maxInstancesPerNode
     )
     simulationManager ! TimeManagerRegisterEvent(actorRef = timeManagersPool, runtimeCoordinator = runtimeCoordinatorForActors)
   }

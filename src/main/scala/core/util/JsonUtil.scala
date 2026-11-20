@@ -82,6 +82,12 @@ object JsonUtil {
   def toJson[T](data: T): String =
     mapper.writeValueAsString(data)
 
+  /** Same output as [[toJson]], faster for the flat primitive maps that reports carry. */
+  def toReportJson(data: Any): String = {
+    val fast = ReportJson.flatMapToJson(data)
+    if (fast != null) fast else mapper.writeValueAsString(data)
+  }
+
   def fromJson[T](data: String)(implicit m: Manifest[T]): T = {
     val javaType = TypeFactory.defaultInstance().constructType(m.runtimeClass)
     mapper.readValue[T](data, javaType)

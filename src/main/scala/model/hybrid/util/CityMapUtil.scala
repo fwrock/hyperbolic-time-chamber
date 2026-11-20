@@ -60,6 +60,15 @@ object CityMapUtil {
       .get("htc.mobility.enable-pedestrian-routing")
       .orElse(sys.env.get("HTC_MOBILITY_ENABLE_PEDESTRIAN_ROUTING"))
       .flatMap(s => scala.util.Try(s.toBoolean).toOption)
+      .getOrElse(scenarioMayWalk)
+
+  /** Default when the setting is absent: build the pedestrian indexes only if the scenario has a
+    * walking actor. Any failure to read the scenario keeps the previous behavior (build them); a wrong
+    * skip is never incorrect, since the pedestrian accessors still build lazily on first use.
+    */
+  private def scenarioMayWalk: Boolean =
+    scala.util.Try(org.interscity.htc.core.util.SimulationUtil.loadSimulationConfig().actorsDataSources.map(_.classType))
+      .map(PedestrianDemand.mayWalk)
       .getOrElse(true)
 
   private lazy val enableCH: Boolean =

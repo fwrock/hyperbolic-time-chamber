@@ -15,10 +15,8 @@ import core.util.ManagerConstantsUtil
 import core.util.ManagerConstantsUtil.{ POOL_PROGRESSIVE_CREATOR_LOAD_DATA_ACTOR_NAME, POOL_PROGRESSIVE_CREATOR_POOL_LOAD_DATA_ACTOR_NAME, PROGRESSIVE_LOAD_MANAGER_ACTOR_NAME }
 
 import org.apache.pekko.actor.{ ActorRef, Deploy, Props, Terminated }
-import org.apache.pekko.cluster.routing.{ ClusterRouterPool, ClusterRouterPoolSettings }
 import org.apache.pekko.cluster.{ Cluster, MemberStatus }
 import org.apache.pekko.remote.RemoteScope
-import org.apache.pekko.routing.RoundRobinPool
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
 import org.interscity.htc.core.metrics.core.{ProgressiveLoadingMetrics, ExecutionTimingMetrics, TimedOperation}
 import org.interscity.htc.model.hybrid.decision.ScenarioLoadError
@@ -667,26 +665,18 @@ class ProgressiveLoadDataManager(
       s"Creating progressive CreatorLoadData pool: totalInstances=$totalInstances, " +
         s"maxInstancesPerNode=$maxInstancesPerNode"
     )
-    context.actorOf(
-      ClusterRouterPool(
-        local = RoundRobinPool(0),
-        settings = ClusterRouterPoolSettings(
-          totalInstances = totalInstances,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees = true
-        )
-      ).props(
-        CreatorLoadData.props(
-          CreatorProperties(
-            entityId = "progressive-creator-load-data",
-            loadDataManager = self,
-            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
-            reporters = poolReporters,
-            runtimeCoordinator = runtimeCoordinator
-          )
+    core.util.ActorCreatorUtil.createRouterPool(
+      context, context.system,
+      CreatorLoadData.props(
+        CreatorProperties(
+          entityId = "progressive-creator-load-data",
+          loadDataManager = self,
+          timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+          reporters = poolReporters,
+          runtimeCoordinator = runtimeCoordinator
         )
       ),
-      name = POOL_PROGRESSIVE_CREATOR_LOAD_DATA_ACTOR_NAME
+      POOL_PROGRESSIVE_CREATOR_LOAD_DATA_ACTOR_NAME, totalInstances, maxInstancesPerNode
     )
   }
 
@@ -700,26 +690,18 @@ class ProgressiveLoadDataManager(
       s"Creating progressive CreatorPoolLoadData pool: totalInstances=$totalInstances, " +
         s"maxInstancesPerNode=$maxInstancesPerNode"
     )
-    context.actorOf(
-      ClusterRouterPool(
-        local = RoundRobinPool(0),
-        settings = ClusterRouterPoolSettings(
-          totalInstances = totalInstances,
-          maxInstancesPerNode = maxInstancesPerNode,
-          allowLocalRoutees = true
-        )
-      ).props(
-        CreatorPoolLoadData.props(
-          CreatorProperties(
-            entityId = "progressive-creator-pool-load-data",
-            loadDataManager = self,
-            timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
-            reporters = poolReporters,
-            runtimeCoordinator = runtimeCoordinator
-          )
+    core.util.ActorCreatorUtil.createRouterPool(
+      context, context.system,
+      CreatorPoolLoadData.props(
+        CreatorProperties(
+          entityId = "progressive-creator-pool-load-data",
+          loadDataManager = self,
+          timeManagers = mutable.Map(timeManagerType -> poolTimeManager),
+          reporters = poolReporters,
+          runtimeCoordinator = runtimeCoordinator
         )
       ),
-      name = POOL_PROGRESSIVE_CREATOR_POOL_LOAD_DATA_ACTOR_NAME
+      POOL_PROGRESSIVE_CREATOR_POOL_LOAD_DATA_ACTOR_NAME, totalInstances, maxInstancesPerNode
     )
   }
 }

@@ -73,7 +73,7 @@ object SimulationReportEventAvro {
 
   def fromReportEvent(event: ReportEvent, simulationId: String): SimulationReportEvent = {
     val dataJson =
-      try JsonUtil.toJson(event.data)
+      try JsonUtil.toReportJson(event.data)
       catch { case _: Exception => event.data.toString }
     SimulationReportEvent(
       simulationId = simulationId,
