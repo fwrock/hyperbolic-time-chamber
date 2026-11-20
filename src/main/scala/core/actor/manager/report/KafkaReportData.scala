@@ -39,6 +39,8 @@ class KafkaReportData(
 
   private var strictCommit = false
   private var pendingWrites: Future[Unit] = Future.successful(())
+  private val inFlight = new java.util.concurrent.atomic.AtomicLong(0)
+  private val MaxInFlightEvents = 100000L
   private val buffer = new mutable.ArrayBuffer[SimulationReportEvent](batchSize)
 
   private lazy val publisher = new KafkaPublisher()(context.system)
@@ -77,7 +79,16 @@ class KafkaReportData(
         case scala.util.Failure(error) => Future.failed(error)
       }
     }).map(_ => ())
-    val write = pendingWrites.flatMap(_ => batch())
+    // Batches are pipelined: waiting for each broker ack before starting the next capped throughput at
+    // one round trip per batch (a few hundred events/s with batch-size=1), so a 1M-actor placement backlog
+    // starved live vehicle/link events for hours. The producer preserves per-partition order, and the
+    // returned future still completes only after every outstanding batch. Past MaxInFlightEvents the
+    // chain is serialized again to bound memory.
+    val count = snapshot.size
+    val backlogged = inFlight.addAndGet(count) > MaxInFlightEvents
+    val started = if (backlogged) pendingWrites.flatMap(_ => batch()) else Future.unit.flatMap(_ => batch())
+    started.onComplete(_ => inFlight.addAndGet(-count))
+    val write = pendingWrites.zipWith(started)((_, _) => ())
     pendingWrites = if (strict) write else write.recover { case err => logWarn(s"Kafka publish failed: ${err.getMessage}") }
     pendingWrites
   }
