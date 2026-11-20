@@ -234,8 +234,12 @@ object CityMapUtil {
       // interchangeable; the pedestrian graph orders its nodes differently in the legacy builder.
       val selectionTag = if (landmarkSelection == LandmarkSelection.Hops) "|selection=hops" else ""
       val builderTag   = if (builderSensitive) s"|builder=$landmarkBuilder" else ""
-      cache.getOrCompute(settings, id, 1, graph.staticFingerprint(landmarkCount) + selectionTag + builderTag,
-        CompactLandmarkIndex.codec(graph.n, landmarkCount))(compute)
+      val base = graph.staticFingerprint(landmarkCount)
+      // The cache key must stay a bare SHA-256; tags are folded in by hashing, not appended.
+      // Untagged keys are left unchanged so existing vehicle entries remain valid.
+      val tags = selectionTag + builderTag
+      val key  = if (tags.isEmpty) base else cache.fingerprint { out => out.writeUTF(base); out.writeUTF(tags) }
+      cache.getOrCompute(settings, id, 1, key, CompactLandmarkIndex.codec(graph.n, landmarkCount))(compute)
     }
   }
 

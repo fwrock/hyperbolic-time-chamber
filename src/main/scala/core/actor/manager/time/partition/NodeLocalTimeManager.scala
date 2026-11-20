@@ -39,7 +39,41 @@ class NodeLocalTimeManager(
   private var bootstrapSequence = 0L
   private var adapterFailed = false
 
+  // Bounded protocol trace, dumped on any adapter failure. Per-wake/per-root events are only counted:
+  // tracing them individually would put string building on the hottest path of the scheduler.
+  private val TraceCapacity = 256
+  private val SummaryEveryTicks = 1000L
+  private val trace = new java.util.ArrayDeque[String](TraceCapacity + 1)
+  private val traceStartNanos = System.nanoTime()
+  private var wakesStored, wakesClaimed, rootsDispatched, rootsSettled, drainsSent, drainsAcked, ticksGranted =
+    0L
+
+  private def counters: String =
+    s"stored=$wakesStored claimed=$wakesClaimed rootsDispatched=$rootsDispatched rootsSettled=$rootsSettled " +
+      s"drainsSent=$drainsSent drainsAcked=$drainsAcked"
+
+  private def note(entry: => String): Unit = {
+    if (trace.size >= TraceCapacity) trace.removeFirst()
+    trace.addLast(s"+${(System.nanoTime() - traceStartNanos) / 1000000L}ms $entry")
+  }
+
+  private def pendingState: String =
+    s"active=$activeTick bootstrap=$bootstrap pendingRoots=${pendingRoots.size} drains=${drains.size} " +
+      s"pendingAcceptance=${assignments.pendingAcceptanceCount} forwarded=${forwarded.size} " +
+      s"granted=${granted.size}/$workerCount $counters " +
+      s"sampleRoots=${pendingRoots.take(5).map { case (id, w) => s"${id.source}#${id.sequence}@${w.path.name}" }.mkString("[", ",", "]")} " +
+      s"sampleDrains=${drains.take(5).map { case (token, w) => s"$token@${w.path.name}" }.mkString("[", ",", "]")}"
+
+  private def dumpTrace(reason: String): Unit =
+    logError(
+      s"[NODE-LOCAL-TRACE] ${self.path.name} $reason | $pendingState | last ${trace.size} protocol events, oldest first:\n" +
+        trace.toArray.mkString("\n")
+    )
+
   override protected def directInteractions: Boolean = true
+
+  override protected def onReadyReported(round: Long): Unit =
+    note(s"READY-REPORTED round=$round $pendingState")
   override protected def additiveWakeups: Boolean = true
 
   /** Register only after all local worker references exist; membership itself is fixed. */
@@ -141,6 +175,8 @@ class NodeLocalTimeManager(
       worker =>
         nextDrain = Math.addExact(nextDrain, 1L)
         drains(nextDrain) = worker
+        drainsSent += 1
+        note(s"DRAIN-SENT token=$nextDrain worker=${worker.path.name} tick=$tick micro=$microstep all=$allMicrosteps")
         granted.add(worker)
         worker ! DrainPartition(conservativeEpoch, nextDrain, tick)
     }
@@ -158,6 +194,8 @@ class NodeLocalTimeManager(
     }
     val worker = partitions(index)
     pendingRoots(delivery.work.id) = worker
+    rootsDispatched += 1
+    if (pendingRoots.size == 1) note(s"ROOT-FIRST tick=${delivery.work.tick} id=${delivery.work.id.source}#${delivery.work.id.sequence} worker=${worker.path.name} wake=${wake.isDefined}")
     worker ! StartPartitionRoot(
       conservativeEpoch,
       target,
@@ -206,19 +244,24 @@ class NodeLocalTimeManager(
           require(sender() == coordinator, "foreign node-local grant")
           bootstrap = event.initializationOnly
           if (!activeTick.contains(event.tick)) {
+            note(s"GRANT tick=${event.tick} micro=${event.microstep} init=${event.initializationOnly} prev=$activeTick $pendingState")
             require(
               pendingRoots.isEmpty && drains.isEmpty && !assignments.hasPendingAcceptance,
-              "node-local advance before settlement"
+              s"node-local advance before settlement: grant=${event.tick} $pendingState"
             )
             assignments.advance(event.tick)
             activeTick = Some(event.tick)
             granted.clear()
-          }
+            ticksGranted += 1
+            if (ticksGranted % SummaryEveryTicks == 0)
+              logInfo(s"[NODE-LOCAL] ${self.path.name} tick=${event.tick} ticksGranted=$ticksGranted $counters")
+          } else note(s"GRANT-SAME-TICK tick=${event.tick} micro=${event.microstep} init=${event.initializationOnly}")
           inherited(event)
         }
       case WakeStored(run, wake) =>
         guarded {
           check(run)
+          wakesStored += 1
           assignments.accept(wake, indexOf(sender()))
           flushCompletions()
           progressConservative()
@@ -227,6 +270,7 @@ class NodeLocalTimeManager(
         guarded {
           check(run)
           require(activeTick.contains(wake.tick), "claim outside authorized tick")
+          wakesClaimed += 1
           assignments.claim(wake, indexOf(sender()))
           runningEvents.add(wake.identity)
           sendSpontaneousEvent(wake.tick, wake.identity)
@@ -234,6 +278,8 @@ class NodeLocalTimeManager(
       case PartitionDrained(run, token) =>
         guarded {
           check(run)
+          drainsAcked += 1
+          note(s"DRAINED token=$token worker=${sender().path.name}")
           require(drains.remove(token).contains(sender()), "unexpected partition grant receipt")
           progressConservative()
         }
@@ -244,6 +290,8 @@ class NodeLocalTimeManager(
             roots.nonEmpty && roots.distinct.size == roots.size,
             "invalid settled root cohort"
           )
+          rootsSettled += roots.size
+          note(s"ROOTS-SETTLED n=${roots.size} worker=${sender().path.name} remaining=${pendingRoots.size - roots.size}")
           roots.foreach(
             id => require(pendingRoots.remove(id).contains(sender()), "foreign root settlement")
           )
@@ -274,6 +322,7 @@ class NodeLocalTimeManager(
   catch {
     case NonFatal(error) =>
       adapterFailed = true
+      dumpTrace(s"failure: ${error.getMessage}")
       coordinator ! RuntimeFailure(s"node-local scheduler ${self.path}: ${error.getMessage}")
   }
 }

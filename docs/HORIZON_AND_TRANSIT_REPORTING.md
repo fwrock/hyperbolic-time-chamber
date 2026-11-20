@@ -28,6 +28,19 @@ This adds no model dispatch, timeout or new coordinator. Reply obligations still
 constrain settled completion; at an authorized truncated cut their historical send
 ticks do not represent unprocessed in-horizon work.
 
+Same-tick wake at the cap (2026-11-20). An LP that executed exactly at the inclusive
+horizon and asked for another wake in that same tick keeps that request in its
+`pendingSelf`. Schedulers that hold one wake per LP and tick (`node-local-tick`) cannot
+run it in the tick and defer it to the next one, which lies beyond the cap, so the
+coordinator truncates while the LP still remembers the requested tick. Finalization
+treats that single case as censored work beyond the cap instead of failing with
+"horizon reporting before all in-horizon work is resolved". Queued input,
+cancellations, creation callbacks and dynamic initializations at or below the horizon
+still reject the final cut, and a pending wake that is not a same-tick request at
+the cap is still rejected. The failure message now carries the actor, the tick state
+and every pending source. Under `cluster-pool` a same-tick wake runs inside the tick,
+so the exemption is not reached there. Seen on `tl_1pct_meso` (Bus, tick 86400).
+
 `JourneyHorizonReporter` is shared by Car, Bicycle, Motorcycle, Bus and Subway.
 It emits one journey record and one SUMO record for an actually departed unfinished
 journey. Completed or parked private vehicles and inactive/unborn services are

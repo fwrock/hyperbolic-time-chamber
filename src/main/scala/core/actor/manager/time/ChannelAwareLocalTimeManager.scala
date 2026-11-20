@@ -40,6 +40,8 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   protected def directInteractions: Boolean = false
   /** Optional scheduling adapters retain the same lifecycle and report barriers. */
   protected def additionalWorkPending: Boolean = false
+  /** Diagnostic hook: this manager just told the coordinator it has no work pending for `round`. */
+  protected def onReadyReported(round: Long): Unit = ()
   protected def additiveWakeups: Boolean = false
   protected def selectRuntimeOwner(id: LogicalProcessId, membership: Vector[ActorRef]): ActorRef =
     membership(Math.floorMod(id.hashCode(), membership.size))
@@ -627,6 +629,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
     accepting.isEmpty && reports.isEmpty && births.isEmpty && !additionalWorkPending && (!directInteractions || directLedger.isClosed)) {
     val (round, target) = readyRequest.get
     readyRequest = None
+    onReadyReported(round)
     val next = (readyOrderedSchedules.map(_._3) ++ readyInputs.valuesIterator).minOption
     target ! ConservativeReady(round, next, blockedProcesses.size + runningEvents.size,
       if (directInteractions) readyInputs.valuesIterator.map(_.tick).minOption else None)

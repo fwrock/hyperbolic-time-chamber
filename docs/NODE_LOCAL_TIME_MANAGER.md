@@ -1,8 +1,9 @@
 # Node-local tick scheduling
 
 `auto` is the default scheduling strategy. It selects `node-local-tick` for direct
-conservative execution with live load balancing disabled, and `cluster-pool` for
-Time Warp, `channel-closed` and live load balancing. Explicit `cluster-pool` retains
+conservative execution (e.g. `discrete-event`) with live load balancing disabled, and `cluster-pool` for
+Time Warp, `channel-closed` and live load balancing. (A 2026-11-20 attempt to make `node-local-tick` the
+unconditional default made every Time Warp scenario hang in Loading, because the engine rejects it there.) Explicit `cluster-pool` retains
 the previous scheduler; explicit `node-local-tick` rejects incompatible policies. All JVMs must run the same executable and configuration.
 
 ## Configuration
@@ -23,7 +24,7 @@ Equivalent environment variables:
 
 | Setting | Environment variable | Default |
 |---|---|---|
-| Scheduling strategy | `HTC_TIME_MANAGER_SCHEDULING_STRATEGY` | `auto` |
+| Scheduling strategy | `HTC_TIME_MANAGER_SCHEDULING_STRATEGY` | `node-local-tick` |
 | Simulation JVM count | `HTC_NODE_LOCAL_SCHEDULER_NODES` | `0` (discover startup cohort) |
 | Local worker count | `HTC_NODE_LOCAL_SCHEDULER_WORKERS` | `4` |
 
@@ -106,3 +107,16 @@ The [bounded validation record](NODE_LOCAL_TIME_MANAGER_VALIDATION_2026_11_17.md
 contains the two-JVM MESO/MICRO results, protocol review and reproduction commands.
 The [cross-JVM measurement guide](REMOTE_TRAFFIC_MEASUREMENT.md) explains optional
 transport counters and the paired execution-time/message-volume benchmark.
+
+## Behavior notes (2026-11-20)
+
+- A wake an LP requests for a tick it has already processed is deferred to the next tick
+  (one wake per LP and tick). `cluster-pool` runs it inside the same tick. At the inclusive
+  horizon this is handled as described in [HORIZON_AND_TRANSIT_REPORTING.md](HORIZON_AND_TRANSIT_REPORTING.md).
+- Diagnostics: every 1000 granted ticks each node logs `[NODE-LOCAL] <node> tick=... ticksGranted=...`
+  with protocol counters (`stored`, `claimed`, `rootsDispatched`, `rootsSettled`, `drainsSent`,
+  `drainsAcked`). On any scheduler failure it logs `[NODE-LOCAL-TRACE]` with the current pending state and
+  the last 256 protocol events (`GRANT`, `READY-REPORTED`, `DRAIN-SENT`, `DRAINED`, `ROOTS-SETTLED`,
+  `ROOT-FIRST`). Look in every node's log, not only in the one that reported the failure.
+- An earlier 46% failure (`node-local advance before settlement`) was seen once on a four-JVM `tl_1pct_meso`
+  run and did not recur in a full 86400-tick rerun; its cause is not established.

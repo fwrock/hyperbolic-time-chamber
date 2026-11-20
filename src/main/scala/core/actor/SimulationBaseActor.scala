@@ -1572,8 +1572,10 @@ abstract class SimulationBaseActor[T <: BaseState](
       actInteractWith(event)
   }
 
-  private def runtimeMinimum: Option[Long] = {
-    (inputQueue.minimumTick.toSeq ++ pendingSelf.map(_.tick) ++ pendingCancellations.map(_.tick) ++
+  private def runtimeMinimum: Option[Long] = runtimeMinimum(includeSelf = true)
+
+  private def runtimeMinimum(includeSelf: Boolean): Option[Long] = {
+    (inputQueue.minimumTick.toSeq ++ (if (includeSelf) pendingSelf.map(_.tick) else None) ++ pendingCancellations.map(_.tick) ++
       (if (distributedRuntime || usesConservativeRuntime) Iterable.empty else outstandingAwaitedReplies.values.map(_.sentAtTick)) ++ pendingCreationCallbacks.map(_._2) ++
       pendingDynamicInits.values.map(_._2.data.data).map(_ => currentTick)).minOption
   }
@@ -2157,8 +2159,21 @@ abstract class SimulationBaseActor[T <: BaseState](
   protected def onHorizonFinalization(horizon: Tick): Unit = ()
 
   private def finalizeHorizonReports(horizon: Tick): Unit = {
-    require(finalizedHorizon.isEmpty && currentTick <= horizon && runtimeMinimum.forall(_ > horizon),
-      "horizon reporting before all in-horizon work is resolved or after finalization")
+    // An actor that executed AT the inclusive horizon and asked for another wake in that same tick cannot
+    // have that wake run in the tick: schedulers that keep one wake per LP and tick (node-local-tick) defer it
+    // to the next tick, which lies beyond the cap, while the actor still remembers the tick it requested.
+    // That wake is censored like any wake beyond the horizon, not unresolved in-horizon work. Every other
+    // pending source (queued input, cancellations, creation callbacks, dynamic inits) still has to be clear.
+    val deferredSameTickWake = pendingSelf.exists(p => p.tick == horizon && currentTick == horizon)
+    val pendingMinimum = runtimeMinimum(includeSelf = !deferredSameTickWake)
+    require(finalizedHorizon.isEmpty && currentTick <= horizon && pendingMinimum.forall(_ > horizon),
+      s"horizon reporting before all in-horizon work is resolved or after finalization: " +
+        s"actor=$getEntityId horizon=$horizon currentTick=$currentTick finalizedHorizon=$finalizedHorizon " +
+        s"runtimeMinimum=$pendingMinimum queuedMin=${inputQueue.minimumTick} pendingSelf=$pendingSelf " +
+        s"cancellations=${pendingCancellations.map(_.tick).toList.take(5)} " +
+        s"creationCallbacks=${pendingCreationCallbacks.map(_._2).toList.take(5)} " +
+        s"dynamicInits=${pendingDynamicInits.size} awaited=${outstandingAwaitedReplies.size} " +
+        s"terminal=$terminalIntent runtimeBorn=$runtimeBorn")
     val previousTick = currentTick
     horizonReporting = Some(horizon)
     currentTick = horizon
