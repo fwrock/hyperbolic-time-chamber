@@ -105,7 +105,8 @@ Same generated scenario in both modes, one JVM, `--measure`, seed 7 (4x4 grid, 1
 | Report rows | 17,717 | 17,717 |
 | Event types | 26 | 26, identical counts per type |
 
-One run per mode on a 16-second simulation: an indication, not a measured speedup. Parity was
+One run per mode on a 16-second simulation: an indication, not a measured speedup (the Berlin
+rerun below shows the opposite direction). Parity was
 compared by row count per event type, not by row content. Heap was not compared.
 
 Delivery path, single-node, discrete-event conservative runtime:
@@ -118,6 +119,47 @@ Delivery path, single-node, discrete-event conservative runtime:
 `Bus` and `Subway` are born dynamically in both, so dynamic births do not reach the region
 either: every birth path waits for the start and initialization acks before anyone addresses
 the entity.
+
+## Berlin 5000-trip scenario (2026-11-20)
+
+The derived MATSim Berlin car benchmark (`tools/matsim-validation`, protocol
+`berlin-car-meso-v4-direct-20261117`, 5,000 fixed-route car trips, one-second clock) was rerun
+on the HTC side only, using the existing `current-5000/htc-input` scenario, this branch's jar,
+`HTC_CONSERVATIVE_TRANSPORT=direct`, the harness reporting config (parquet, zstd) and
+`run_cluster_validation.py --nodes 1 --measure` (four visible logical processors, 4 GiB heap).
+MATSim was not rerun.
+
+| | Wall time | Load + warmup + progressive load |
+|---|---|---|
+| single-node (this branch's jar) | 164.0 s | 24.2 + 11.7 + 22.9 s |
+| cluster (this branch's jar) | 158.1 s | 28.8 + 16.0 + 23.2 s |
+| Recorded v4-direct run (older jar, cluster) | 204.7 s | not recorded |
+| MATSim, recorded v4-direct run | 36.7 s | not recorded |
+
+Both runs completed (`CONSERVATIVE-COMPLETE`), with about 31,300 rounds and 3.7 million
+time-manager callbacks each, and similar parquet volume (75.2 MB and 74.8 MB; row content was
+not compared).
+
+What this does and does not show:
+
+- Single-node gave no time gain on this scenario: it was 6 s (about 4%) slower than cluster,
+  within what one run per mode cannot separate from noise. On the small scenario above the
+  direction was the opposite, so neither result supports a speed claim for the mode.
+- The cluster run with this branch's jar is about 23% faster than the recorded 204.7 s. It
+  cannot come from the runtime mode, so it must come from the mode-independent performance
+  changes on the branch (plain `BaseActor`, report JSON fast path, primitive-keyed time-manager
+  maps). The recorded run used an older jar and was not repeated on this machine, so the size
+  of that gain is approximate.
+- HTC remains about 4.3 times slower than MATSim's recorded time. Roughly 60 s (about 37%) of
+  the wall time is spent before the simulation starts (load, warmup, progressive load). The
+  rest, about 90 to 100 s, is the time-manager round protocol; this split is derived from the
+  phase log and was not profiled separately.
+- Entity transport is not what dominates: the runtime mode only changes how entities are
+  reached, and the round and callback volume is the same in both modes.
+
+Candidate targets for time, not yet investigated: the roughly 60 s preparation phase for 5,000
+vehicles, and the 3.7 million callbacks for 5,000 trips (callbacks without useful work, or
+batching).
 
 ## Limits and open items
 
