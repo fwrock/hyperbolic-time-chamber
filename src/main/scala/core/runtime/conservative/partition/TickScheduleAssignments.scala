@@ -76,6 +76,9 @@ final class TickScheduleAssignments(workerCount: Int) {
   /** Pending acceptance fences registration and closure. */
   def hasPendingAcceptance: Boolean = pendingAcceptance != 0
 
+  /** Admitted wake-ups whose storage receipt has not arrived (diagnostics). */
+  def pendingAcceptanceCount: Int = pendingAcceptance
+
   /** Ordered summaries use the authoritative directory, including unacknowledged events. */
   def earliest: Vector[TickWake] = ticks.headOption.toVector.flatMap {
     case (tick, ids) =>
