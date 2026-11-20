@@ -2,6 +2,9 @@ package org.interscity.htc
 package core.actor
 
 import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.actor.ExtendedActorSystem
+import core.actor.manager.report.NodeLocalReporters
+import core.util.RuntimeMode
 import org.apache.pekko.actor.PoisonPill
 import org.apache.pekko.cluster.sharding.ShardRegion
 import core.actor.manager.loadbalance.migration.{MigrationSnapshot, MigrationStateStoreRegistry}
@@ -2195,7 +2198,7 @@ abstract class SimulationBaseActor[T <: BaseState](
     if (usesConservativeRuntime && migrationRequest.nonEmpty) {
       val defaultTarget = if (defaultReportsEnabled) available.get(selected).orElse(available.get(cachedDefaultReportType)).toVector else Vector.empty
       val targets = if (runtimeBorn) (defaultTarget ++ available.get(ReportTypeEnum.kafka)).distinct else Vector.empty
-      currentTimeManager ! PublishConservativePlacement(runtimeEpoch.get, migrationRequest.get, targets, event)
+      currentTimeManager ! PublishConservativePlacement(runtimeEpoch.get, migrationRequest.get, targets.map(nodeLocalTarget), event)
       return
     }
     report(event)
@@ -2241,6 +2244,30 @@ abstract class SimulationBaseActor[T <: BaseState](
   private lazy val defaultReportsEnabled: Boolean =
     !config.hasPath("htc.report-manager.default-enabled") || config.getBoolean("htc.report-manager.default-enabled")
 
+  /** Startup-only `htc.report-manager.placement`: send reports to the sink of the same strategy on this JVM. */
+  private lazy val nodeLocalReporting: Boolean =
+    RuntimeMode.forSystem(context.system) == RuntimeMode.Cluster &&
+      core.api.SimulatorSettingsRegistry.getString(NodeLocalReporters.PlacementKey, config) == NodeLocalReporters.NodeLocal
+
+  private val localReporterFor = mutable.Map.empty[ActorRef, ActorRef]
+
+  /** The routee of `router` on this JVM; `router` itself until resolved or when none is local. */
+  private def nodeLocalTarget(router: ActorRef): ActorRef =
+    if (!nodeLocalReporting || !NodeLocalReporters.isReportPool(router)) router
+    else localReporterFor.getOrElse(router, {
+      val reportType = Option(reporters).flatMap(_.collectFirst { case (rt, ref) if ref == router => rt })
+      reportType.flatMap { rt =>
+        val expected = NodeLocalReporters.expectedRoutees(config, rt, context.system.asInstanceOf[ExtendedActorSystem])
+        NodeLocalReporters(context.system).localSinks(router, expected)
+      } match {
+        case Some(local) =>
+          val chosen = if (local.isEmpty) router else local(Math.floorMod(entityId.hashCode, local.size))
+          localReporterFor.put(router, chosen)
+          chosen
+        case None => router
+      }
+    })
+
   /** This actor's own model class type (e.g. "Car"), resolved once and cached for Prometheus
     * labels -- avoids a `getClass.getName` + string-split allocation on every interaction/
     * anti-message under Time Warp's rollback-metrics instrumentation.
@@ -2275,9 +2302,10 @@ abstract class SimulationBaseActor[T <: BaseState](
     reportToTarget(event, target)
   }
 
-  private def reportToTarget(event: ReportEvent, target: ActorRef): Unit = {
+  private def reportToTarget(event: ReportEvent, router: ActorRef): Unit = {
     require(horizonReporting.forall(_ == event.tick), "horizon report has a different timestamp")
     if (isReplaying) return
+    val target = nodeLocalTarget(router)
     if (directScope.nonEmpty) directScope.get.reports += DirectReport(target, event)
     else if (usesConservativeRuntime && runtimeEpoch.nonEmpty) currentTimeManager ! PublishConservativeReport(target, event)
     else if (isTimeWarp || usesConservativeRuntime) reportBuffer += BufferedReport(event, target, currentEventSeq)

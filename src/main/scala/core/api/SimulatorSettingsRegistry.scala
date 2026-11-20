@@ -32,6 +32,8 @@ object SimulatorSettingsRegistry {
   val catalog: List[SettingDef] = List(
     SettingDef("htc.time-manager.scheduling-strategy", "HTC_TIME_MANAGER_SCHEDULING_STRATEGY",
       "Scheduling ownership strategy; auto selects node-local-tick for direct conservative execution and cluster-pool otherwise", "auto"),
+    SettingDef("htc.report-manager.placement", "HTC_REPORT_PLACEMENT",
+      "Report sink placement; node-local (default) sends each actor's reports to a sink of the same strategy on its own JVM, cluster-pool uses the round-robin pool", "node-local"),
     SettingDef("htc.time-manager.node-local.nodes", "HTC_NODE_LOCAL_SCHEDULER_NODES",
       "Fixed simulation JVM count for node-local-tick; zero freezes the Up cohort at startup", "0"),
     SettingDef("htc.time-manager.node-local.workers-per-node", "HTC_NODE_LOCAL_SCHEDULER_WORKERS",
@@ -213,6 +215,7 @@ object SimulatorSettingsRegistry {
       "htc.runtime.mode" -> List("cluster", "single-node"),
       "htc.time-manager.conservative-transport" -> List("direct", "channel-closed"),
       "htc.time-manager.scheduling-strategy" -> List("auto", "cluster-pool", "node-local-tick"),
+      "htc.report-manager.placement" -> List("cluster-pool", "node-local"),
       "htc.routing.cache-strategy" -> List("kafka", "inmemory", "accounted", "disabled"),
       "htc.mobility.load-policy.transit-trip-policy" -> List("reject", "walk"),
       "htc.snapshot-manager.migration.state-store" -> List("inmemory", "redis"),
@@ -231,6 +234,7 @@ object SimulatorSettingsRegistry {
 
   def isStartupOnly(key: String): Boolean =
     key == "htc.time-manager.conservative-transport" || key == "htc.time-manager.scheduling-strategy" ||
+      key == "htc.report-manager.placement" ||
       key.startsWith("htc.time-manager.node-local.") || startupOnlyPrefixes.exists(key.startsWith)
 
   def set(key: String, value: String): Unit = { overrides.put(key, value); version.incrementAndGet() }
