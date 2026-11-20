@@ -3,7 +3,7 @@ package org.interscity.htc.model.hybrid.collections
 import org.interscity.htc.model.hybrid.collections.graph.LandmarkIndex
 import org.interscity.htc.model.hybrid.entity.state.model.NodeGraph
 
-/** ALT landmark index stored as flat primitive arrays for zero-allocation heuristic evaluation.
+/** ALT landmark index stored as one flat primitive array for zero-allocation heuristic evaluation.
   *
   * ==Motivation==
   * [[LandmarkIndex]] stores distances as `IndexedSeq[Map[V, Double]]`. Each `heuristic` call
@@ -11,22 +11,25 @@ import org.interscity.htc.model.hybrid.entity.state.model.NodeGraph
   * with 10K expansions × 5 neighbours × 4 × 16 lookups = 3.2M HashMap calls — the dominant
   * cost for long routes.
   *
-  * This class pre-translates the maps to `Array[Array[Double]]` indexed by the same Int node
-  * index used by [[CompactGraph]]. The heuristic becomes pure array arithmetic: 4 array reads
-  * and 4 arithmetic ops per landmark, no object allocation, no HashMap, no boxing.
+  * This class holds the distances as primitives indexed by the same Int node index used by
+  * [[CompactGraph]]. The heuristic becomes pure array arithmetic: 4 array reads and 4
+  * arithmetic ops per landmark, no object allocation, no HashMap, no boxing.
+  *
+  * ==Layout==
+  * Node-major: the 2k values of one node are contiguous (`data(node * 2k + 2i)` is the distance
+  * from landmark i to the node, `+ 1` the distance from the node to landmark i). A heuristic
+  * call reads the rows of two nodes, 2 × 2k × 8 bytes in a few cache lines, instead of 4k
+  * positions scattered over 4k arrays when each landmark owns its own array.
   *
   * ==Memory==
   * 2 × k × n × 8 bytes. For k=16, n=488K (Toulouse): ~125 MB — loaded once at startup.
-  *
-  * @param distFrom  `distFrom(i)(nodeIdx)` = forward distance from landmark i to node `nodeIdx`.
-  * @param distTo    `distTo(i)(nodeIdx)`   = backward distance from landmark i to node `nodeIdx`.
   */
 final class CompactLandmarkIndex private (
-  private val distFrom: Array[Array[Double]], // [landmark][nodeIdx]
-  private val distTo:   Array[Array[Double]]  // [landmark][nodeIdx]
+  val k: Int,
+  private val data: Array[Double]
 ) {
 
-  val k: Int = distFrom.length
+  private val stride: Int = 2 * k
 
   /** Admissible ALT lower bound on d(u, target).
     *
@@ -41,12 +44,14 @@ final class CompactLandmarkIndex private (
     */
   @inline def heuristic(u: Int, target: Int): Double = {
     var best = 0.0
+    val bu   = u * stride
+    val bt   = target * stride
     var i    = 0
-    while (i < k) {
-      val dft = distFrom(i)(target)
-      val dfu = distFrom(i)(u)
-      val dtu = distTo(i)(u)
-      val dtt = distTo(i)(target)
+    while (i < stride) {
+      val dfu = data(bu + i)
+      val dtu = data(bu + i + 1)
+      val dft = data(bt + i)
+      val dtt = data(bt + i + 1)
 
       // Forward landmark: L→target cheaper than L→u→target
       val h1 = dft - dfu
@@ -55,35 +60,90 @@ final class CompactLandmarkIndex private (
 
       if (h1 > best && h1 < Double.PositiveInfinity) best = h1
       if (h2 > best && h2 < Double.PositiveInfinity) best = h2
-      i += 1
+      i += 2
     }
     best
   }
+
+  private[collections] def distanceFrom(landmark: Int, node: Int): Double = data(node * stride + 2 * landmark)
+  private[collections] def distanceTo(landmark: Int, node: Int): Double   = data(node * stride + 2 * landmark + 1)
 }
 
 object CompactLandmarkIndex {
 
+  /** Wraps node-major data produced by [[CompactAltBuilder]]: `data(node * 2k + 2i)` is the
+    * distance from landmark i to the node and `+ 1` the distance from the node to landmark i.
+    */
+  private[collections] def fromInterleaved(k: Int, nodes: Int, data: Array[Double]): CompactLandmarkIndex = {
+    require(k >= 0 && nodes >= 0 && data.length.toLong == 2L * k * nodes, "invalid landmark dimensions")
+    new CompactLandmarkIndex(k, data)
+  }
+
+  /** Interleaves distance rows that are indexed by [[CompactGraph]] node index, one row per landmark. */
+  private[collections] def fromArrays(
+    distFrom: Array[Array[Double]],
+    distTo:   Array[Array[Double]]
+  ): CompactLandmarkIndex = {
+    require(distFrom.length == distTo.length, "forward and backward landmark counts differ")
+    val k     = distFrom.length
+    val nodes = if (k == 0) 0 else distFrom(0).length
+    val data  = new Array[Double](2 * k * nodes)
+    var i = 0
+    while (i < k) {
+      require(distFrom(i).length == nodes && distTo(i).length == nodes, "landmark rows differ in length")
+      var v = 0
+      while (v < nodes) {
+        data(v * 2 * k + 2 * i)     = distFrom(i)(v)
+        data(v * 2 * k + 2 * i + 1) = distTo(i)(v)
+        v += 1
+      }
+      i += 1
+    }
+    new CompactLandmarkIndex(k, data)
+  }
+
+  /** On-disk layout is unchanged (all forward rows, then all backward rows), so entries written by
+    * earlier builds stay readable.
+    */
   def codec(nodes: Int, maxLandmarks: Int): org.interscity.htc.core.cache.CalculationCodec[CompactLandmarkIndex] =
     new org.interscity.htc.core.cache.CalculationCodec[CompactLandmarkIndex] {
       def read(in: java.io.DataInputStream): CompactLandmarkIndex = {
         val k = in.readInt()
         require(k >= 0 && k <= math.max(0, maxLandmarks) && in.readInt() == nodes, "invalid landmark dimensions")
-        def matrix(): Array[Array[Double]] = Array.fill(k) {
-          Array.fill(nodes) {
-            val value = in.readDouble()
-            require(!value.isNaN && value >= 0, "invalid landmark distance")
-            value
+        val data = new Array[Double](2 * k * nodes)
+        var side = 0
+        while (side < 2) {
+          var i = 0
+          while (i < k) {
+            var v = 0
+            while (v < nodes) {
+              val value = in.readDouble()
+              require(!value.isNaN && value >= 0, "invalid landmark distance")
+              data(v * 2 * k + 2 * i + side) = value
+              v += 1
+            }
+            i += 1
           }
+          side += 1
         }
-        new CompactLandmarkIndex(matrix(), matrix())
+        new CompactLandmarkIndex(k, data)
       }
       def write(index: CompactLandmarkIndex, out: java.io.DataOutputStream): Unit = {
         out.writeInt(index.k); out.writeInt(nodes)
-        index.distFrom.foreach(_.foreach(out.writeDouble))
-        index.distTo.foreach(_.foreach(out.writeDouble))
+        var i = 0
+        while (i < index.k) {
+          var v = 0
+          while (v < nodes) { out.writeDouble(index.distanceFrom(i, v)); v += 1 }
+          i += 1
+        }
+        i = 0
+        while (i < index.k) {
+          var v = 0
+          while (v < nodes) { out.writeDouble(index.distanceTo(i, v)); v += 1 }
+          i += 1
+        }
       }
     }
-
 
   /** Build a [[CompactLandmarkIndex]] from an existing [[LandmarkIndex]].
     *
@@ -132,6 +192,6 @@ object CompactLandmarkIndex {
     }
 
     println(s"[CompactLandmarkIndex] Done in ${System.currentTimeMillis() - t0}ms")
-    new CompactLandmarkIndex(compactFrom, compactTo)
+    fromArrays(compactFrom, compactTo)
   }
 }
