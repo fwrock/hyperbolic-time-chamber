@@ -31,7 +31,7 @@ object SimulatorSettingsRegistry {
   /** Catalog of all known settings exposed via the API. */
   val catalog: List[SettingDef] = List(
     SettingDef("htc.time-manager.scheduling-strategy", "HTC_TIME_MANAGER_SCHEDULING_STRATEGY",
-      "Scheduling ownership strategy; auto selects node-local for direct conservative execution", "auto"),
+      "Scheduling ownership strategy; auto selects node-local-tick for direct conservative execution and cluster-pool otherwise", "auto"),
     SettingDef("htc.time-manager.node-local.nodes", "HTC_NODE_LOCAL_SCHEDULER_NODES",
       "Fixed simulation JVM count for node-local-tick; zero freezes the Up cohort at startup", "0"),
     SettingDef("htc.time-manager.node-local.workers-per-node", "HTC_NODE_LOCAL_SCHEDULER_WORKERS",
