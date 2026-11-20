@@ -1,7 +1,7 @@
 package org.interscity.htc.model.hybrid.util
 
 import org.interscity.htc.core.api.{ ApiConfigRegistry, SimulatorSettingsRegistry }
-import org.interscity.htc.model.hybrid.collections.{ CompactGraph, CompactLandmarkIndex, Graph, LoadedGraphData, SCCIndex }
+import org.interscity.htc.model.hybrid.collections.{ CompactAltBuilder, CompactGraph, CompactLandmarkIndex, Graph, LandmarkSelection, LoadedGraphData, SCCIndex }
 import org.interscity.htc.model.hybrid.collections.graph.{ ContractionHierarchiesIndex, LandmarkIndex }
 import org.interscity.htc.model.hybrid.entity.state.model.{ EdgeGraph, NodeGraph }
 import scala.util.{ Failure, Success }
@@ -85,6 +85,30 @@ object CityMapUtil {
       .orElse(sys.env.get("HTC_MOBILITY_LANDMARK_COUNT"))
       .flatMap(s => scala.util.Try(s.toInt).toOption)
       .getOrElse(16)
+
+  /** `compact` builds the vehicle ALT index on the CSR graph; `map` keeps the legacy Map-based builder. */
+  private lazy val landmarkBuilder: String =
+    SimulatorSettingsRegistry
+      .get("htc.mobility.landmark-builder")
+      .orElse(sys.env.get("HTC_MOBILITY_LANDMARK_BUILDER"))
+      .map(_.trim.toLowerCase)
+      .getOrElse("compact")
+
+  private lazy val landmarkSelection: LandmarkSelection =
+    LandmarkSelection.parse(
+      SimulatorSettingsRegistry
+        .get("htc.mobility.landmark-selection")
+        .orElse(sys.env.get("HTC_MOBILITY_LANDMARK_SELECTION"))
+        .getOrElse("weighted")
+    )
+
+  private lazy val landmarkThreads: Int =
+    SimulatorSettingsRegistry
+      .get("htc.mobility.landmark-threads")
+      .orElse(sys.env.get("HTC_MOBILITY_LANDMARK_THREADS"))
+      .flatMap(s => scala.util.Try(s.toInt).toOption)
+      .filter(_ > 0)
+      .getOrElse(CompactAltBuilder.defaultThreads)
 
 
   /** Compact CSR representation of the city graph.
@@ -186,12 +210,14 @@ object CityMapUtil {
       synchronized {
         if (_compactAltIndex == null) {
           _compactAltIndex = cachedLandmarks("routing.alt.vehicle", compactGraph) {
-            CompactLandmarkIndex.fromLandmarkIndex(
-              altIndex,
-              compactGraph.nodeIndex,
-              nodeGraphIdExtractor,
-              compactGraph.n
-            )
+            if (landmarkBuilder == "map")
+              CompactLandmarkIndex.fromLandmarkIndex(
+                altIndex,
+                compactGraph.nodeIndex,
+                nodeGraphIdExtractor,
+                compactGraph.n
+              )
+            else CompactAltBuilder.build(compactGraph, landmarkCount, landmarkSelection, landmarkThreads)
           }
         }
         _compactAltIndex
@@ -203,8 +229,12 @@ object CityMapUtil {
     val settings = cache.configured
     // Avoid hashing when this calculation has not been selected for persistence.
     if (!settings.exists(_.entries.contains(id))) compute
-    else cache.getOrCompute(settings, id, 1, graph.staticFingerprint(landmarkCount),
-      CompactLandmarkIndex.codec(graph.n, landmarkCount))(compute)
+    else {
+      // `weighted` reproduces the legacy landmarks exactly, so those entries stay interchangeable.
+      val selectionTag = if (landmarkSelection == LandmarkSelection.Hops) "|selection=hops" else ""
+      cache.getOrCompute(settings, id, 1, graph.staticFingerprint(landmarkCount) + selectionTag,
+        CompactLandmarkIndex.codec(graph.n, landmarkCount))(compute)
+    }
   }
 
   /** Undirected CompactGraph for pedestrian routing.

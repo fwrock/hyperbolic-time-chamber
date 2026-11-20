@@ -63,6 +63,15 @@ final class CompactLandmarkIndex private (
 
 object CompactLandmarkIndex {
 
+  /** Wraps distance rows that are already indexed by [[CompactGraph]] node index. */
+  private[collections] def fromArrays(
+    distFrom: Array[Array[Double]],
+    distTo:   Array[Array[Double]]
+  ): CompactLandmarkIndex = {
+    require(distFrom.length == distTo.length, "forward and backward landmark counts differ")
+    new CompactLandmarkIndex(distFrom, distTo)
+  }
+
   def codec(nodes: Int, maxLandmarks: Int): org.interscity.htc.core.cache.CalculationCodec[CompactLandmarkIndex] =
     new org.interscity.htc.core.cache.CalculationCodec[CompactLandmarkIndex] {
       def read(in: java.io.DataInputStream): CompactLandmarkIndex = {

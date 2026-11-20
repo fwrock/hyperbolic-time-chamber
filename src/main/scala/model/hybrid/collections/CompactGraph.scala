@@ -90,6 +90,11 @@ final class CompactGraph private (
   private[collections] def colIdxAt(i: Int): Int  = colIdx(i)
   private[collections] def edgeCount: Int          = colIdx.length
 
+  // Read-only views for [[CompactAltBuilder]]; the arrays are never mutated after construction.
+  private[collections] def rowPtrArray: Array[Int]       = rowPtr
+  private[collections] def colIdxArray: Array[Int]       = colIdx
+  private[collections] def edgeWeightArray: Array[Double] = edgeWeight
+
   // ── ALT heuristic (optional landmark index) ───────────────────────────────
 
   /** A* with an external landmark heuristic (ALT).
