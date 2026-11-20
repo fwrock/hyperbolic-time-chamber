@@ -224,15 +224,17 @@ object CityMapUtil {
       }
   }
 
-  private def cachedLandmarks(id: String, graph: CompactGraph)(compute: => CompactLandmarkIndex): CompactLandmarkIndex = {
+  private def cachedLandmarks(id: String, graph: CompactGraph, builderSensitive: Boolean = false)(compute: => CompactLandmarkIndex): CompactLandmarkIndex = {
     val cache = org.interscity.htc.core.cache.CalculationCache
     val settings = cache.configured
     // Avoid hashing when this calculation has not been selected for persistence.
     if (!settings.exists(_.entries.contains(id))) compute
     else {
-      // `weighted` reproduces the legacy landmarks exactly, so those entries stay interchangeable.
+      // `weighted` reproduces the legacy vehicle landmarks exactly, so those entries stay
+      // interchangeable; the pedestrian graph orders its nodes differently in the legacy builder.
       val selectionTag = if (landmarkSelection == LandmarkSelection.Hops) "|selection=hops" else ""
-      cache.getOrCompute(settings, id, 1, graph.staticFingerprint(landmarkCount) + selectionTag,
+      val builderTag   = if (builderSensitive) s"|builder=$landmarkBuilder" else ""
+      cache.getOrCompute(settings, id, 1, graph.staticFingerprint(landmarkCount) + selectionTag + builderTag,
         CompactLandmarkIndex.codec(graph.n, landmarkCount))(compute)
     }
   }
@@ -305,13 +307,15 @@ object CityMapUtil {
     else
       synchronized {
         if (_compactAltIndexPedestrian == null) {
-          _compactAltIndexPedestrian = cachedLandmarks("routing.alt.pedestrian", compactGraphPedestrian) {
-            CompactLandmarkIndex.fromLandmarkIndex(
-              altIndexPedestrian,
-              compactGraphPedestrian.nodeIndex,
-              nodeGraphIdExtractor,
-              compactGraphPedestrian.n
-            )
+          _compactAltIndexPedestrian = cachedLandmarks("routing.alt.pedestrian", compactGraphPedestrian, builderSensitive = true) {
+            if (landmarkBuilder == "map")
+              CompactLandmarkIndex.fromLandmarkIndex(
+                altIndexPedestrian,
+                compactGraphPedestrian.nodeIndex,
+                nodeGraphIdExtractor,
+                compactGraphPedestrian.n
+              )
+            else CompactAltBuilder.build(compactGraphPedestrian, landmarkCount, landmarkSelection, landmarkThreads)
           }
         }
         _compactAltIndexPedestrian

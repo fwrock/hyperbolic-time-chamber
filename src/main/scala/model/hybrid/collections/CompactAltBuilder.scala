@@ -55,20 +55,33 @@ object CompactAltBuilder {
     val (rrowPtr, rcol, rwt) = transpose(n, rowPtr, col, wt)
 
     val target = math.min(landmarks, n)
+    require(2L * target * n <= Int.MaxValue, s"landmark index of $target landmarks × $n nodes does not fit one array")
     println(s"[CompactAlt] Building $target landmarks on $n nodes (selection=$selection, threads=$threads)...")
     val t0   = System.nanoTime()
     val pool = Executors.newFixedThreadPool(math.max(1, threads), daemonThreads)
     try {
-      val (from, to) = selection match {
-        case LandmarkSelection.Weighted => weighted(n, rowPtr, col, wt, rrowPtr, rcol, rwt, target, pool)
-        case LandmarkSelection.Hops     => hops(n, rowPtr, col, wt, rrowPtr, rcol, rwt, target, pool)
+      val data = new Array[Double](2 * target * n)
+      val chosen = selection match {
+        case LandmarkSelection.Weighted => weighted(n, rowPtr, col, wt, rrowPtr, rcol, rwt, target, data, pool)
+        case LandmarkSelection.Hops     => hops(n, rowPtr, col, wt, rrowPtr, rcol, rwt, target, data, pool)
       }
+      // Selection returns an unselected node whenever one exists and target <= n, so this cannot fail.
+      require(chosen == target, s"selected $chosen of $target landmarks")
       val elapsed = (System.nanoTime() - t0) / 1e9
       GPSMetrics.altPrecomputationDuration.set(elapsed)
-      GPSMetrics.altLandmarkCount.set(from.length.toDouble)
-      println(f"[CompactAlt] Done in $elapsed%.2fs (${from.length} landmarks).")
-      CompactLandmarkIndex.fromArrays(from, to)
+      GPSMetrics.altLandmarkCount.set(target.toDouble)
+      println(f"[CompactAlt] Done in $elapsed%.2fs ($target landmarks).")
+      CompactLandmarkIndex.fromInterleaved(target, n, data)
     } finally pool.shutdown()
+  }
+
+  /** Interleaves one tree into the node-major array as it is produced, so trees are not all held at once. */
+  private def copyTree(tree: Array[Double], data: Array[Double], n: Int, stride: Int, offset: Int): Unit = {
+    var v = 0
+    while (v < n) {
+      data(v * stride + offset) = tree(v)
+      v += 1
+    }
   }
 
   private def weighted(
@@ -76,29 +89,33 @@ object CompactAltBuilder {
     rowPtr: Array[Int], col: Array[Int], wt: Array[Double],
     rrowPtr: Array[Int], rcol: Array[Int], rwt: Array[Double],
     target: Int,
+    data: Array[Double],
     pool: java.util.concurrent.ExecutorService
-  ): (Array[Array[Double]], Array[Array[Double]]) = {
+  ): Int = {
+    val stride     = 2 * target
     val isSelected = new Array[Boolean](n)
     val minDist    = new Array[Double](n)
     java.util.Arrays.fill(minDist, Double.PositiveInfinity)
-    val from     = mutable.ArrayBuffer.empty[Array[Double]]
     val backward = mutable.ArrayBuffer.empty[Future[Array[Double]]]
 
-    var next = n / 2
-    while (next >= 0 && from.size < target) {
+    var chosen = 0
+    var next   = n / 2
+    while (next >= 0 && chosen < target) {
       val landmark = next
       isSelected(landmark) = true
       backward += pool.submit(task(shortestTree(n, rrowPtr, rcol, rwt, landmark)))
       val tree = shortestTree(n, rowPtr, col, wt, landmark)
-      from += tree
+      copyTree(tree, data, n, stride, 2 * chosen)
       var v = 0
       while (v < n) {
         if (tree(v) < minDist(v)) minDist(v) = tree(v)
         v += 1
       }
-      next = if (from.size < target) farthestByCost(n, minDist, isSelected) else -1
+      chosen += 1
+      next = if (chosen < target) farthestByCost(n, minDist, isSelected) else -1
     }
-    (from.toArray, backward.map(await).toArray)
+    backward.zipWithIndex.foreach { case (future, i) => copyTree(await(future), data, n, stride, 2 * i + 1) }
+    chosen
   }
 
   private def hops(
@@ -106,8 +123,10 @@ object CompactAltBuilder {
     rowPtr: Array[Int], col: Array[Int], wt: Array[Double],
     rrowPtr: Array[Int], rcol: Array[Int], rwt: Array[Double],
     target: Int,
+    data: Array[Double],
     pool: java.util.concurrent.ExecutorService
-  ): (Array[Array[Double]], Array[Array[Double]]) = {
+  ): Int = {
+    val stride     = 2 * target
     val isSelected = new Array[Boolean](n)
     val selected   = mutable.ArrayBuffer.empty[Int]
     val forward    = mutable.ArrayBuffer.empty[Future[Array[Double]]]
@@ -122,7 +141,9 @@ object CompactAltBuilder {
       backward += pool.submit(task(shortestTree(n, rrowPtr, rcol, rwt, landmark)))
       next = if (selected.size < target) farthestByHops(n, rowPtr, col, selected, isSelected) else -1
     }
-    (forward.map(await).toArray, backward.map(await).toArray)
+    forward.zipWithIndex.foreach { case (future, i) => copyTree(await(future), data, n, stride, 2 * i) }
+    backward.zipWithIndex.foreach { case (future, i) => copyTree(await(future), data, n, stride, 2 * i + 1) }
+    selected.size
   }
 
   /** First node with the largest finite distance to the selected set; any unselected node when

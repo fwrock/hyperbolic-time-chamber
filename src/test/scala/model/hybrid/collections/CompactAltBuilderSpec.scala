@@ -117,6 +117,75 @@ class CompactAltBuilderSpec extends AnyFlatSpec with Matchers {
     an[IllegalArgumentException] should be thrownBy CompactAltBuilder.build(negative, 2)
   }
 
+  "The interleaved index" should "survive the cache codec round trip" in {
+    val index = CompactAltBuilder.build(connectedCg, 8, LandmarkSelection.Weighted, 2)
+    val codec = CompactLandmarkIndex.codec(connectedCg.n, 8)
+    val bytes = new java.io.ByteArrayOutputStream()
+    val out   = new java.io.DataOutputStream(bytes)
+    codec.write(index, out)
+    out.flush()
+    val restored = codec.read(new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes.toByteArray)))
+    sameHeuristics(index, restored, connectedCg.n)
+  }
+
+  it should "keep the on-disk layout of earlier builds: all forward rows, then all backward rows" in {
+    val index = CompactAltBuilder.build(connectedCg, 4, LandmarkSelection.Weighted, 2)
+    val bytes = new java.io.ByteArrayOutputStream()
+    val out   = new java.io.DataOutputStream(bytes)
+    CompactLandmarkIndex.codec(connectedCg.n, 4).write(index, out)
+    out.flush()
+    val in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes.toByteArray))
+    in.readInt() shouldBe 4
+    in.readInt() shouldBe connectedCg.n
+    for (landmark <- 0 until 4; v <- 0 until connectedCg.n) in.readDouble() shouldBe index.distanceFrom(landmark, v)
+    for (landmark <- 0 until 4; v <- 0 until connectedCg.n) in.readDouble() shouldBe index.distanceTo(landmark, v)
+    in.available() shouldBe 0
+  }
+
+  it should "read the same values the legacy translation stores" in {
+    val legacyIndex = legacy(connected, connectedCg, 4)
+    val built       = CompactAltBuilder.build(connectedCg, 4, LandmarkSelection.Weighted, 2)
+    for (landmark <- 0 until 4; v <- 0 until connectedCg.n) {
+      built.distanceFrom(landmark, v) shouldBe legacyIndex.distanceFrom(landmark, v)
+      built.distanceTo(landmark, v) shouldBe legacyIndex.distanceTo(landmark, v)
+    }
+  }
+
+  "The pedestrian graph" should "get admissible landmarks, checked against Bellman-Ford on its own CSR" in {
+    val ped = CompactGraph.fromLoadedBidirectional(connected)
+    ped.n should be > 0
+    val (rowPtr, col, wt) = (ped.rowPtrArray, ped.colIdxArray, ped.edgeWeightArray)
+
+    def exact(source: Int): Array[Double] = {
+      val dist = Array.fill(ped.n)(Inf)
+      dist(source) = 0.0
+      var changed = true
+      while (changed) {
+        changed = false
+        for (u <- 0 until ped.n if dist(u) < Inf; e <- rowPtr(u) until rowPtr(u + 1)) {
+          val candidate = dist(u) + wt(e)
+          if (candidate < dist(col(e))) { dist(col(e)) = candidate; changed = true }
+        }
+      }
+      dist
+    }
+
+    for (selection <- LandmarkSelection.values) {
+      val index = CompactAltBuilder.build(ped, 8, selection, 3)
+      var positive = 0
+      for (u <- 0 until ped.n) {
+        val d = exact(u)
+        for (v <- 0 until ped.n) {
+          val h = index.heuristic(u, v)
+          h should be >= 0.0
+          if (d(v) < Inf) h should be <= d(v)
+          if (h > 0.0) positive += 1
+        }
+      }
+      positive should be > 0
+    }
+  }
+
   "LandmarkSelection.parse" should "accept the two names and reject others" in {
     LandmarkSelection.parse(" Weighted ") shouldBe LandmarkSelection.Weighted
     LandmarkSelection.parse("hops") shouldBe LandmarkSelection.Hops
