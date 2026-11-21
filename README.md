@@ -530,45 +530,21 @@ RoutingService actors; unaccounted shared caches are rejected. Static routing is
 also supported. See [Accounted Routing](docs/ACCOUNTED_ROUTING.md).
 
 **Prometheus metrics** are exposed on `/metrics` (default port `9090`) for Grafana dashboards
-(see `k8s/monitoring/`).
+(see `htc-infrastructure/k8s/monitoring/`).
 
 ---
 
 ## Infrastructure & Deployment
 
-### Docker Compose
+Docker Compose files, Kubernetes manifests, Terraform and monitoring provisioning live in the
+sibling repo `htc-infrastructure` (`../htc-infrastructure`; see its README). Typical use:
 
 ```bash
 # Full stack (Kafka, ClickHouse, Redis, Prometheus, Grafana)
-docker-compose up
+docker compose -f ../htc-infrastructure/docker/docker-compose.yml up
 
 # Lightweight single-node
-docker-compose -f docker-compose-beluga-single.yml up
-```
-
-### Kubernetes
-
-Manifests in `k8s/`:
-
-```
-k8s/
-├── simulation-setup.yaml
-├── kafka-bootstrap-config.yaml
-├── kafka-connect-gcs-sink.yaml
-├── service.yaml
-├── rbac.yaml
-├── service-account.yaml
-└── monitoring/
-    ├── prometheus.yaml
-    ├── grafana.yaml
-    └── node-exporter.yaml
-```
-
-### Terraform (GCP)
-
-```bash
-cd terraform/gcp
-terraform init && terraform apply
+docker compose -f ../htc-infrastructure/docker/docker-compose-beluga-single.yml up
 ```
 
 ---
