@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.entity.event.{FinishEvent, SpontaneousEvent}
+import core.metrics.core.SchedulingMetrics
 import core.runtime.EventOrder
 import core.runtime.accounting.*
 import core.runtime.conservative.*
@@ -509,8 +510,12 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       value.copy(id = source.handle, classType = source.id.model)
     }
     control match {
-      case e: FinishEvent => finishEvent(e.copy(identify = identity(e.identify)))
-      case e: ScheduleEvent => scheduleEvent(e.copy(identify = Some(identity(e.identify.get))))
+      case e: FinishEvent =>
+        SchedulingMetrics.finish.inc()
+        finishEvent(e.copy(identify = identity(e.identify)))
+      case e: ScheduleEvent =>
+        SchedulingMetrics.schedule.inc()
+        scheduleEvent(e.copy(identify = Some(identity(e.identify.get))))
       case _ => throw new IllegalArgumentException("unsupported conservative schedule control")
     }
   }

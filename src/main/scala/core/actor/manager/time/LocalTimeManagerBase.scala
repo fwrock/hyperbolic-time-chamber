@@ -17,7 +17,7 @@ import org.apache.pekko.actor.ActorRef
 import org.htc.protobuf.core.entity.actor.Identify
 import org.htc.protobuf.core.entity.event.communication.ScheduleEvent
 import org.htc.protobuf.core.entity.event.control.execution.*
-import org.interscity.htc.core.metrics.core.{ActorMetrics, TimeManagerMetrics}
+import org.interscity.htc.core.metrics.core.{ActorMetrics, SchedulingMetrics, TimeManagerMetrics}
 
 import scala.collection.mutable
 import scala.concurrent.duration.*
@@ -194,8 +194,12 @@ abstract class LocalTimeManagerBase(
     case register: RegisterActorEvent    => registerActor(register)
     case passive: RegisterPassiveActorEvent => registerPassiveActor(passive)
     case ack: DestructAckEvent           => handleDestructAck(ack)
-    case schedule: ScheduleEvent         => scheduleEvent(schedule)
-    case replacement: ReplaceScheduleEvent => replaceSchedule(replacement)
+    case schedule: ScheduleEvent =>
+      SchedulingMetrics.schedule.inc()
+      scheduleEvent(schedule)
+    case replacement: ReplaceScheduleEvent =>
+      SchedulingMetrics.replace.inc()
+      replaceSchedule(replacement)
     case finish: FinishEvent             => finishEvent(finish)
     case spontaneous: SpontaneousEvent   => if (isRunning) onSpontaneousEvent(spontaneous)
     case _: org.htc.protobuf.core.entity.event.control.execution.StopSimulationEvent =>

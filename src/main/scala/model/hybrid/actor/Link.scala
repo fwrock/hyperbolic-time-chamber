@@ -25,6 +25,7 @@ import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationSt
 import org.interscity.htc.core.enumeration.ReportTypeEnum
 import org.interscity.htc.model.hybrid.entity.event.data.VehicleLinkFlowData
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
+import org.interscity.htc.core.metrics.core.SchedulingMetrics
 import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData, SubscribeMicroBoundaryData, MicroBoundaryUpdateData }
 import org.interscity.htc.model.hybrid.entity.event.data.routing.LinkCostChangedData
 import org.interscity.htc.model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
@@ -436,6 +437,10 @@ class Link(
     metricsReporter.ensureSummaryTick(currentTick)
     logDebug(s"Vehicle ${event.actorRefId} leaving link")
     val wasRegistered     = state.registered.containsActor(event.actorRefId)
+    if (wasRegistered) {
+      if (state.isMicroMode) SchedulingMetrics.linkTraversalsMicro.inc()
+      else SchedulingMetrics.linkTraversalsMeso.inc()
+    }
     val vehiclesRemaining = math.max(0, state.registered.size - (if (wasRegistered) 1 else 0))
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
