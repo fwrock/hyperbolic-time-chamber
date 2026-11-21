@@ -1,0 +1,129 @@
+package org.interscity.htc
+package model.mobility.entity.state
+
+import core.types.Tick
+
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.model.mobility.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
+import org.interscity.htc.model.mobility.entity.state.enumeration.ActorTypeEnum.Bus
+import org.interscity.htc.model.mobility.entity.state.enumeration.SimulationModeEnum
+
+import scala.collection.mutable
+
+/** Hybrid bus state supporting both MESO and MICRO simulation modes.
+  *
+  * Buses have additional complexity:
+  *   - Passenger capacity and loading/unloading
+  *   - Bus stops along the route
+  *   - In MICRO mode: larger vehicle, slower acceleration, lane restrictions
+  *
+  * Route, path, cost, status, and reachedDestination are managed via accessor methods delegating to
+  * parent MovableState fields (single source of truth).
+  *
+  * @param startTick
+  *   Simulation start tick
+  * @param label
+  *   Bus line label
+  * @param capacity
+  *   Passenger capacity
+  * @param distance
+  *   Total distance traveled
+  * @param countUnloadPassenger
+  *   Count of unloaded passengers
+  * @param countUnloadReceived
+  *   Count of unload confirmations received
+  * @param busStops
+  *   Map of bus stop IDs to node IDs
+  * @param numberOfPorts
+  *   Number of boarding doors
+  * @param people
+  *   Map of passenger IDs to identifiers
+  * @param currentPathPosition
+  *   Current position in path
+  * @param origin
+  *   Origin node ID
+  * @param destination
+  *   Destination node ID
+  * @param actorType
+  *   Actor type (Bus)
+  * @param size
+  *   Vehicle size
+  * @param currentSimulationMode
+  *   Current mode (MESO or MICRO)
+  * @param microState
+  *   Optional microscopic bus state
+  *
+  * `busStops` and `people` carry `@JsonDeserialize(keyAs = classOf[java.lang.Long])`: on Scala 3,
+  * jackson-module-scala only preserves a case class's full Map key/value generics for the
+  * *first* constructor parameter, so any later `Map[Long, _]` field silently deserializes its
+  * keys as `String` without this annotation (see `BusStationState` for the full explanation).
+  */
+case class BusState(
+  // ========== Meso fields ==========
+  override val startTick: Tick,
+  val label: String,
+  val capacity: Int,
+  var distance: Double = 0.0,
+  var countUnloadPassenger: Int = 0,
+  var countUnloadReceived: Int = 0,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  var busStops: Map[Long, Long],
+  val numberOfPorts: Int,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  val people: mutable.Map[Long, Identify] = mutable.Map[Long, Identify](),
+  var currentPathPosition: Int = 0,
+  override val origin: Long,
+  override val destination: Long,
+  override val actorType: ActorTypeEnum = Bus,
+  override val size: Double,
+  var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
+  var microState: Option[MicroBusState] = None,
+  var storedBestRoute: Option[List[(Long, Long)]] = None,
+  /** Speed factor applied in MICRO mode. Values < 1.0 = conservative; > 1.0 = aggressive.
+    * Clamped to [0.5, 1.5] on use. Default: 1.0.
+    */
+  val speedFactor: Double = 1.0,
+  var journey: BusJourneyState = BusJourneyState()
+) extends MovableState(
+      startTick = startTick,
+      origin = origin,
+      destination = destination,
+      actorType = actorType,
+      size = size
+    ) {
+
+  def bestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(Long, Long)]]): Unit = movableBestRoute = v
+
+  def currentPath: Option[(Long, Long)] = movableCurrentPath
+  def currentPath_=(v: Option[(Long, Long)]): Unit = movableCurrentPath = v
+
+  def bestCost: Double = movableBestCost
+  def bestCost_=(v: Double): Unit = movableBestCost = v
+
+  def status: MovableStatusEnum = movableStatus
+  def status_=(v: MovableStatusEnum): Unit = movableStatus = v
+
+  def reachedDestination: Boolean = movableReachedDestination
+  def reachedDestination_=(v: Boolean): Unit = movableReachedDestination = v
+
+  def isMicroMode: Boolean = currentSimulationMode == SimulationModeEnum.MICRO
+  def isMesoMode: Boolean = currentSimulationMode == SimulationModeEnum.MESO
+
+  def activateMicroMode(initialMicroState: MicroBusState): Unit = {
+    currentSimulationMode = SimulationModeEnum.MICRO
+    microState = Some(initialMicroState)
+  }
+
+  def deactivateMicroMode(): Unit = {
+    currentSimulationMode = SimulationModeEnum.MESO
+    microState = None
+  }
+
+  def updateMicroState(newMicroState: MicroBusState): Unit =
+    if (isMicroMode) microState = Some(newMicroState)
+
+  def availableCapacity: Int = capacity - people.size
+  def occupancyPercentage: Double = (people.size.toDouble / capacity.toDouble) * 100.0
+}

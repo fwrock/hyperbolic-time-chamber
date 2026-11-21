@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.types.Tick
-import model.hybrid.entity.event.data.GlobalTickEvent
+import core.modelbinding.ModelBindings
 
 import org.apache.pekko.actor.ActorRef
 
@@ -58,10 +58,8 @@ trait MicroAwareTimeManager extends TimeManagerBase {
     if (microLinks.nonEmpty) {
       logInfo(s"[MicroTM] Triggering ${microLinks.size} micro links for global tick $tick")
 
-      microLinks.foreach {
-        linkRef =>
-          linkRef ! GlobalTickEvent(tick = tick)
-      }
+      val message = ModelBindings.active.globalTick(tick)
+      microLinks.foreach(_ ! message)
     }
 
   /** Get the number of registered micro links.

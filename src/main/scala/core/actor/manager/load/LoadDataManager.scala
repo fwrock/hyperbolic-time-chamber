@@ -15,7 +15,7 @@ import org.htc.protobuf.core.entity.event.control.execution.{DestructEvent, Stop
 import org.interscity.htc.core.actor.manager.loadbalance.allocation.SpatialShardIdRegistry
 import org.interscity.htc.core.modifications.ScenarioModifications
 import org.interscity.htc.core.partial.PartialFilter
-import org.interscity.htc.model.hybrid.decision.ScenarioLoadError
+import org.interscity.htc.core.entity.event.control.load.ScenarioLoadError
 
 import scala.collection.mutable
 import scala.compiletime.uninitialized
@@ -195,7 +195,7 @@ class LoadDataManager(
     progressive: List[ActorDataSource],
     totalSources: Int
   ): Unit = {
-    val personEagerSources = eagerSources.filter(ScenarioPreflightValidator.isPersonSource)
+    val personEagerSources = eagerSources.filter(core.modelbinding.ModelBindings.active.isPersonSource)
 
     if (personEagerSources.isEmpty) {
       proceedWithLoad(eagerSources, progressive, totalSources)
@@ -221,9 +221,8 @@ class LoadDataManager(
       s"Running scenario-wide mode-decision-engine pre-flight check over " +
         s"${personEagerSources.size} EAGER Person source(s) before creating any actor."
     )
-    val ctx = ScenarioPreflightValidator.currentValidationContext()
     val ioEc = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
-    ScenarioPreflightValidator.validate(personEagerSources, ctx)(ioEc).onComplete {
+    core.modelbinding.ModelBindings.active.validatePreflight(personEagerSources)(ioEc).onComplete {
       case Success(result) =>
         self ! LoadDataManager.PreflightDone(result, eagerSources, progressive, totalSources)
       case Failure(cause) =>

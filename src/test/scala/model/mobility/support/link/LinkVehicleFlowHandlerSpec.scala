@@ -1,0 +1,353 @@
+package org.interscity.htc
+package model.mobility.support.link
+
+import core.entity.event.ActorInteractionEvent
+import core.types.Tick
+import model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData }
+import model.mobility.entity.state.LinkState
+import model.mobility.entity.state.enumeration.ActorTypeEnum
+import model.mobility.util.{ DynamicWeightCache, SpeedUtil }
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+import scala.collection.mutable
+
+/** Regression coverage for populating `LinkState.currentSpeed`/`congestionFactor` from real
+  * occupancy instead of leaving them frozen at their 0.0/1.0 defaults forever (previously: set
+  * once at construction, read by `DynamicLinkCost`/routing, never recomputed — see the
+  * congestion-propagation design discussion this implements the first step of).
+  *
+  * `LinkMetricsReporter.publishDynamicCost` writes through `DynamicWeightCache`, a JVM-wide
+  * singleton — but unlike `CityMapUtil` it defaults to the dependency-free in-memory cache
+  * strategy (no file/network requirement) when no `htc.routing.cache-strategy` config is present,
+  * so it's safe to exercise directly here. Each test uses a unique link ID and clears it
+  * afterward to avoid leaking state into other specs sharing this JVM.
+  */
+class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach {
+
+  private var usedLinkIds: mutable.Set[String] = mutable.Set.empty
+
+  override def afterEach(): Unit = {
+    usedLinkIds.foreach(DynamicWeightCache.clearCost)
+    usedLinkIds = mutable.Set.empty
+  }
+
+  private def newMesoState(linkId: String, length: Double = 300.0, capacity: Double = 20.0, freeSpeed: Double = 13.9, lanes: Int = 1): LinkState =
+    LinkState.createMeso(
+      startTick = 0L,
+      from = 1L,
+      to = 2L,
+      length = length,
+      lanes = lanes,
+      speedLimit = freeSpeed,
+      capacity = capacity,
+      freeSpeed = freeSpeed
+    )
+
+  private case class Fixture(handler: LinkVehicleFlowHandler, getState: () => LinkState, linkId: String,
+                            setTick: Tick => Unit, sent: mutable.Buffer[AnyRef])
+
+  private def newFixture(linkId: String, initialState: LinkState, costPublishInterval: Int = 0): Fixture = {
+    usedLinkIds += linkId
+    var state = initialState
+    var tick: Tick = 0L
+    val sent = mutable.Buffer.empty[AnyRef]
+    val vehicleEntryTick = mutable.Map.empty[Long, Tick]
+    val vehicleWaiting    = mutable.Map.empty[Long, Double]
+
+    val metricsReporter = new LinkMetricsReporter(
+      reportFn = (_, _) => (),
+      entityIdFn = () => linkId,
+      currentTickFn = () => tick,
+      cacheTtl = 60,
+      costPublishInterval = costPublishInterval,
+      getLinkStateFn = () => state,
+      getVehicleEntryTickFn = id => vehicleEntryTick.get(id),
+      getVehicleWaitingSecondsFn = id => vehicleWaiting.getOrElse(id, 0.0),
+      getRegisteredVehicleIdsFn = () => state.registered.iterator.map(_.actorId).toIterable,
+      logWarnFn = _ => ()
+    )
+
+    val handler = new LinkVehicleFlowHandler(
+      entityIdFn = () => linkId,
+      currentTickFn = () => tick,
+      sendMessageFn = (_, _, data, _) => { sent += data; () },
+      scheduleEventFn = _ => (),
+      getLinkStateFn = () => state,
+      setLinkStateFn = s => state = s,
+      putVehicleEntryTickFn = (id, t) => vehicleEntryTick.put(id, t),
+      getVehicleEntryTickFn = id => vehicleEntryTick.get(id),
+      removeVehicleEntryTickFn = id => vehicleEntryTick.remove(id),
+      getOrUpdateVehicleWaitingFn = id => vehicleWaiting.getOrElseUpdate(id, 0.0),
+      removeVehicleWaitingFn = id => vehicleWaiting.remove(id),
+      getVehicleWaitingSecondsFn = id => vehicleWaiting.getOrElse(id, 0.0),
+      isMicroScheduledFn = () => false,
+      setMicroScheduledFn = _ => (),
+      metricsReporter = metricsReporter,
+      findVehicleLaneFn = _ => None,
+      findLeastOccupiedLaneFn = () => 0,
+      logDebugFn = _ => ()
+    )
+
+    Fixture(handler, () => state, linkId, t => tick = t, sent)
+  }
+
+  private def event(carId: Long, linkId: String): ActorInteractionEvent =
+    ActorInteractionEvent(
+      tick = 0L,
+      lamportTick = 0L,
+      actorRefId = carId,
+      shardRefId = "mobility.actor.Car",
+      actorPathRef = carId.toString,
+      actorClassType = "mobility.actor.Car",
+      data = "unused",
+      resourceId = "res-1"
+    )
+
+  private def enterData(carId: Long, actorType: ActorTypeEnum = ActorTypeEnum.Car): EnterLinkData =
+    EnterLinkData(
+      actorType = actorType,
+      actorCreationType = CreationTypeEnum.LoadBalancedDistributed,
+      actorSize = 4.5
+    )
+
+  private def newMicroState(linkId: String, length: Double = 300.0, lanes: Int = 2, speedLimit: Double = 13.9, capacity: Double = 20.0): LinkState =
+    LinkState.createMicro(
+      startTick = 0L,
+      from = 1L,
+      to = 2L,
+      length = length,
+      lanes = lanes,
+      speedLimit = speedLimit,
+      capacity = capacity,
+      freeSpeed = speedLimit
+    )
+
+  private def leaveData(carId: Long): LeaveLinkData =
+    LeaveLinkData(
+      actorType = ActorTypeEnum.Car,
+      actorSize = 4.5,
+      actorCreationType = CreationTypeEnum.LoadBalancedDistributed
+    )
+
+  "handleEnterLinkMeso" should "start currentSpeed at freeSpeed and congestionFactor at 1.0 on an empty link" in {
+    val linkId = "301"
+    val f = newFixture(linkId, newMesoState(linkId))
+
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
+
+    f.getState().currentSpeed shouldBe SpeedUtil.linkDensitySpeed(300.0, 20.0, 1L, 13.9)
+    f.getState().congestionFactor shouldBe SpeedUtil.bprCongestionFactor(1.0, 20.0)
+  }
+
+  it should "lower currentSpeed and raise congestionFactor as more distinct vehicles register" in {
+    val linkId = "302"
+    val f = newFixture(linkId, newMesoState(linkId, capacity = 10.0))
+
+    (1 to 9).foreach(i => f.handler.handleEnterLinkMeso(event(i.toLong, linkId), enterData(i.toLong)))
+    val speedAt9 = f.getState().currentSpeed
+    val congestionAt9 = f.getState().congestionFactor
+
+    f.handler.handleEnterLinkMeso(event(10L, linkId), enterData(10L))
+
+    f.getState().currentSpeed should be < speedAt9
+    f.getState().congestionFactor should be > congestionAt9
+  }
+
+  it should "not double-count or recompute for a duplicate EnterLinkData from the same vehicle" in {
+    val linkId = "303"
+    val f = newFixture(linkId, newMesoState(linkId))
+
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
+    val speedAfterFirst = f.getState().currentSpeed
+
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
+
+    f.getState().registered should have size 1
+    f.getState().currentSpeed shouldBe speedAfterFirst
+  }
+
+  "handleLeaveLink" should "recompute back toward freeSpeed/1.0 as vehicles leave a MESO link" in {
+    val linkId = "304"
+    val f = newFixture(linkId, newMesoState(linkId, capacity = 10.0))
+    (1 to 5).foreach(i => f.handler.handleEnterLinkMeso(event(i.toLong, linkId), enterData(i.toLong)))
+    val speedAt5 = f.getState().currentSpeed
+
+    (1 to 4).foreach(i => f.handler.handleLeaveLink(event(i.toLong, linkId), leaveData(i.toLong), wasRegistered = true))
+
+    f.getState().registered should have size 1
+    f.getState().currentSpeed should be > speedAt5
+    f.getState().congestionFactor shouldBe SpeedUtil.bprCongestionFactor(1.0, 10.0)
+  }
+
+  it should "leave currentSpeed/congestionFactor untouched on a MICRO-mode link (owned by the per-tick MICRO recompute instead)" in {
+    val linkId = "305"
+    val microState = LinkState.createMicro(
+      startTick = 0L, from = 1L, to = 2L, length = 300.0, lanes = 1,
+      speedLimit = 13.9, capacity = 20.0, freeSpeed = 13.9
+    ).copy(currentSpeed = 7.0, congestionFactor = 1.42)
+    val f = newFixture(linkId, microState)
+
+    f.handler.handleLeaveLink(event(1L, linkId), leaveData(1L), wasRegistered = false)
+
+    f.getState().currentSpeed shouldBe 7.0
+    f.getState().congestionFactor shouldBe 1.42
+  }
+
+  "recomputeAndPublishMesoDynamics (via handleEnterLinkMeso)" should "publish the recomputed cost to DynamicWeightCache when costPublishInterval is 0 (always publish)" in {
+    val linkId = "306"
+    val f = newFixture(linkId, newMesoState(linkId), costPublishInterval = 0)
+
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
+
+    val published = DynamicWeightCache.getCost(linkId)
+    published shouldBe defined
+    published.get.currentSpeed shouldBe f.getState().currentSpeed / 3.6
+    published.get.freeFlowSpeed shouldBe f.getState().freeSpeed / 3.6
+    published.get.congestionFactor shouldBe f.getState().congestionFactor
+  }
+
+  it should "respect costPublishInterval: skip the Kafka/cache publish for an enter before the interval elapses, then publish once it has" in {
+    val linkId = "307"
+    val f = newFixture(linkId, newMesoState(linkId), costPublishInterval = 10)
+
+    f.setTick(3L)
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
+
+    f.getState().currentSpeed should not be 13.9
+    DynamicWeightCache.getCost(linkId) shouldBe None
+
+    f.setTick(10L)
+    f.handler.handleEnterLinkMeso(event(2L, linkId), enterData(2L))
+    val published = DynamicWeightCache.getCost(linkId)
+    published shouldBe defined
+    published.get.currentSpeed shouldBe f.getState().currentSpeed / 3.6
+  }
+
+  /** Regression coverage for docs/EVENTS_MESSAGES_ANALYSIS.md §7 recommendation 6:
+    * `EnterLinkData.maxAcceleration`/`maxDeceleration` were removed from the wire; the Link now
+    * derives them from `data.actorType` via `ActorTypeEnum.microMaxAcceleration`/
+    * `microMaxDeceleration` instead. This locks in that the per-vehicle-type MICRO car-following
+    * bounds are unchanged from what each vehicle actor used to send explicitly (formerly
+    * `Movable`/`Bicycle`/`Bus`/`Motorcycle.microMaxAcceleration`/`microMaxDeceleration`
+    * overrides).
+    */
+  "handleEnterLinkMicro" should "seed VehicleInLane.maxAcceleration/maxDeceleration from actorType, not a wire field" in {
+    val cases = Seq(
+      ActorTypeEnum.Car -> (2.6, 4.5),
+      ActorTypeEnum.Bicycle -> (1.0, 3.0),
+      ActorTypeEnum.Bus -> (1.2, 3.5),
+      ActorTypeEnum.Motorcycle -> (3.5, 5.0)
+    )
+
+    cases.foreach {
+      case (actorType, (expectedAcceleration, expectedDeceleration)) =>
+        val linkId = s"${400 + cases.indexWhere(_._1 == actorType)}"
+        val f = newFixture(linkId, newMicroState(linkId))
+
+        f.handler.handleEnterLinkMicro(event(1L, linkId), enterData(1L, actorType))
+
+        val vehicle = f.getState().vehiclesByLane.values.flatten.find(_.actorId == 1L)
+        vehicle shouldBe defined
+        vehicle.get.maxAcceleration shouldBe expectedAcceleration
+        vehicle.get.maxDeceleration shouldBe expectedDeceleration
+    }
+  }
+
+  it should "order equal-position arrivals by vehicle ID regardless of message arrival order" in {
+    val linkId = "308"
+    val f = newFixture(linkId, newMicroState(linkId, lanes = 1))
+
+    f.handler.handleEnterLinkMicro(event(15L, linkId), enterData(15L))
+    f.handler.handleEnterLinkMicro(event(13L, linkId), enterData(13L))
+
+    f.getState().vehiclesByLane(0).map(_.actorId) shouldBe Seq(13L, 15L)
+  }
+
+  it should "preserve imported per-car physics and endpoint positions through lane checkpoints" in {
+    val f = newFixture("313", newMicroState("313", lanes = 1, speedLimit = 36.0))
+    f.handler.handleEnterLinkMicro(event(1L, "313"), enterData(1L).copy(
+      maxAcceleration = Some(1.5), maxDeceleration = Some(3.7),
+      initialPosition = 12.0, arrivalPosition = Some(250.0), minGap = Some(3.5),
+      reactionTime = Some(1.7), maxSpeed = Some(7.0), initialVelocity = 12.0,
+      speedFactor = 1.2, desiredMaxSpeed = Some(5),sigma=.5,randomSeed=9007199254740993L,
+      lc2013=model.mobility.entity.state.model.Lc2013Parameters(strategic=2,keepRight=0)))
+    val restored = core.util.JsonUtil.fromJson[LinkState](core.util.JsonUtil.toJson(f.getState()))
+    val vehicle = restored.vehiclesByLane(0).head
+    vehicle.maxAcceleration shouldBe 1.5
+    vehicle.maxDeceleration shouldBe 3.7
+    vehicle.minGap shouldBe 3.5
+    vehicle.reactionTime shouldBe 1.7
+    vehicle.maxSpeed shouldBe Some(7.0)
+    vehicle.velocity shouldBe 6.0
+    vehicle.speedFactor shouldBe 1.2
+    vehicle.desiredMaxSpeed shouldBe Some(5.0)
+    vehicle.sigma shouldBe .5
+    vehicle.randomSeed shouldBe 9007199254740993L
+    vehicle.lc2013.strategic shouldBe 2.0
+    vehicle.lc2013.keepRight shouldBe 0.0
+    vehicle.position shouldBe 12.0
+    vehicle.entryPosition shouldBe 12.0
+    vehicle.arrivalPosition shouldBe Some(250.0)
+    f.sent.collectFirst { case d: model.mobility.entity.event.data.MicroEnterLinkData => d.initialPosition }.get shouldBe 12.0
+    intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(2, "313"),
+      enterData(2).copy(maxAcceleration = Some(-1))))
+    intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(2, "313"),
+      enterData(2).copy(initialPosition = 301)))
+    for (bad <- List(enterData(2).copy(minGap = Some(-1)),
+      enterData(2).copy(reactionTime = Some(0)),enterData(2).copy(maxSpeed = Some(Double.NaN)),
+      enterData(2).copy(speedFactor = 0),enterData(2).copy(desiredMaxSpeed = Some(-1)),
+      enterData(2).copy(sigma = Double.NaN),enterData(2).copy(sigma = 1.1),enterData(2).copy(sigma = -1)))
+      intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(2, "313"),bad))
+  }
+
+  it should "carry an entry speed into the lane and acknowledge the actual capped speed" in {
+    val f = newFixture("309", newMicroState("309", speedLimit = 36.0))
+    f.handler.handleEnterLinkMicro(event(1L, "309"), enterData(1L).copy(initialVelocity = 12.5))
+    f.getState().vehiclesByLane.values.flatten.find(_.actorId == 1L).get.velocity shouldBe 10.0
+    f.sent.collectFirst { case d: model.mobility.entity.event.data.MicroEnterLinkData => d.initialVelocity }
+      .get shouldBe Some(10.0)
+  }
+
+  it should "reject a driver factor that exceeds the supported boundary remainder step" in {
+    val road=newMicroState("314",speedLimit=36.0).copy(length=1.5,
+      microTicksPerGlobalTick=1,carryMicroRemainder=true)
+    val f=newFixture("314",road)
+    intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(1,"314"),
+      enterData(1).copy(speedFactor=2)))
+    f.handler.handleEnterLinkMicro(event(1,"314"),enterData(1).copy(speedFactor=.8))
+    f.getState().vehiclesByLane.values.flatten.head.speedFactor shouldBe .8
+  }
+
+  it should "select the exit speed for the actual next road and preserve it in the lane checkpoint" in {
+    val f = newFixture("310", newMicroState("310", speedLimit = 50).copy(exitSpeedLimitsMps = Map(99L -> 5.0)))
+    f.handler.handleEnterLinkMicro(event(1, "310"), enterData(1).copy(nextLinkId = 99))
+    val restored = core.util.JsonUtil.fromJson[LinkState](core.util.JsonUtil.toJson(f.getState()))
+    restored.vehiclesByLane(0).head.exitSpeedLimitMps shouldBe Some(5.0)
+  }
+
+  it should "acknowledge a safe physical remainder and retain it through a lane checkpoint" in {
+    val state = newMicroState("311", speedLimit = 36).copy(microTicksPerGlobalTick = 1, carryMicroRemainder = true)
+    val f = newFixture("311", state)
+    f.handler.handleEnterLinkMicro(event(1, "311"), enterData(1).copy(initialVelocity = 10, initialRemainderSeconds = 0.04))
+    val restored = core.util.JsonUtil.fromJson[LinkState](core.util.JsonUtil.toJson(f.getState()))
+    restored.vehiclesByLane(0).head.position shouldBe 0.4 +- 1e-9
+    f.sent.collectFirst { case d: model.mobility.entity.event.data.MicroEnterLinkData => d.initialPosition }.get shouldBe 0.4 +- 1e-9
+    intercept[IllegalArgumentException](f.handler.handleEnterLinkMicro(event(2, "311"),
+      enterData(2).copy(initialVelocity = 10, initialRemainderSeconds = 0.2)))
+  }
+
+  it should "stop carried motion before a downstream rear bumper instead of inserting over it" in {
+    val state = newMicroState("312", speedLimit = 36).copy(microTicksPerGlobalTick = 1, carryMicroRemainder = true)
+      .initializeMicroLanes()
+    state.vehiclesByLane(0).enqueue(model.mobility.entity.state.model.VehicleInLane(9, "cars", 6.7, 0, 0, 4.5))
+    val f = newFixture("312", state)
+    f.handler.handleEnterLinkMicro(event(1, "312"), enterData(1).copy(initialVelocity = 10, initialRemainderSeconds = 0.08))
+    val entered = f.getState().vehiclesByLane(0).find(_.actorId == 1).get
+    entered.position shouldBe 0.2 +- 1e-9
+    entered.velocity shouldBe 0.0
+  }
+}

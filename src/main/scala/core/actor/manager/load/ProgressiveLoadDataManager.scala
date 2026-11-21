@@ -19,7 +19,7 @@ import org.apache.pekko.cluster.{ Cluster, MemberStatus }
 import org.apache.pekko.remote.RemoteScope
 import org.htc.protobuf.core.entity.event.control.execution.{ DestructEvent, StopSimulationEvent }
 import org.interscity.htc.core.metrics.core.{ProgressiveLoadingMetrics, ExecutionTimingMetrics, TimedOperation}
-import org.interscity.htc.model.hybrid.decision.ScenarioLoadError
+import org.interscity.htc.core.entity.event.control.load.ScenarioLoadError
 
 import scala.collection.immutable.TreeMap
 import scala.collection.mutable
@@ -185,7 +185,7 @@ class ProgressiveLoadDataManager(
     }
 
     indexTiming = Some(ExecutionTimingMetrics.timers.start(TimedOperation.ProgressiveIndex))
-    val personSources = event.progressiveSources.filter(ScenarioPreflightValidator.isPersonSource)
+    val personSources = event.progressiveSources.filter(core.modelbinding.ModelBindings.active.isPersonSource)
     if (personSources.isEmpty) {
       proceedWithProgressiveLoading(event)
     } else {
@@ -215,9 +215,8 @@ class ProgressiveLoadDataManager(
       s"Running scenario-wide mode-decision-engine pre-flight check over " +
         s"${personSources.size} PROGRESSIVE Person source(s) before creating any actor."
     )
-    val ctx = ScenarioPreflightValidator.currentValidationContext()
     val ioEc = context.system.dispatchers.lookup("pekko.actor.io-dispatcher")
-    ScenarioPreflightValidator.validate(personSources, ctx)(ioEc).onComplete {
+    core.modelbinding.ModelBindings.active.validatePreflight(personSources)(ioEc).onComplete {
       case Success(result) =>
         self ! ProgressiveLoadDataManager.PreflightDone(result, event)
       case Failure(cause) =>

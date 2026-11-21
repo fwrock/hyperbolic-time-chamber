@@ -20,7 +20,7 @@ import scala.jdk.CollectionConverters.*
 object SimulationUtil {
 
   private[util] def validateAccountedRoutingSources(configuration: Simulation, workerIds: Vector[Long]): Unit = {
-    val className = StringUtil.getModelClassName(model.hybrid.util.AccountedRoutingConfig.ActorClassType)
+    val className = StringUtil.getModelClassName(core.modelbinding.ModelBindings.active.accountedRoutingActorClassType)
     val sources = configuration.actorsDataSources.filter(s => StringUtil.getModelClassName(s.classType) == className)
     require(sources.nonEmpty, "accounted routing requires an EAGER RoutingService actor source")
     require(sources.forall(_.loadingStrategy == core.enumeration.LoadingStrategyEnum.EAGER),
@@ -124,8 +124,10 @@ object SimulationUtil {
     require(!customBalancing || simulationConfig.timeManagerType != core.enumeration.TimeManagerTypeEnum.TIME_WARP,
       "custom load-balancing migration requires the production conservative runtime")
     if (customBalancing) core.actor.manager.loadbalance.strategy.LoadBalanceSettings.read(org.interscity.htc.core.api.SimulatorSettingsRegistry.overlay(system.settings.config))
-    if (model.hybrid.util.AccountedRoutingConfig.enabled)
-      validateAccountedRoutingSources(simulationConfig, model.hybrid.util.AccountedRoutingConfig.workerIds)
+    val bindings = core.modelbinding.ModelBindings.active
+    core.modelbinding.ModelBindings.requireScenarioMatches(bindings.namespace, simulationConfig.actorsDataSources.map(_.classType))
+    if (bindings.accountedRoutingEnabled)
+      validateAccountedRoutingSources(simulationConfig, bindings.accountedRoutingWorkerIds)
     allocation.start()
 
     // Register shard regions for all actor types declared in actorsDataSources.

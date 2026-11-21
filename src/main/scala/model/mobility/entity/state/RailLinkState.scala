@@ -1,0 +1,124 @@
+package org.interscity.htc
+package model.mobility.entity.state
+
+import core.types.Tick
+
+import org.interscity.htc.core.entity.state.BaseState
+import org.interscity.htc.model.mobility.entity.state.enumeration.SimulationModeEnum
+import com.fasterxml.jackson.databind.annotation.{ JsonDeserialize, JsonSerialize }
+import org.interscity.htc.model.mobility.entity.state.model.LinkRegistry
+
+import scala.collection.mutable
+
+/** State for rail link (dedicated for subway/train transit).
+  *
+  * Rail links are EXCLUSIVE to subway trains - they form a separate network from road links. Cars,
+  * buses, and other road vehicles CANNOT use rail links.
+  *
+  * Key differences from regular Link:
+  *   - Higher speeds (typically 60-100 km/h)
+  *   - No lane changes or overtaking
+  *   - Dedicated infrastructure (no mixing with road traffic)
+  *   - Gradient and curvature affect speed
+  *   - Typically uses MESO mode (aggregate flow)
+  *
+  * @param startTick
+  *   Start tick
+  * @param from
+  *   Origin node ID
+  * @param to
+  *   Destination node ID
+  * @param length
+  *   Link length in meters
+  * @param lanes
+  *   Number of tracks (typically 2 for bidirectional)
+  * @param speedLimit
+  *   Maximum speed in km/h
+  * @param capacity
+  *   Maximum trains per hour
+  * @param freeSpeed
+  *   Free-flow speed in km/h
+  * @param railType
+  *   Type of rail (SUBWAY, LIGHT_RAIL, HEAVY_RAIL)
+  * @param subwayLine
+  *   Subway line ID this rail belongs to
+  * @param fromStation
+  *   Origin station ID
+  * @param toStation
+  *   Destination station ID
+  * @param gradient
+  *   Track gradient (positive = uphill, negative = downhill)
+  * @param curvature
+  *   Track curvature (higher = more curved, affects speed)
+  * @param simulationMode
+  *   Simulation mode (typically MESO for rails)
+  * @param registered
+  *   Registered vehicles
+  * @param scheduleOnTimeManager
+  *   Schedule on time manager
+  */
+case class RailLinkState(
+  startTick: Tick,
+  from: Long,
+  to: Long,
+  length: Double,
+  lanes: Int,
+  speedLimit: Double,
+  capacity: Double,
+  freeSpeed: Double,
+  railType: String = "SUBWAY",
+  subwayLine: String = "",
+  fromStation: Long = 0L,
+  toStation: Long = 0L,
+  gradient: Double = 0.0,
+  curvature: Double = 0.0,
+  simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
+  @JsonSerialize(converter = classOf[LinkRegistry.ToJson])
+  @JsonDeserialize(converter = classOf[LinkRegistry.FromJson])
+  registered: LinkRegistry = new LinkRegistry,
+  scheduleOnTimeManager: Boolean = false
+) extends BaseState(
+      startTick = startTick,
+      scheduleOnTimeManager = scheduleOnTimeManager
+    ) {
+
+  /** Calculate effective speed considering gradient and curvature.
+    *
+    * Speed is reduced for:
+    *   - Uphill gradients
+    *   - Sharp curves
+    *
+    * @return
+    *   Effective speed in km/h
+    */
+  def effectiveSpeed: Double = {
+    var speed = freeSpeed
+
+    if (gradient > 0) {
+      speed = speed * (1.0 - (gradient * 0.1))
+    }
+
+    if (curvature > 0) {
+      speed = speed * (1.0 - (curvature * 0.05))
+    }
+
+    math.max(speed, speedLimit * 0.5)
+  }
+
+  /** Check if a vehicle type can use this rail link.
+    *
+    * Only SUBWAY vehicles can use SUBWAY rail links.
+    *
+    * @param vehicleType
+    *   Vehicle type (e.g., "Subway", "Car")
+    * @return
+    *   True if vehicle can use this rail
+    */
+  def canAcceptVehicle(vehicleType: String): Boolean =
+    railType match {
+      case "SUBWAY"     => vehicleType == "Subway"
+      case "LIGHT_RAIL" => vehicleType == "Subway" || vehicleType == "LightRail"
+      case "HEAVY_RAIL" => vehicleType == "Subway" || vehicleType == "Train"
+      case _            => false
+    }
+}

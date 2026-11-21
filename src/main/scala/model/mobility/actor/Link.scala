@@ -1,0 +1,481 @@
+package org.interscity.htc
+package model.mobility.actor
+
+import core.actor.SimulationBaseActor
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
+import core.types.Tick
+import core.entity.event.SpontaneousEvent
+
+import org.interscity.htc.core.entity.event.ActorInteractionEvent
+import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+
+import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import core.entity.event.EntityEnvelopeEvent
+import core.util.{ IdUtil, StringPool, StringUtil }
+import org.interscity.htc.model.mobility.entity.state.LinkState
+import org.interscity.htc.model.mobility.entity.state.enumeration.SimulationModeEnum
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
+import org.interscity.htc.model.mobility.entity.state.model.{ DynamicLinkCost, LinkRegister, VehicleInLane }
+import org.interscity.htc.model.mobility.entity.event.data.*
+import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
+import org.interscity.htc.model.mobility.util.DynamicWeightCache
+import org.interscity.htc.model.mobility.micro.strategy.{ DefaultMicroSimulationStrategy, LaneChangeStrategy, MicroSimulationStrategy, NoLaneChangeStrategy }
+import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
+import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
+import org.interscity.htc.core.metrics.core.SchedulingMetrics
+import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData, SubscribeMicroBoundaryData, MicroBoundaryUpdateData }
+import org.interscity.htc.model.mobility.entity.event.data.routing.LinkCostChangedData
+import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum
+import org.interscity.htc.model.mobility.support.link.{
+  LinkMetricsReporter, LinkMicroSimulationHandler, LinkVehicleFlowHandler, LinkFollowingHandler
+}
+
+import scala.collection.mutable
+import scala.util.Success
+
+/** Hybrid link actor representing a road segment that can operate in MESO or MICRO simulation mode.
+  *
+  * <h2>Overview</h2> The Link actor manages vehicle flow through a road segment, supporting both:
+  * <ul> <li><b>MESO mode</b>: Aggregate flow calculations using speed-density relationships</li>
+  * <li><b>MICRO mode</b>: Individual vehicle dynamics with car-following and lane management</li>
+  * </ul>
+  *
+  * <h2>Responsibilities</h2> <ul> <li>Vehicle entry/exit management</li> <li>Mode-specific traffic
+  * simulation (delegated to strategies)</li> <li>Dynamic cost calculation for routing</li>
+  * <li>Performance metrics and reporting</li> <li>Inter-actor communication (vehicles, nodes,
+  * signals)</li> </ul>
+  *
+  * <h2>Micro Simulation</h2> In MICRO mode, the link: <ul> <li>Maintains per-lane vehicle
+  * queues</li> <li>Executes sub-tick simulations (typically 10 sub-ticks per global tick)</li>
+  * <li>Delegates car-following logic to [[MicroSimulationStrategy]]</li> <li>Delegates lane-change
+  * logic to [[LaneChangeStrategy]]</li> <li>Publishes dynamic costs to Kafka for routing</li> </ul>
+  *
+  * <h2>Configuration</h2> Link behavior is configured via: <ul>
+  * <li>`htc.routing.link-cost.publish-interval`: Cost publish frequency (ticks)</li>
+  * <li>`htc.routing.link-cost.cache-ttl`: Cost cache TTL (ticks)</li> </ul>
+  *
+  * @param properties
+  *   Actor properties including entity ID, shard configuration
+  * @see
+  *   LinkState for link state model
+  * @see
+  *   MicroSimulationStrategy for micro simulation algorithms
+  * @see
+  *   LaneChangeStrategy for lane change behavior
+  */
+class Link(
+  private val properties: Properties
+) extends SimulationBaseActor[LinkState](
+      properties = properties
+    ) {
+
+  override protected def validateRuntimeCapabilities(): Unit = {
+    model.mobility.util.HybridRuntimeCapabilities.validateAccountedRouting(DynamicWeightCache.configuredStrategy,
+      getCurrentTimeManagerType)
+    val clock = core.util.SimulationClock.current
+    require(!state.downstreamLookahead || math.abs(state.microTimeStep - clock.secondsPerTick) < 1e-9,
+      "downstream lookahead requires one physics step per scenario tick")
+    if (clock.secondsPerTick != 1.0) {
+      require(state.isMicroMode, "fractional clocks require every road Link to use MICRO")
+      require(math.abs(state.microTimeStep * state.microTicksPerGlobalTick - clock.secondsPerTick) < 1e-9,
+        "Link physics interval must equal the scenario tickDuration")
+      require(DynamicWeightCache.configuredStrategy == "disabled",
+        "fractional clocks require disabled dynamic routing until routing cost units are adapted")
+    }
+  }
+
+  override protected def internStateStrings(s: LinkState): LinkState =
+    s.copy(
+      following = s.following.copy(otherSubscribers = s.following.otherSubscribers.map(p =>
+        p.copy(shardId = StringPool.intern(p.shardId)))),
+      from = s.from,
+      to   = s.to,
+      pendingMicroEntries = s.pendingMicroEntries.map(p => p.copy(shardId=core.util.StringPool.intern(p.shardId))),
+      mesoCapacityState = s.mesoCapacityState.copy(
+        entries=s.mesoCapacityState.entries.map(p => p.copy(shardId=StringPool.intern(p.shardId))),
+        exits=s.mesoCapacityState.exits.map(p => p.copy(shardId=StringPool.intern(p.shardId))))
+    )
+
+  /** Tracks when each vehicle entered the link (for travel time calculation).
+    * protected, not private: lets LinkMigrationSnapshotSpec drive this directly, same rationale as
+    * the vehicle actors' link-wait fields.
+    */
+  protected val vehicleEntryTick: mutable.Map[Long, Tick] = mutable.Map.empty
+
+  /** Accumulated waiting time per vehicle (seconds) */
+  protected val vehicleWaitingSeconds: mutable.Map[Long, Double] = mutable.Map.empty
+
+  /** `Link` had **no** `buildMigrationSnapshot`/`applyMigrationSnapshot` override at all before
+    * this fix (`docs/TIME_WARP_DESIGN.md`'s checkpoint-completeness audit, 2026-08-07):
+    * `vehicleEntryTick`/`vehicleWaitingSeconds` feed travel-time math sent to a departing vehicle
+    * (`MicroLeaveLinkData`'s `avgSpeed`, `LinkVehicleFlowHandler`'s `travelTicks`) but are
+    * actor-local `mutable.Map`s, invisible to a Time Warp rollback restore — a rollback that undoes
+    * a vehicle's leave-event without also purging its now-stale map entry would compute a different
+    * travel time for the same logical leave event on replay than the original live run did.
+    * MICRO scheduling and exit-signal state are captured by the model snapshot hooks as well:
+    * they control subsequent events and cannot be reconstructed from the vehicle maps alone.
+    */
+  private def captureLinkMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      linkVehicleEntryTick = vehicleEntryTick.toMap,
+      linkVehicleWaitingSeconds = vehicleWaitingSeconds.toMap
+    )
+
+  /** Restores what [[captureLinkMigrationFields]] captured. */
+  private def restoreLinkMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    vehicleEntryTick.clear()
+    vehicleEntryTick ++= snapshot.linkVehicleEntryTick
+    vehicleWaitingSeconds.clear()
+    vehicleWaitingSeconds ++= snapshot.linkVehicleWaitingSeconds
+  }
+
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureLinkMigrationFields(super.buildMigrationSnapshot())
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreLinkMigrationFields(snapshot)
+  }
+
+  /** Flag indicating if micro-tick simulation is scheduled */
+  private var microTickScheduled: Boolean = false
+
+  /** Current signal phase at the exit node of this link; None when uncontrolled. */
+  private var signalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+  private var previousSignalAtExit: Option[TrafficSignalPhaseStateEnum] = None
+  private var signalAtExitSinceTick: Tick = Long.MinValue
+
+  protected def signalForMicroIntervalEndingAt(tick: Tick): Option[TrafficSignalPhaseStateEnum] =
+    if (tick <= signalAtExitSinceTick) previousSignalAtExit else signalAtExit
+
+  /** Grace-period counter for MICRO links: stays alive for MICRO_GRACE_TICKS extra ticks when empty
+    * to avoid race conditions with late-arriving vehicles from previous batches.
+    */
+  private var emptyGraceTick: Int = 0
+  private val MICRO_GRACE_TICKS: Int = 5
+
+  override protected def captureModelSnapshot(): Map[String, String] =
+    super.captureModelSnapshot() ++ Map(
+      "hybrid.link.v1.microTickScheduled" -> microTickScheduled.toString,
+      "hybrid.link.v1.signalAtExit" -> signalAtExit.fold("")(_.toString),
+      "hybrid.link.v2.previousSignalAtExit" -> previousSignalAtExit.fold("")(_.toString),
+      "hybrid.link.v2.signalAtExitSinceTick" -> signalAtExitSinceTick.toString,
+      "hybrid.link.v1.emptyGraceTick" -> emptyGraceTick.toString
+    )
+
+  override protected def restoreModelSnapshot(metadata: Map[String, String]): Unit = {
+    super.restoreModelSnapshot(metadata)
+    microTickScheduled = metadata.get("hybrid.link.v1.microTickScheduled").exists(_.toBoolean)
+    signalAtExit = metadata.get("hybrid.link.v1.signalAtExit").filter(_.nonEmpty).map(TrafficSignalPhaseStateEnum.valueOf)
+    previousSignalAtExit = metadata.get("hybrid.link.v2.previousSignalAtExit").filter(_.nonEmpty).map(TrafficSignalPhaseStateEnum.valueOf)
+    signalAtExitSinceTick = metadata.get("hybrid.link.v2.signalAtExitSinceTick").fold(Long.MinValue)(_.toLong)
+    emptyGraceTick = metadata.get("hybrid.link.v1.emptyGraceTick").fold(0)(_.toInt)
+  }
+
+  /** Configuration: interval between dynamic cost publications (ticks) */
+  private val costPublishInterval: Int =
+    try org.interscity.htc.core.api.SimulatorSettingsRegistry.effective.getInt("htc.routing.link-cost.publish-interval")
+    catch { case _: Exception => 10 }
+
+  /** Configuration: TTL for cached dynamic costs (ticks) */
+  private val cacheTtl: Int =
+    try org.interscity.htc.core.api.SimulatorSettingsRegistry.effective.getInt("htc.routing.link-cost.cache-ttl")
+    catch { case _: Exception => 60 }
+
+  private lazy val metricsReporter = new LinkMetricsReporter(
+    reportFn                   = (data, label) => report(data = data, label = label),
+    entityIdFn                 = () => getEntityId,
+    currentTickFn              = () => currentTick,
+    cacheTtl                   = cacheTtl,
+    costPublishInterval        = costPublishInterval,
+    getLinkStateFn             = () => state,
+    getVehicleEntryTickFn      = id => vehicleEntryTick.get(id),
+    getVehicleWaitingSecondsFn = id => vehicleWaitingSeconds.getOrElse(id, 0.0),
+    getRegisteredVehicleIdsFn  = () => state.registered.iterator.map(_.actorId).toIterable,
+    logWarnFn                  = msg => logWarn(msg),
+    publishCostFn              = (cost, ttl) => publishRoutingCost(cost, ttl)
+  )
+
+  private def publishRoutingCost(cost: DynamicLinkCost, ttl: Int): scala.util.Try[Unit] =
+    if (model.mobility.util.AccountedRoutingConfig.enabled) {
+      model.mobility.util.AccountedRoutingConfig.workerIds.foreach { workerId =>
+        sendMessageTo(
+          entityId = workerId,
+          shardId = model.mobility.util.AccountedRoutingConfig.ActorClassType,
+          data = LinkCostChangedData(cost.linkId, cost.totalCost, currentTick),
+          eventType = EventTypeEnum.LinkCostChanged.toString,
+          actorType = LoadBalancedDistributed
+        )
+      }
+      Success(())
+    } else DynamicWeightCache.publishCost(cost, ttl)
+
+  private lazy val followingHandler = new LinkFollowingHandler(
+    stateFn = () => state,
+    entityIdFn = () => getEntityId.toLong,
+    currentTickFn = () => currentTick,
+    sendFn = (id, shard, data, eventType) => sendMessageTo(
+      entityId = id, shardId = shard, data = data, eventType = eventType, actorType = LoadBalancedDistributed)
+  )
+
+  private lazy val microSimHandler = new LinkMicroSimulationHandler(
+    entityIdFn                    = () => getEntityId,
+    currentTickFn                 = () => currentTick,
+    sendMessageFn                 = (id, shard, d, et) => sendMessageTo(entityId = id, shardId = shard, data = d, eventType = et, actorType = LoadBalancedDistributed),
+    getLinkStateFn                = () => state,
+    setLinkStateFn                = s => state = s,
+    getVehicleEntryTickFn         = id => vehicleEntryTick.get(id),
+    removeVehicleEntryTickFn      = id => vehicleEntryTick.remove(id),
+    getVehicleWaitingSecondsFn    = id => vehicleWaitingSeconds.getOrElse(id, 0.0),
+    removeVehicleWaitingSecondsFn = id => vehicleWaitingSeconds.remove(id),
+    vehicleWaitingSeconds         = vehicleWaitingSeconds,
+    isMicroScheduledFn            = () => microTickScheduled,
+    setMicroScheduledFn           = v => microTickScheduled = v,
+    getSignalAtExitFn             = () => signalForMicroIntervalEndingAt(currentTick),
+    metricsReporter               = metricsReporter,
+    logDebugFn                    = msg => logDebug(msg),
+    downstreamLeadersFn           = tick => followingHandler.leaders(tick),
+    downstreamLaneLeaderFn        = tick => (road, lane, self) => followingHandler.laneLeader(tick, road, lane, self),
+    reportFn = (data,label) => report(data,label)
+  )
+
+  private lazy val vehicleFlowHandler = new LinkVehicleFlowHandler(
+    entityIdFn                  = () => getEntityId,
+    currentTickFn               = () => currentTick,
+    sendMessageFn               = (id, shard, d, et) => sendMessageTo(entityId = id, shardId = shard, data = d, eventType = et, actorType = LoadBalancedDistributed),
+    scheduleEventFn             = tick => scheduleEvent(tick),
+    getLinkStateFn              = () => state,
+    setLinkStateFn              = s => state = s,
+    putVehicleEntryTickFn       = (id, t) => vehicleEntryTick.put(id, t),
+    getVehicleEntryTickFn       = id => vehicleEntryTick.get(id),
+    removeVehicleEntryTickFn    = id => vehicleEntryTick.remove(id),
+    getOrUpdateVehicleWaitingFn = id => vehicleWaitingSeconds.getOrElseUpdate(id, 0.0),
+    removeVehicleWaitingFn      = id => vehicleWaitingSeconds.remove(id),
+    getVehicleWaitingSecondsFn  = id => vehicleWaitingSeconds.getOrElse(id, 0.0),
+    isMicroScheduledFn          = () => microTickScheduled,
+    setMicroScheduledFn         = v => microTickScheduled = v,
+    metricsReporter             = metricsReporter,
+    findVehicleLaneFn           = id => microSimHandler.findVehicleLane(id),
+    findLeastOccupiedLaneFn     = () => microSimHandler.findLeastOccupiedLane(),
+    logDebugFn                  = msg => logDebug(msg),
+    reportFn                    = (data,label) => report(data,label)
+  )
+
+  private lazy val mesoCapacityHandler = new model.mobility.support.link.LinkMesoCapacityHandler(
+    stateFn=() => state,setStateFn=s => state=s,tickFn=() => currentTick,linkIdFn=() => getEntityId.toLong,
+    sendFn=(id,shard,data,eventType) => sendMessageTo(entityId=id,shardId=shard,data=data,
+      eventType=eventType,actorType=LoadBalancedDistributed),
+    scheduleFn=tick => scheduleEvent(tick),reportFn=(data,label) => report(data,label),
+    enteredFn=id => {
+      vehicleEntryTick.put(id,currentTick)
+      vehicleWaitingSeconds.getOrElseUpdate(id,0.0)
+      metricsReporter.onVehicleLoaded(isMicro=false)
+    },
+    leftFn=id => {
+      val entered=vehicleEntryTick.remove(id)
+      vehicleWaitingSeconds.remove(id)
+      metricsReporter.onVehicleArrived(isMicro=false,travelTime=entered.map(t => (currentTick-t).toDouble).getOrElse(0.0))
+    }
+  )
+
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
+    if (state.isMicroMode) microSimHandler.initializeMicroMode()
+    if (!model.mobility.util.AccountedRoutingConfig.enabled) metricsReporter.publishDynamicCost()
+    logDebug(s"Link initialized: mode=${state.simulationMode}, lanes=${state.lanes}, length=${state.length}m")
+  }
+
+  override def requiresPostLoadRegistration: Boolean = true
+
+  /** Seeds the entry Node's availableCapacity counter for this link, before any vehicle ever
+    * requests access to it. See docs/CONGESTION_PROPAGATION_DESIGN.md. Deferred to the post-load
+    * registration phase (rather than sent from onInitialize) because EAGER sources of different
+    * classTypes load concurrently (LoadDataManager.handleLoadNext groups sources by classType and
+    * advances every queue each round) — a Link can otherwise initialize and message its Node
+    * before that Node exists yet. Post-load registration only fires once every EAGER source has
+    * finished loading, so the target Node is guaranteed to be initialized here.
+    */
+  override def handlePostLoadRegistration(): Unit = {
+    val dependencyOpt =
+      getDependencyOption(IdUtil.format(state.from)).orElse(
+        relationships
+          .get(IdUtil.format(state.from))
+          .orElse(
+            relationships.values.find(_.classType == "mobility.actor.Node")
+          )
+      )
+    val nodeId = dependencyOpt.map(_.id).getOrElse(state.from)
+    if (state.mesoCapacity.isEmpty) sendMessageTo(
+      entityId  = nodeId,
+      shardId   = "mobility.actor.Node",
+      data      = RegisterLinkCapacityData(linkId = getEntityId.toLong, capacity = state.capacity.toInt),
+      eventType = EventTypeEnum.RegisterLinkCapacity.toString,
+      actorType = LoadBalancedDistributed
+    )
+    if (model.mobility.util.AccountedRoutingConfig.enabled) metricsReporter.publishDynamicCost()
+  }
+
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: EnterLinkData        => handleEnterLink(event, d)
+      case d: LeaveLinkData        => handleLeaveLink(event, d)
+      case _: SubscribeMicroBoundaryData => followingHandler.subscribe(event.actorRefId, event.shardRefId)
+      case d: MicroBoundaryUpdateData => followingHandler.receive(event.actorRefId, d.snapshot)
+      case d: LinkSignalStateData =>
+        // The tick-t MICRO batch integrates (t-1, t]; a phase effective at t governs the next interval.
+        def applyMovement(target: Long,lanes: List[Int],phase: TrafficSignalPhaseStateEnum): Unit = {
+          val old=state.signalControls.find(s => s.targetLinkId == target && s.laneIds == lanes)
+            .getOrElse(model.mobility.entity.state.model.LinkMovementSignal(target,lanes))
+          val updated=old.copy(phase=phase,
+            previousPhase=if (event.tick == old.effectiveTick) old.previousPhase else old.phase,effectiveTick=event.tick)
+          state=state.copy(signalControls=state.signalControls.filterNot(s => s.targetLinkId == target && s.laneIds == lanes) :+ updated)
+        }
+        d.targetLinkId match {
+          case Some(target) => applyMovement(target,d.laneIds,d.phase)
+          case None =>
+            if (event.tick != signalAtExitSinceTick) previousSignalAtExit = signalAtExit
+            signalAtExitSinceTick = event.tick
+            signalAtExit = Some(d.phase)
+        }
+        d.updates.foreach(change => applyMovement(change.targetLinkId,change.laneIds,change.phase))
+
+      case _ =>
+        logWarn(s"Event not handled: ${event.data.getClass.getSimpleName}")
+    }
+
+  /** Handles spontaneous (time-triggered) events for MICRO mode simulation.
+    *
+    * In MICRO mode:
+    *   - Executes sub-tick simulation for all vehicles
+    *   - Schedules next tick if vehicles remain
+    *   - Stops scheduling when link is empty
+    *
+    * In MESO mode: No-op (vehicles manage their own timing)
+    *
+    * @param event
+    *   Spontaneous event from time manager
+    */
+  override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
+    // logInfo(s"[LINK] actSpontaneous tick=$currentTick id=$getEntityId =${state.isMicroMode} vehicles=${if (state.isMicroMode) state.totalVehiclesInMicro else 0}")
+    if (state.mesoCapacity.nonEmpty) {
+      onFinishSpontaneous(mesoCapacityHandler.onTick())
+      return
+    }
+    if (!state.isMicroMode) {
+      microTickScheduled = false
+      onFinishSpontaneous(None)
+      return
+    }
+
+    if (state.pendingMicroEntries.nonEmpty) {
+      metricsReporter.ensureSummaryTick(currentTick)
+      vehicleFlowHandler.drainMicroEntries()
+    }
+    val vehicleCount = state.totalVehiclesInMicro
+    val hasVehicles = vehicleCount > 0
+
+    if (!hasVehicles) {
+      emptyGraceTick += 1
+      if (emptyGraceTick <= MICRO_GRACE_TICKS) {
+        onFinishSpontaneous(Some(currentTick + 1))
+      } else {
+        emptyGraceTick = 0
+        microTickScheduled = false
+        onFinishSpontaneous(None)
+      }
+      return
+    }
+
+    emptyGraceTick = 0
+    microTickScheduled = true
+    microSimHandler.handleGlobalTick(currentTick)
+    followingHandler.publish()
+
+    val hasVehiclesAfterTick = state.totalVehiclesInMicro > 0 || state.pendingMicroEntries.nonEmpty
+    if (hasVehiclesAfterTick) {
+      microTickScheduled = true
+      emptyGraceTick = 0
+      onFinishSpontaneous(Some(currentTick + 1))
+    } else {
+      emptyGraceTick += 1
+      if (emptyGraceTick <= MICRO_GRACE_TICKS) {
+        onFinishSpontaneous(Some(currentTick + 1))
+      } else {
+        emptyGraceTick = 0
+        microTickScheduled = false
+        onFinishSpontaneous(None)
+      }
+    }
+  }
+
+  private def handleEnterLink(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
+    metricsReporter.ensureSummaryTick(currentTick)
+    logDebug(s"Vehicle ${event.actorRefId} entering link (mode=${state.simulationMode})")
+    reportToSpecificReporter(
+      ReportTypeEnum.clickhouse,
+      VehicleLinkFlowData(
+        linkId = getEntityId, eventType = (if (state.mesoCapacity.nonEmpty) "entry_request" else "enter"), vehicleId = event.actorRefId.toString,
+        actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
+        vehicleCountOnLink = state.registered.size
+      ),
+      "vehicle_link_flow"
+    )
+    if (state.isMicroMode) vehicleFlowHandler.handleEnterLinkMicro(event, data)
+    else if (state.mesoCapacity.nonEmpty) mesoCapacityHandler.enter(event,data)
+    else {
+      require(!data.mesoOriginAtEnd,"origin-end admission requires separate MESO capacity")
+      vehicleFlowHandler.handleEnterLinkMeso(event,data)
+    }
+    followingHandler.observeNextRoad(data.nextLinkId)
+    followingHandler.publish()
+  }
+
+  private def handleLeaveLink(event: ActorInteractionEvent, data: LeaveLinkData): Unit = {
+    metricsReporter.ensureSummaryTick(currentTick)
+    logDebug(s"Vehicle ${event.actorRefId} leaving link")
+    val wasRegistered     = state.registered.containsActor(event.actorRefId)
+    if (wasRegistered) {
+      if (state.isMicroMode) SchedulingMetrics.linkTraversalsMicro.inc()
+      else SchedulingMetrics.linkTraversalsMeso.inc()
+    }
+    val vehiclesRemaining = math.max(0, state.registered.size - (if (wasRegistered) 1 else 0))
+    reportToSpecificReporter(
+      ReportTypeEnum.clickhouse,
+      VehicleLinkFlowData(
+        linkId = getEntityId, eventType = (if (state.mesoCapacity.nonEmpty) "leave_request" else "leave"), vehicleId = event.actorRefId.toString,
+        actorType = data.actorType.toString, actorCreationType = data.actorCreationType.toString,
+        vehicleCountOnLink = vehiclesRemaining
+      ),
+      "vehicle_link_flow"
+    )
+    if (state.mesoCapacity.nonEmpty) mesoCapacityHandler.leave(event,data)
+    else vehicleFlowHandler.handleLeaveLink(event, data, wasRegistered)
+    followingHandler.publish()
+  }
+  /** Handles link destruction on simulation termination.
+    *
+    * Forwards DestructEvent to all registered vehicles to ensure proper cleanup. This is critical
+    * for MICRO mode where vehicles may have stopped scheduling their own events and rely on the
+    * link for lifecycle management.
+    *
+    * @param event
+    *   DestructEvent from the system
+    */
+  override def onDestruct(event: DestructEvent): Unit =
+    state.registered.foreach {
+      reg =>
+        val shardRef = getShardRef(IdUtil.format(StringUtil.getModelClassName(reg.shardId)))
+        shardRef ! EntityEnvelopeEvent(
+          IdUtil.format(reg.actorId),
+          DestructEvent(actorRef = self.path.toString)
+        )
+    }
+}
+
+object Link {
+  def apply(properties: Properties): Link =
+    new Link(properties)
+}

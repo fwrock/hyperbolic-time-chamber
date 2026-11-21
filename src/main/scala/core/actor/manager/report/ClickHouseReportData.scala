@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager.report
 
 import core.entity.event.control.report.ReportEvent
-import model.hybrid.entity.event.data.VehicleLinkFlowData
+import core.modelbinding.{ LinkFlowRecord, ModelBindings }
 import system.database.clickhouse.ClickHouseClientManager
 
 import org.apache.pekko.actor.ActorRef
@@ -58,8 +58,8 @@ class ClickHouseReportData(
 
   override def onReport(event: ReportEvent): Unit =
     event.data match {
-      case flow: VehicleLinkFlowData =>
-        buffer += toJsonLine(event, flow)
+      case data if ModelBindings.active.linkFlow(data).isDefined =>
+        buffer += toJsonLine(event, ModelBindings.active.linkFlow(data).get)
         if (buffer.size >= batchSize) flush()
       case data: scala.collection.Map[?, ?] if event.label == "execution_timing_summary" =>
         val fields = data.asInstanceOf[scala.collection.Map[String, Any]].toMap ++ Map(
@@ -69,7 +69,7 @@ class ClickHouseReportData(
     }
 
   override protected def onCommittedReport(event: ReportEvent): Unit = {
-    require(event.data.isInstanceOf[VehicleLinkFlowData] ||
+    require(ModelBindings.active.linkFlow(event.data).isDefined ||
       (event.label == "execution_timing_summary" && event.data.isInstanceOf[scala.collection.Map[?, ?]]),
       "unsupported ClickHouse report payload")
     strictCommit = true
@@ -105,7 +105,7 @@ class ClickHouseReportData(
     pendingWrites
   }
 
-  private def toJsonLine(event: ReportEvent, flow: VehicleLinkFlowData): String = {
+  private def toJsonLine(event: ReportEvent, flow: LinkFlowRecord): String = {
     val sb = new java.lang.StringBuilder(256)
     sb.append("{\"simulation_id\":\"").append(escape(simulationId)).append('"')
     sb.append(",\"scenario_id\":\"").append(escape(scenarioId)).append('"')

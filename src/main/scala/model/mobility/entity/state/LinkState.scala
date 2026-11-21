@@ -1,0 +1,269 @@
+package org.interscity.htc
+package model.mobility.entity.state
+
+import core.types.Tick
+import core.entity.state.BaseState
+import com.fasterxml.jackson.annotation.JsonIgnore
+import com.fasterxml.jackson.databind.annotation.{ JsonDeserialize, JsonSerialize }
+
+import org.interscity.htc.core.enumeration.ReportTypeEnum
+import org.interscity.htc.model.mobility.entity.state.model.{LinkRegistry, LinkMetricsState}
+import org.interscity.htc.model.mobility.entity.state.enumeration.SimulationModeEnum
+import org.interscity.htc.model.mobility.entity.state.model.{ LaneConfig, LaneConnectionIndex, VehicleInLane }
+
+import scala.collection.mutable
+
+/** Hybrid link state supporting both MESO and MICRO simulation modes.
+  *
+  * This state extends the mesoscopic LinkState with additional fields for microscopic simulation.
+  * When simulationMode is MICRO, the link manages individual vehicle positions, velocities, and
+  * lane assignments.
+  *
+  * Key differences from mesoscopic LinkState:
+  *   - simulationMode flag determines behavior
+  *   - vehiclesByLane tracks individual vehicles in MICRO mode
+  *   - laneConfigurations defines lane types and restrictions
+  *   - microTimeStep and microTicksPerGlobalTick manage sub-tick timing
+  *   - registered set maintained for backward compatibility with MESO mode
+  *
+  * @param startTick
+  *   Simulation start tick
+  * @param reporterType
+  *   Type of reporter for this link
+  * @param scheduleOnTimeManager
+  *   Whether to schedule on time manager
+  * @param from
+  *   Origin node ID
+  * @param to
+  *   Destination node ID
+  * @param length
+  *   Link length (meters)
+  * @param lanes
+  *   Number of lanes
+  * @param speedLimit
+  *   Speed limit (m/s)
+  * @param capacity
+  *   Maximum vehicle capacity
+  * @param freeSpeed
+  *   Free-flow speed (m/s)
+  * @param currentSpeed
+  *   Current aggregate speed (for MESO mode)
+  * @param congestionFactor
+  *   Congestion factor (for MESO mode)
+  * @param registered
+  *   Registered vehicles (for MESO mode)
+  * @param simulationMode
+  *   MESO or MICRO mode
+  * @param microTimeStep
+  *   Duration of each sub-tick (seconds)
+  * @param microTicksPerGlobalTick
+  *   Number of sub-ticks per global tick
+  * @param vehiclesByLane
+  *   Vehicles organized by lane (for MICRO mode)
+  * @param laneConfigurations
+  *   Configuration for each lane
+  */
+case class LinkState(
+  startTick: Tick,
+  reporterType: ReportTypeEnum = null,
+  scheduleOnTimeManager: Boolean = false,
+  from: Long,
+  to: Long,
+  length: Double,
+  lanes: Int,
+  speedLimit: Double,
+  capacity: Double,
+  freeSpeed: Double,
+  var currentSpeed: Double = 0.0,
+  var congestionFactor: Double = 1.0,
+  @JsonSerialize(converter = classOf[LinkRegistry.ToJson])
+  @JsonDeserialize(converter = classOf[LinkRegistry.FromJson])
+  registered: LinkRegistry = new LinkRegistry,
+  simulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
+  microTimeStep: Double = 0.1,
+  microTicksPerGlobalTick: Int = 10,
+  @JsonDeserialize(keyAs = classOf[java.lang.Integer])
+  vehiclesByLane: Map[Int, mutable.Queue[VehicleInLane]] = Map.empty,
+  laneConfigurations: List[LaneConfig] = List.empty,
+  metrics: LinkMetricsState = LinkMetricsState(),
+  junctionGeometry: Option[model.JunctionGeometry] = None,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Double])
+  exitSpeedLimitsMps: Map[Long, Double] = Map.empty,
+  carryMicroRemainder: Boolean = false,
+  downstreamLookahead: Boolean = false,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Long])
+  downstreamConnectors: Map[Long, Long] = Map.empty,
+  stopLineGapM: Double = 0.0,
+  following: model.MicroFollowingState = model.MicroFollowingState(),
+  downstreamSpillback: Boolean = false,
+  sidewalk: model.SidewalkConfig = model.SidewalkConfig.Default,
+  laneChanging: model.LaneChangingConfig = model.LaneChangingConfig(),
+  laneConnections: List[model.LaneConnection] = Nil,
+  signalControls: List[model.LinkMovementSignal] = Nil,
+  detectors: List[model.MicroDetectorConfig] = Nil,
+  microEntry: model.MicroEntryConfig = model.MicroEntryConfig(),
+  var pendingMicroEntries: List[model.PendingMicroEntry] = Nil,
+  mesoCapacity: Option[model.MesoCapacityConfig] = None,
+  mesoCapacityState: model.MesoCapacityState = model.MesoCapacityState()
+) extends BaseState(
+      startTick = startTick,
+      reporterType = reporterType,
+      scheduleOnTimeManager = scheduleOnTimeManager
+    ) {
+  require(mesoCapacity != null && (mesoCapacity.isEmpty || isMesoMode), "separate MESO capacity requires MESO links")
+  require(mesoCapacityState != null, "missing MESO capacity state")
+  require(sidewalk != null, "sidewalk configuration cannot be null; use enabled=false to disable walking")
+  require(laneChanging != null, "lane-changing configuration cannot be null")
+  require(microEntry != null && (!microEntry.enabled || isMicroMode), "queued entry requires MICRO")
+  require(laneChanging.model == model.LaneChangingModel.Disabled || isMicroMode,
+    "active lane changing requires MICRO links")
+  require(laneConnections.forall(_.fromLane < lanes), "lane connection exceeds link lane count")
+  require(detectors.forall(d => d.laneId < lanes && d.positionMeters + d.lengthMeters <= length),
+    "signal detector lies outside its link")
+  require(signalControls.forall(_.laneIds.forall(l => l >= 0 && l < lanes)), "invalid signal control lane")
+  require(exitSpeedLimitsMps.values.forall(v => v.isFinite && v > 0.0), "exit speed limits must be positive m/s")
+  require(stopLineGapM.isFinite && stopLineGapM >= 0 && stopLineGapM < length, "invalid signal stop-line gap")
+  require(!downstreamLookahead || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
+    "downstream lookahead requires MICRO with one physics step per runtime tick")
+  require(!downstreamLookahead || lanes == 1 || laneConnections.nonEmpty,
+    "multi-lane downstream lookahead requires explicit lane connections; a missing path is unknown, not free")
+  require(!downstreamSpillback || downstreamLookahead, "downstream spillback requires MICRO downstream lookahead")
+  require(!carryMicroRemainder || (simulationMode == SimulationModeEnum.MICRO && microTicksPerGlobalTick == 1),
+    "MICRO boundary remainder requires one physics step per runtime tick")
+  require(!carryMicroRemainder || length > speedLimit / 3.6 * microTimeStep,
+    "MICRO remainder requires links longer than one speed-limit physics step")
+  junctionGeometry.foreach { geometry =>
+    require(from == geometry.nodeId && to == geometry.nodeId, "junction connector must stay at its node")
+    require(math.abs(length - geometry.lengthMeters) <= 1e-6, "junction link length must match geometry")
+    require(math.abs(speedLimit / 3.6 - geometry.speedLimitMps) <= 1e-6, "junction speed must match geometry")
+  }
+
+  /** Derived from the immutable connections; rebuilt per state instance and never serialized. */
+  @JsonIgnore @transient lazy val laneConnectionIndex: LaneConnectionIndex = LaneConnectionIndex(laneConnections)
+
+  /** Single pass over the lanes; replaces repeated lane scans per vehicle event. */
+  def locateVehicle(actorId: Long): Option[(Int, VehicleInLane)] = {
+    val it = vehiclesByLane.iterator
+    while (it.hasNext) {
+      val (lane, queue) = it.next()
+      queue.find(_.actorId == actorId) match {
+        case Some(v) => return Some((lane, v))
+        case None    =>
+      }
+    }
+    None
+  }
+
+  /** Check if link is in microscopic mode */
+  def isMicroMode: Boolean = simulationMode == SimulationModeEnum.MICRO
+
+  /** Check if link is in mesoscopic mode */
+  def isMesoMode: Boolean = simulationMode == SimulationModeEnum.MESO
+
+  /** Get total number of vehicles in MICRO mode */
+  def totalVehiclesInMicro: Int =
+    if (isMicroMode) vehiclesByLane.valuesIterator.foldLeft(0)(_ + _.size)
+    else 0
+
+  /** Get total number of vehicles in MESO mode */
+  def totalVehiclesInMeso: Int =
+    if (isMesoMode) registered.size
+    else 0
+
+  /** Get total number of vehicles (works in both modes) */
+  def totalVehicles: Int =
+    if (isMicroMode) totalVehiclesInMicro
+    else totalVehiclesInMeso
+
+  /** Get density (vehicles per meter) */
+  def density: Double =
+    if (length > 0) totalVehicles.toDouble / length
+    else 0.0
+
+  /** Check if link is near capacity */
+  def isNearCapacity(threshold: Double = 0.8): Boolean =
+    totalVehicles.toDouble / capacity > threshold
+
+  /** Initialize lane structure for MICRO mode */
+  def initializeMicroLanes(): LinkState =
+    if (isMicroMode && vehiclesByLane.isEmpty) {
+      val effectiveLanes = math.max(1, this.lanes)
+      val lanes = (0 until effectiveLanes).map {
+        laneId =>
+          laneId -> mutable.Queue.empty[VehicleInLane]
+      }.toMap
+
+      val configs = if (laneConfigurations.isEmpty) {
+        (0 until effectiveLanes).map {
+          laneId =>
+            LaneConfig(laneId = laneId)
+        }.toList
+      } else laneConfigurations
+
+      this.copy(
+        vehiclesByLane = lanes,
+        laneConfigurations = configs
+      )
+    } else this
+}
+
+object LinkState {
+
+  /** Create a hybrid link in MESO mode (default, backward compatible) */
+  def createMeso(
+    startTick: Tick,
+    from: Long,
+    to: Long,
+    length: Double,
+    lanes: Int,
+    speedLimit: Double,
+    capacity: Double,
+    freeSpeed: Double,
+    sidewalk: model.SidewalkConfig = model.SidewalkConfig.Default
+  ): LinkState =
+    LinkState(
+      startTick = startTick,
+      from = from,
+      to = to,
+      length = length,
+      lanes = lanes,
+      speedLimit = speedLimit,
+      capacity = capacity,
+      freeSpeed = freeSpeed,
+      simulationMode = SimulationModeEnum.MESO,
+      sidewalk = sidewalk
+    )
+
+  /** Create a hybrid link in MICRO mode with initialized lane structure */
+  def createMicro(
+    startTick: Tick,
+    from: Long,
+    to: Long,
+    length: Double,
+    lanes: Int,
+    speedLimit: Double,
+    capacity: Double,
+    freeSpeed: Double,
+    microTimeStep: Double = 0.1,
+    microTicksPerGlobalTick: Int = 10,
+    laneConfigs: List[LaneConfig] = List.empty,
+    sidewalk: model.SidewalkConfig = model.SidewalkConfig.Default
+  ): LinkState = {
+    val state = LinkState(
+      startTick = startTick,
+      from = from,
+      to = to,
+      length = length,
+      lanes = lanes,
+      speedLimit = speedLimit,
+      capacity = capacity,
+      freeSpeed = freeSpeed,
+      simulationMode = SimulationModeEnum.MICRO,
+      microTimeStep = microTimeStep,
+      microTicksPerGlobalTick = microTicksPerGlobalTick,
+      laneConfigurations = laneConfigs,
+      sidewalk = sidewalk
+    )
+    state.initializeMicroLanes()
+  }
+}

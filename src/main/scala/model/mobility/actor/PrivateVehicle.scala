@@ -1,0 +1,409 @@
+package org.interscity.htc
+package model.mobility.actor
+
+import core.entity.event.ActorInteractionEvent
+import core.types.Tick
+import core.util.JsonUtil
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
+import model.mobility.entity.state.{ DriverAttributes, MovableState }
+import model.mobility.entity.state.enumeration.MovableStatusEnum
+import model.mobility.entity.state.enumeration.MovableStatusEnum.{ Parked, Start }
+import model.mobility.entity.event.data.person.{ ParkVehicleData, PersonScheduleCompleteData, StartTripData, TripCompletedData }
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.htc.protobuf.core.entity.actor.Identify
+
+/** Common trait for private vehicles (Car, Bicycle, Motorcycle).
+  *
+  * Private vehicles are ASSETS owned by Person actors. They are:
+  *   - Passive (Parked) by default
+  *   - Activated by Person via StartTrip message
+  *   - Configured with person's DriverAttributes
+  *   - Report back with TripCompleted when done
+  *
+  * This trait provides common behavior for activation/deactivation and driver attribute
+  * configuration.
+  */
+trait PrivateVehicle[T <: MovableState] {
+  self: Movable[T] =>
+
+  /** True once this vehicle has ever been activated by a Person actor. Once set, it is NEVER
+    * cleared — even between trips. A person-centric vehicle must NOT selfDestruct() after
+    * completing a trip; it returns to Parked and waits for the next StartTrip from its owner
+    * Person.
+    */
+  private var personCentric: Boolean = false
+
+  /** When true, the vehicle will selfDestruct() on the next call to deactivateVehicle().
+    * Set by handlePersonScheduleComplete() when the owning Person completes its daily schedule.
+    * Vehicles that are already Parked self-destruct immediately; active vehicles set this flag
+    * so they clean up after their current trip finishes naturally.
+    */
+  private var destroyAfterNextPark: Boolean = false
+
+  /** Whether this vehicle is managed by a Person actor. Determines lifecycle: person-centric →
+    * survive between trips; standalone → selfDestruct on finish.
+    */
+  protected def isPersonCentric: Boolean = personCentric
+
+  /** Owner person reference with id and classType (set when vehicle is activated).
+    */
+  private var ownerPersonRef: Option[Identify] = None
+
+  /** Current trip origin (override state's immutable origin).
+    */
+  private var tripOrigin: Option[Long] = None
+
+  /** Current trip destination (override state's immutable destination).
+    */
+  private var tripDestination: Option[Long] = None
+
+  /** Current trip driver attributes (overrides defaults).
+    */
+  protected var driverAttributes: DriverAttributes = DriverAttributes()
+
+  /** Track when trip started (for travel time calculation).
+    */
+  private var tripStartTick: Option[Tick] = None
+
+  /** The `ActorInteractionEvent.seq` of the `StartTrip` request currently being served, echoed
+    * back on [[TripCompletedData.requestSeq]] so the owning Person can tell this trip's genuine
+    * completion apart from a rollback-orphaned reply to an earlier, since-retracted `StartTrip`
+    * (see `TripCompletedData.requestSeq`'s doc). `0L` outside Time Warp, where it's never read.
+    */
+  private var tripRequestSeq: Long = 0L
+
+  /** Track trip start distance (for distance calculation).
+    */
+  private var tripStartDistance: Double = 0.0
+
+  /** Get current distance from state (abstract method to be implemented by vehicle types).
+    */
+  protected def getCurrentDistance: Double
+
+  /** Accessor methods for protected BaseActor/SimulationBaseActor members. These must be
+    * implemented by the concrete class.
+    */
+  protected def getVehicleStatus: MovableStatusEnum
+  protected def setVehicleStatus(status: MovableStatusEnum): Unit
+  protected def getActorCurrentTick: Tick
+  protected def getActorShardId: String
+  protected def getActorEntityId: String
+  protected def scheduleNextTick(nextTick: Option[Tick]): Unit
+  protected def selfDestructVehicle(): Unit
+  protected def isVehicleStateNull: Boolean
+  protected def sendVehicleMessage(
+    entityId: Long,
+    shardId: String,
+    data: AnyRef,
+    eventType: String,
+    actorType: CreationTypeEnum
+  ): Unit
+  protected def logVehicleInfo(message: String): Unit
+  protected def logVehicleWarn(message: String): Unit
+  protected def logVehicleDebug(message: String): Unit
+
+  /** Register this vehicle with the TimeManager pool for the first time. Must use scheduleEvent (TM
+    * pool router) instead of onFinishSpontaneous because passive vehicles
+    * (scheduleOnTimeManager=false) have null currentTimeManager.
+    */
+  protected def registerOnTimeManager(tick: Tick): Unit
+
+  /** Initialize vehicle in Parked state.
+    *
+    * Override actSpontaneous in subclasses to call this. Vehicles should NOT auto-start; they wait
+    * for StartTrip message.
+    */
+  protected def initializeAsParked(): Unit = {
+    setVehicleStatus(Parked)
+    logVehicleDebug(s"${getActorEntityId} initialized in Parked state")
+  }
+
+  /** Pre-load a route pre-computed by ModeChoiceStrategy so requestRoute() can skip a second A*.
+    *
+    * Subclasses must set the appropriate route field on their state object.
+    */
+  protected def applyPrecomputedRoute(route: List[(Long, Long)]): Unit
+
+  /** Hook called at the beginning of each new trip (before activation). Subclasses must override to
+    * reset all per-trip variables (metrics, SUMO stats, link tracking). This is critical for
+    * person-centric vehicles that serve multiple trips without being destroyed.
+    */
+  protected def resetTripState(): Unit = {}
+
+  /** Handle StartTrip message from Person.
+    *
+    * Activates the vehicle, configures it with driver attributes, and begins the trip.
+    */
+  protected def handleStartTrip(event: ActorInteractionEvent, data: StartTripData): Unit =
+    try {
+      val status = getVehicleStatus
+      if (status != Parked) {
+        logVehicleWarn(
+          s"${getActorEntityId} received StartTrip but is not Parked (status: $status)"
+        )
+        return
+      }
+
+      personCentric = true
+
+      resetTripState()
+
+      logVehicleDebug(
+        s"${getActorEntityId} activated by ${data.personId}: ${data.origin} -> ${data.destination}"
+      )
+
+      ownerPersonRef = Some(
+        Identify(
+          id = data.personId,
+          classType = event.actorClassType
+        )
+      )
+      tripOrigin = Some(data.origin)
+      tripDestination = Some(data.destination)
+      driverAttributes = data.driverAttributes.validate()
+      tripStartTick = Some(data.startTick)
+      tripStartDistance = getCurrentDistance
+      tripRequestSeq = event.seq
+
+      applyDriverAttributes(driverAttributes)
+
+      // Pre-load route if TravelTimeModeChoiceStrategy already computed it (avoids double A*)
+      data.precomputedRoute.foreach(applyPrecomputedRoute)
+
+      setVehicleStatus(Start)
+
+      // logVehicleWarn(s"[DIAG] ${getActorEntityId} StartTrip registered on TM at tick=${getActorCurrentTick+1}: ${data.origin} -> ${data.destination}")
+
+      registerOnTimeManager(getActorCurrentTick + 1)
+    } catch {
+      case _: NullPointerException =>
+        logVehicleDebug(s"${getActorEntityId} state not ready for StartTrip, deferring message")
+        context.self ! event
+    }
+
+  /** Get current trip origin (for route calculation).
+    */
+  protected def getTripOrigin: Option[Long] = tripOrigin
+
+  /** Get current trip destination (for route calculation).
+    */
+  protected def getTripDestination: Option[Long] = tripDestination
+
+  /** Get current trip start tick (for trip metrics).
+    */
+  protected def getTripStartTick: Option[Tick] = tripStartTick
+
+  protected def getTripStartDistance: Double = tripStartDistance
+
+  /** Get current driver attributes (for speed factor metrics).
+    */
+  protected def getDriverAttributes: DriverAttributes = driverAttributes
+
+  /** Handle ParkVehicle message (optional explicit parking).
+    */
+  protected def handleParkVehicle(event: ActorInteractionEvent, data: ParkVehicleData): Unit = {
+    logVehicleDebug(s"${getActorEntityId} parking at ${data.parkingNodeId}")
+
+    if (getVehicleStatus != Parked) {
+      reportTripCompletion("parked_by_person", data.parkingNodeId)
+    }
+
+    deactivateVehicle()
+  }
+
+  /** Report trip completion back to Person.
+    */
+  protected def reportTripCompletion(reason: String, finalNode: Long, wasTeleported: Boolean = false): Unit =
+    ownerPersonRef.foreach {
+      personRef =>
+        val travelTime = tripStartTick
+          .map(
+            start => getActorCurrentTick - start
+          )
+          .getOrElse(0L)
+        val distanceTraveled = getCurrentDistance - tripStartDistance
+
+        sendVehicleMessage(
+          entityId = personRef.id,
+          shardId = personRef.classType,
+          data = TripCompletedData(
+            vehicleId = getActorEntityId.toLong,
+            personId = personRef.id,
+            distanceTraveled = distanceTraveled,
+            travelTime = travelTime,
+            finalNode = finalNode,
+            completionTick = getActorCurrentTick,
+            completionReason = reason,
+            wasTeleported = wasTeleported,
+            requestSeq = tripRequestSeq
+          ),
+          eventType = "TripCompleted",
+          actorType = LoadBalancedDistributed
+        )
+
+        logVehicleDebug(
+          s"${getActorEntityId} reported trip completion to ${personRef.id}: ${distanceTraveled}m in $travelTime ticks"
+        )
+    }
+
+  /** Deactivate vehicle (return to Parked state).
+    *
+    * Unregister from TimeManager, clear trip state.
+    */
+  protected def deactivateVehicle(): Unit = {
+    setVehicleStatus(Parked)
+    ownerPersonRef = None
+    tripStartTick = None
+    tripStartDistance = 0.0
+    // Release the route queue between trips — it will be recalculated on the next StartTrip.
+    // This is the single largest per-vehicle allocation and parking is the right moment to free it.
+    clearRouteOnPark()
+
+    if (destroyAfterNextPark) {
+      logVehicleDebug(s"${getActorEntityId} destructing after final trip (owner schedule complete)")
+      selfDestructVehicle()
+    } else {
+      logVehicleDebug(s"${getActorEntityId} deactivated (Parked)")
+      scheduleNextTick(None)
+    }
+  }
+
+  /** Apply driver attributes to vehicle physics parameters.
+    *
+    * Subclasses should override this to apply attributes to their specific state (CarState,
+    * BicycleState, etc.).
+    */
+  protected def applyDriverAttributes(attrs: DriverAttributes): Unit =
+    logVehicleDebug(
+      s"Applying driver attributes: aggressiveness=${attrs.aggressiveness}, " +
+        s"maxSpeedFactor=${attrs.maxSpeedFactor}, reactionTime=${attrs.reactionTime}"
+    )
+
+  /** Override onFinish to report trip completion.
+    */
+  protected def onFinishPrivateVehicle(nodeId: Long, wasTeleported: Boolean = false): Unit = {
+    val reason =
+      if (wasTeleported) "teleported"
+      else if (tripDestination.contains(nodeId)) "reached_destination"
+      else "trip_ended"
+
+    reportTripCompletion(reason, nodeId, wasTeleported)
+    deactivateVehicle()
+  }
+
+  /** Check if vehicle is active (not parked).
+    */
+  protected def isActive: Boolean = getVehicleStatus != Parked
+
+  /** Check if vehicle is parked.
+    */
+  protected def isParked: Boolean = getVehicleStatus == Parked
+
+  /** Adds reply-linkage and lifecycle-intent fields onto an already-built migration snapshot.
+    *
+    * `ownerPersonRef`, `personCentric`, `tripOrigin`, `tripDestination`, `tripStartTick`,
+    * `tripStartDistance`, and `destroyAfterNextPark` are actor-local `var`s, not part of `T
+    * <: MovableState`, so the default `BaseActor.buildMigrationSnapshot` (which only serializes
+    * `state`) would silently drop them on migration — `ownerPersonRef` in particular is a pending
+    * reply obligation to the owning Person, and losing it makes `reportTripCompletion` a silent
+    * no-op after rehydration. `Option[String]`/`Option[Tick]` fields are flattened to sentinel
+    * empty-string / `Long.MinValue` because [[MigrationSnapshot]] must stay Jackson-serializable
+    * with simple field types.
+    *
+    * This trait cannot itself `override` `BaseActor.buildMigrationSnapshot`/
+    * `applyMigrationSnapshot` and call `super` — a trait's `self: Movable[T] =>` self-type
+    * constrains what concrete class it can be mixed into, but `super` resolution only follows the
+    * trait's own linearization, which (absent an `extends`) is just `AnyRef`. So each concrete
+    * vehicle (`Car`, `Bicycle`, `Motorcycle`) — which genuinely extends `Movable[T]` and can call
+    * `super` — wires these two methods into its own `buildMigrationSnapshot`/
+    * `applyMigrationSnapshot` override. See `Car.scala` for the wiring.
+    */
+  protected def captureMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      ownerPersonRefId = ownerPersonRef.map(_.id).getOrElse(0L),
+      ownerPersonRefClassType = ownerPersonRef.map(_.classType).getOrElse(""),
+      personCentric = personCentric,
+      tripOrigin = tripOrigin.getOrElse(0L),
+      tripDestination = tripDestination.getOrElse(0L),
+      tripStartTick = tripStartTick.getOrElse(Long.MinValue),
+      tripStartDistance = tripStartDistance,
+      destroyAfterNextPark = destroyAfterNextPark,
+      modelSnapshot = base.modelSnapshot ++ Map(
+        "hybrid.private-vehicle.v1.tripRequestSeq" -> tripRequestSeq.toString,
+        "hybrid.private-vehicle.v1.driverAttributes" -> JsonUtil.toJson(driverAttributes)
+      )
+    )
+
+  /** Restores reply-linkage and lifecycle-intent fields from a migration snapshot. See
+    * [[captureMigrationFields]] for why these must be carried explicitly.
+    */
+  protected def restoreMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    ownerPersonRef =
+      if (snapshot.ownerPersonRefId != 0L)
+        Some(Identify(id = snapshot.ownerPersonRefId, classType = snapshot.ownerPersonRefClassType))
+      else None
+    personCentric = snapshot.personCentric
+    tripOrigin = if (snapshot.tripOrigin != 0L) Some(snapshot.tripOrigin) else None
+    tripDestination = if (snapshot.tripDestination != 0L) Some(snapshot.tripDestination) else None
+    tripStartTick = if (snapshot.tripStartTick != Long.MinValue) Some(snapshot.tripStartTick) else None
+    tripStartDistance = snapshot.tripStartDistance
+    destroyAfterNextPark = snapshot.destroyAfterNextPark
+    tripRequestSeq = snapshot.modelSnapshot.get("hybrid.private-vehicle.v1.tripRequestSeq").fold(0L)(_.toLong)
+    driverAttributes = snapshot.modelSnapshot.get("hybrid.private-vehicle.v1.driverAttributes")
+      .fold(DriverAttributes())(JsonUtil.fromJson[DriverAttributes])
+  }
+
+  /** Private vehicles should only re-register on the TM after migration when they are NOT parked.
+    * When parked they are waiting passively for a StartTrip message from Person; re-registering
+    * would fire a spurious spontaneous tick which is immediately discarded by the Parked guard in
+    * actSpontaneous — wasting a TM slot.
+    */
+  override protected def shouldRegisterOnTimeManagerAfterMigration(): Boolean = !isParked
+
+  /** Handle private vehicle specific interaction events.
+    *
+    * Call this from subclass actInteractWith before super.actInteractWith.
+    */
+  protected def handlePrivateVehicleEvent(event: ActorInteractionEvent): Boolean =
+    event.data match {
+      case d: StartTripData =>
+        handleStartTrip(event, d)
+        true
+      case d: ParkVehicleData =>
+        handleParkVehicle(event, d)
+        true
+      case d: TripCompletedData =>
+        logVehicleWarn(s"${getActorEntityId} received TripCompletedData (unexpected)")
+        true
+      case d: PersonScheduleCompleteData =>
+        handlePersonScheduleComplete(d)
+        true
+      case _ =>
+        false
+    }
+
+  /** Handle the owner Person completing its daily schedule.
+    *
+    * Parked vehicles self-destruct immediately to free memory.
+    * Active vehicles (mid-trip) set a flag and self-destruct on the next deactivation.
+    * Guards against duplicate signals and ghost-restart edge cases.
+    */
+  private def handlePersonScheduleComplete(data: PersonScheduleCompleteData): Unit = {
+    // Ghost restart: vehicle was rehydrated with null state after prior passivation.
+    // Passivate immediately to avoid a stale entity lingering in the shard.
+    if (isVehicleStateNull) {
+      logVehicleDebug(s"${getActorEntityId} ghost restart on PersonScheduleComplete — re-passivating")
+      selfDestructVehicle()
+      return
+    }
+    if (destroyAfterNextPark) return // already scheduled
+    if (isParked) {
+      logVehicleDebug(s"${getActorEntityId} owner schedule complete — destructing (Parked)")
+      selfDestructVehicle()
+    } else {
+      logVehicleDebug(s"${getActorEntityId} owner schedule complete — will destruct after current trip")
+      destroyAfterNextPark = true
+    }
+  }
+}

@@ -1,0 +1,623 @@
+package org.interscity.htc
+package model.mobility.support.node
+
+import core.entity.actor.ShardActorId
+import core.entity.event.ActorInteractionEvent
+import model.mobility.entity.event.data.link.{ LinkCapacityFreedData, RegisterLinkCapacityData }
+import model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
+import model.mobility.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
+import model.mobility.entity.event.node.LinkAccessData
+import model.mobility.entity.state.NodeState
+import model.mobility.entity.state.enumeration.LinkCapacityStateEnum.{ Available, Full }
+import model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
+import model.mobility.entity.state.model.{ PendingLinkAccessRequest, SignalState }
+
+import org.htc.protobuf.core.entity.actor.Identify
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+import scala.collection.mutable
+
+/** Regression coverage for docs/KNOWN_GAPS.md's "+161-167s signal-wait overshoot" finding, and
+  * for the congestion-propagation link-capacity feature (docs/CONGESTION_PROPAGATION_DESIGN.md).
+  *
+  * The signal-wait fix removed a Car/Bus/Bicycle/Motorcycle-side retry that resent
+  * `RequestLinkAccessData` every tick a reply hadn't yet arrived — but that fix only holds if its
+  * premise is true: [[NodeEventHandler.handleRequestLinkAccess]] must reply on *every* branch,
+  * with no code path that silently drops the request. These tests lock that invariant in, and
+  * separately document `signalWaitingCounts`' actual (Node-side) increment/reset semantics — a
+  * bare per-request counter with no per-request decrement, only a bulk reset on Green — since
+  * that's precisely what turned repeated requests from a single car into a corrupted,
+  * ever-growing queue position.
+  */
+class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
+
+  private def newState(
+    connections: mutable.Map[Long, Identify] = mutable.Map.empty,
+    approachConnections: mutable.Map[Long, Identify] = mutable.Map.empty,
+    signals: mutable.Map[Long, SignalState] = mutable.Map.empty,
+    signalWaitingCounts: mutable.Map[Long, Int] = mutable.Map.empty,
+    capacityWaitQueue: mutable.Map[Long, mutable.Queue[PendingLinkAccessRequest]] = mutable.Map.empty,
+    availableCapacity: mutable.Map[Long, Int] = mutable.Map.empty,
+    junctionMovements: List[model.mobility.entity.state.model.JunctionMovement] = Nil
+  ): NodeState =
+    NodeState(
+      startTick = 0L,
+      latitude = 0.0,
+      longitude = 0.0,
+      links = List.empty,
+      connections = connections,
+      approachConnections = approachConnections,
+      signals = signals,
+      signalWaitingCounts = signalWaitingCounts,
+      capacityWaitQueue = capacityWaitQueue,
+      availableCapacity = availableCapacity,
+      junctionMovements = junctionMovements
+    )
+
+  private def newHandler(
+    state: NodeState,
+    getLinkDependencyFn: Long => Option[ShardActorId] = _ => None
+  ): (NodeEventHandler, mutable.ArrayBuffer[(Long, String, AnyRef, String)]) = {
+    val sent = mutable.ArrayBuffer.empty[(Long, String, AnyRef, String)]
+    val handler = new NodeEventHandler(
+      getStateFn = () => state,
+      entityIdFn = () => "2",
+      currentTickFn = () => 100L,
+      pendingSignals = mutable.Map.empty,
+      reportFn = (_, _) => (),
+      sendMessageFn = (id, shard, data, evType) => sent += ((id, shard, data, evType)),
+      getLinkDependencyFn = getLinkDependencyFn,
+      logWarnFn = _ => (),
+      logDebugFn = _ => ()
+    )
+    (handler, sent)
+  }
+
+  private def requestEvent(carId: Long = 1L): ActorInteractionEvent =
+    ActorInteractionEvent(
+      tick = 100L,
+      lamportTick = 100L,
+      actorRefId = carId,
+      shardRefId = "mobility.actor.Car",
+      actorPathRef = carId.toString,
+      actorClassType = "mobility.actor.Car",
+      data = "unused",
+      resourceId = "res-1"
+    )
+
+  "handleRequestLinkAccess" should "reply with a Green fallback when there is no connection entry for the link (uncontrolled intersection)" in {
+    val (handler, sent) = newHandler(newState())
+
+    handler.handleRequestLinkAccess(requestEvent(), RequestLinkAccessData(targetLinkId = 999L))
+
+    sent should have size 1
+    val (_, _, data, evType) = sent.head
+    evType shouldBe "ReceiveLinkAccess"
+    data shouldBe LinkAccessData(phase = Green, nextTick = 100L)
+  }
+
+  it should "admit the selected connector before reserving the downstream road" in {
+    val state = newState(availableCapacity = mutable.Map(700L -> 1, 100L -> 1),
+      junctionMovements = List(model.mobility.entity.state.model.JunctionMovement(50, 100, 700)))
+    val (handler, sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 77),
+      RequestLinkAccessData(100, signalAlreadyCleared = true, approachLinkId = 50))
+    sent.head._3 shouldBe LinkAccessData(Green, 100, requestSeq = 77,
+      junctionLink = Some(model.mobility.entity.state.model.PrecomputedRouteItem(700, 2)))
+    state.availableCapacity(700L) shouldBe 0
+    state.availableCapacity(100L) shouldBe 1
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 78),
+      RequestLinkAccessData(100, signalAlreadyCleared = true, approachLinkId = 700))
+    sent.last._3 shouldBe LinkAccessData(Green, 100, requestSeq = 78)
+    state.availableCapacity(100L) shouldBe 0
+  }
+
+  it should "choose a legal destination lane that avoids changes for the following turn" in {
+    import model.mobility.entity.state.model.{JunctionMovement, LaneConnection}
+    val onward = List(LaneConnection(9,2,0))
+    val state = newState(junctionMovements=List(
+      JunctionMovement(5,7,700,Some(0),Some(0),onward),
+      JunctionMovement(5,7,702,Some(0),Some(2),onward)))
+      .copy(routeAwareJunctionLanes=true)
+    val (handler,sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq=77),
+      RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(0),followingLinkId=9))
+    val grant=sent.last._3.asInstanceOf[LinkAccessData]
+    grant.junctionLink.map(_.linkId) shouldBe Some(702)
+    grant.outgoingLane shouldBe Some(2)
+    grant.requestSeq shouldBe 77
+  }
+
+  it should "prefer available connectors among equally suitable lanes and keep the choice through restore" in {
+    import model.mobility.entity.state.model.{JunctionMovement, LaneConnection}
+    val onward=List(LaneConnection(9,0,0),LaneConnection(9,1,0))
+    val initial=newState(availableCapacity=mutable.Map(700L -> 0,701L -> 1),junctionMovements=List(
+      JunctionMovement(5,7,700,Some(0),Some(0),onward),
+      JunctionMovement(5,7,701,Some(0),Some(1),onward))).copy(routeAwareJunctionLanes=true)
+    val state=core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(initial))
+    state.junctionMovements.head.continuationLanes.head.fromLane shouldBe 0
+    val (handler,sent)=newHandler(state)
+    val req=RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(0),followingLinkId=9)
+    handler.handleRequestLinkAccess(requestEvent(1),req)
+    sent.last._3.asInstanceOf[LinkAccessData].outgoingLane shouldBe Some(1)
+    handler.handleRequestLinkAccess(requestEvent(2).copy(seq=88),req)
+    sent.last._3.asInstanceOf[LinkAccessData].capacityState shouldBe Full
+    val restored=core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(state))
+    val (resumed,grants)=newHandler(restored)
+    resumed.handleLinkCapacityFreed(LinkCapacityFreedData(700,1))
+    val grant=grants.last._3.asInstanceOf[LinkAccessData]
+    grant.outgoingLane shouldBe Some(0)
+    grant.requestSeq shouldBe 88
+  }
+
+  it should "keep destination selection deterministic without route lookahead and exclude other approach lanes" in {
+    import model.mobility.entity.state.model.JunctionMovement
+    val options=List(JunctionMovement(5,7,702,Some(0),Some(2)),
+      JunctionMovement(5,7,700,Some(0),Some(0)),JunctionMovement(5,7,701,Some(1),Some(1)))
+    for (order <- List(options,options.reverse)) {
+      val state=newState(junctionMovements=order).copy(routeAwareJunctionLanes=true)
+      val (handler,sent)=newHandler(state)
+      handler.handleRequestLinkAccess(requestEvent(),RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(0)))
+      sent.last._3.asInstanceOf[LinkAccessData].outgoingLane shouldBe Some(0)
+    }
+  }
+
+  it should "restore a connector wait and grant its original road request after space is freed" in {
+    val state = newState(availableCapacity = mutable.Map(700L -> 0, 100L -> 1),
+      junctionMovements = List(model.mobility.entity.state.model.JunctionMovement(50, 100, 700)))
+    val (handler, sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 77),
+      RequestLinkAccessData(100, signalAlreadyCleared = true, approachLinkId = 50))
+    sent.head._3 shouldBe LinkAccessData(Green, 100, capacityState = Full, requestSeq = 77)
+    state.capacityWaitQueue(700L).head.targetLinkId shouldBe 100L
+    val restored = core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(state))
+    val (afterRestore, granted) = newHandler(restored)
+    afterRestore.handleLinkCapacityFreed(LinkCapacityFreedData(700, 1))
+    granted.head._3 shouldBe LinkAccessData(Green, 100, requestSeq = 77,
+      junctionLink = Some(model.mobility.entity.state.model.PrecomputedRouteItem(700, 2)))
+    restored.capacityWaitQueue shouldBe empty
+    restored.availableCapacity(100L) shouldBe 1
+  }
+
+  it should "cancel connector waits using the originally requested downstream road" in {
+    val state = newState(availableCapacity = mutable.Map(700L -> 0),
+      junctionMovements = List(model.mobility.entity.state.model.JunctionMovement(50, 100, 700)))
+    val (handler, _) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent(), RequestLinkAccessData(100, approachLinkId = 50))
+    state.capacityWaitQueue.keySet shouldBe Set(700L)
+    handler.handleCancelLinkAccessRequest(requestEvent(), CancelLinkAccessRequestData(100))
+    state.capacityWaitQueue shouldBe empty
+  }
+
+  it should "preserve MICRO crossing clearance when the node's phase changed after the physical crossing" in {
+    val state = newState(connections = mutable.Map(100L -> Identify(id = 500L)),
+      signals = mutable.Map(500L -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L)),
+      availableCapacity = mutable.Map(100L -> 1))
+    val (handler, sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 77L), RequestLinkAccessData(100L, signalAlreadyCleared = true))
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, requestSeq = 77L)
+    state.availableCapacity(100L) shouldBe 0
+    state.signalWaitingCounts shouldBe empty
+  }
+
+  it should "retain crossing clearance and reply identity through a checkpointed capacity wait" in {
+    val state = newState(connections = mutable.Map(100L -> Identify(id = 500L)),
+      signals = mutable.Map(500L -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L)),
+      availableCapacity = mutable.Map(100L -> 0))
+    val (handler, sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent().copy(seq = 77L), RequestLinkAccessData(100L, signalAlreadyCleared = true))
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, capacityState = Full, requestSeq = 77L)
+    val restored = core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(state))
+    restored.capacityWaitQueue(100L).head.signalAlreadyCleared shouldBe true
+    val (afterRestore, granted) = newHandler(restored)
+    afterRestore.handleLinkCapacityFreed(LinkCapacityFreedData(100L, 1))
+    granted.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, requestSeq = 77L)
+    restored.capacityWaitQueue shouldBe empty
+    restored.availableCapacity(100L) shouldBe 0
+  }
+
+  it should "reply with a Green fallback when the connection exists but no signal is registered for it" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val (handler, sent) = newHandler(newState(connections = connections))
+
+    handler.handleRequestLinkAccess(requestEvent(), RequestLinkAccessData(targetLinkId = 100L))
+
+    sent should have size 1
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L)
+  }
+
+  it should "reply with a Green fallback and still send a response when state is not yet initialized" in {
+    val sent = mutable.ArrayBuffer.empty[(Long, String, AnyRef, String)]
+    val handler = new NodeEventHandler(
+      getStateFn = () => null,
+      entityIdFn = () => "htcaid:node;n_test",
+      currentTickFn = () => 100L,
+      pendingSignals = mutable.Map.empty,
+      reportFn = (_, _) => (),
+      sendMessageFn = (id, shard, data, evType) => sent += ((id, shard, data, evType)),
+      getLinkDependencyFn = _ => None,
+      logWarnFn = _ => (),
+      logDebugFn = _ => ()
+    )
+
+    handler.handleRequestLinkAccess(requestEvent(), RequestLinkAccessData(targetLinkId = 100L))
+
+    sent should have size 1
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L)
+  }
+
+  it should "reply Red with queuePosition 0 for the first request while the signal is Red, incrementing signalWaitingCounts" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L))
+    val waitingCounts = mutable.Map.empty[Long, Int]
+    val (handler, sent) = newHandler(newState(connections = connections, signals = signals, signalWaitingCounts = waitingCounts))
+
+    handler.handleRequestLinkAccess(requestEvent(), RequestLinkAccessData(targetLinkId = 100L))
+
+    sent should have size 1
+    sent.head._3 shouldBe LinkAccessData(phase = Red, nextTick = 130L, queuePosition = 0)
+    waitingCounts(100L) shouldBe 1
+  }
+
+  it should "reply Green/Available with queuePosition 0 and clear signalWaitingCounts when the signal is Green and capacity is unknown (permissive default)" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 30L, nextTick = 130L))
+    val waitingCounts = mutable.Map(100L -> 3)
+    val (handler, sent) = newHandler(newState(connections = connections, signals = signals, signalWaitingCounts = waitingCounts))
+
+    handler.handleRequestLinkAccess(requestEvent(), RequestLinkAccessData(targetLinkId = 100L))
+
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L)
+    waitingCounts.get(100L) shouldBe None
+  }
+
+  it should "document that signalWaitingCounts has no per-request decrement: N distinct RequestLinkAccessData for the same Red link inflate queuePosition to N-1, N in total" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L))
+    val waitingCounts = mutable.Map.empty[Long, Int]
+    val (handler, sent) = newHandler(newState(connections = connections, signals = signals, signalWaitingCounts = waitingCounts))
+
+    handler.handleRequestLinkAccess(requestEvent(3L), RequestLinkAccessData(targetLinkId = 100L))
+    handler.handleRequestLinkAccess(requestEvent(3L), RequestLinkAccessData(targetLinkId = 100L))
+    handler.handleRequestLinkAccess(requestEvent(3L), RequestLinkAccessData(targetLinkId = 100L))
+
+    sent.map(_._3.asInstanceOf[LinkAccessData].queuePosition) shouldBe Seq(0, 1, 2)
+    waitingCounts(100L) shouldBe 3
+  }
+
+  // ── Capacity: fresh requests ─────────────────────────────────────────────────────────────
+
+  it should "grant Green/Available and decrement availableCapacity when capacity is known and positive" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
+    val availableCapacity = mutable.Map(100L -> 2)
+    val (handler, sent) = newHandler(newState(connections = connections, signals = signals, availableCapacity = availableCapacity))
+
+    handler.handleRequestLinkAccess(requestEvent(1L), RequestLinkAccessData(targetLinkId = 100L))
+
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L)
+    availableCapacity(100L) shouldBe 1
+  }
+
+  it should "buffer the requester FIFO and reply Green/Full when availableCapacity is exhausted" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
+    val availableCapacity = mutable.Map(100L -> 0)
+    val capacityWaitQueue = mutable.Map.empty[Long, mutable.Queue[PendingLinkAccessRequest]]
+    val (handler, sent) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    handler.handleRequestLinkAccess(requestEvent(1L), RequestLinkAccessData(targetLinkId = 100L))
+
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, capacityState = Full)
+    capacityWaitQueue(100L) shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "mobility.actor.Car", requestedTick = 100L))
+    availableCapacity(100L) shouldBe 0
+  }
+
+  it should "queue vehicles FIFO by arrival order regardless of which approach link/shard they requested from -- fairness across competing movements comes for free from a single per-destination-link buffer, not from any per-origin logic" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
+    val availableCapacity = mutable.Map(100L -> 0)
+    val capacityWaitQueue = mutable.Map.empty[Long, mutable.Queue[PendingLinkAccessRequest]]
+    val (handler, sent) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    def requestFrom(carId: Long, shardRefId: String): ActorInteractionEvent =
+      requestEvent(carId).copy(shardRefId = shardRefId, actorClassType = shardRefId)
+
+
+    handler.handleRequestLinkAccess(requestFrom(4L, "mobility.actor.Car"), RequestLinkAccessData(targetLinkId = 100L))
+    handler.handleRequestLinkAccess(requestFrom(5L, "mobility.actor.Bus"), RequestLinkAccessData(targetLinkId = 100L))
+
+    capacityWaitQueue(100L) shouldBe mutable.Queue(
+      PendingLinkAccessRequest(actorRefId = 4L, shardRefId = "mobility.actor.Car", requestedTick = 100L),
+      PendingLinkAccessRequest(actorRefId = 5L, shardRefId = "mobility.actor.Bus", requestedTick = 100L)
+    )
+
+    handler.handleLinkCapacityFreed(LinkCapacityFreedData(linkId = 100L, freedCount = 1))
+
+    sent.last shouldBe ((4L, "mobility.actor.Car", LinkAccessData(phase = Green, nextTick = 100L, capacityState = Available), "ReceiveLinkAccess"))
+    capacityWaitQueue(100L) shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = 5L, shardRefId = "mobility.actor.Bus", requestedTick = 100L))
+  }
+
+  // ── Capacity: cancellation (destroyed while buffered) ────────────────────────────────────
+
+  "handleCancelLinkAccessRequest" should "remove the matching entry from capacityWaitQueue, and the link entirely once it's the last one" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
+    val availableCapacity = mutable.Map(100L -> 0)
+    val capacityWaitQueue = mutable.Map(
+      100L -> mutable.Queue(
+        PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "mobility.actor.Car"),
+        PendingLinkAccessRequest(actorRefId = 2L, shardRefId = "mobility.actor.Car")
+      )
+    )
+    val (handler, _) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    handler.handleCancelLinkAccessRequest(requestEvent(1L), CancelLinkAccessRequestData(targetLinkId = 100L))
+    capacityWaitQueue(100L) shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = 2L, shardRefId = "mobility.actor.Car"))
+
+    handler.handleCancelLinkAccessRequest(requestEvent(2L), CancelLinkAccessRequestData(targetLinkId = 100L))
+    capacityWaitQueue.get(100L) shouldBe None
+  }
+
+  it should "be a no-op when there is no matching entry (already dequeued, or never existed) or when state is not yet initialized" in {
+    val capacityWaitQueue = mutable.Map(100L -> mutable.Queue(PendingLinkAccessRequest(actorRefId = 2L, shardRefId = "mobility.actor.Car")))
+    val (handler, _) = newHandler(newState(capacityWaitQueue = capacityWaitQueue))
+
+    handler.handleCancelLinkAccessRequest(requestEvent(1L), CancelLinkAccessRequestData(targetLinkId = 100L))
+    capacityWaitQueue(100L) should have size 1
+
+    handler.handleCancelLinkAccessRequest(requestEvent(1L), CancelLinkAccessRequestData(targetLinkId = 999L))
+    capacityWaitQueue.get(999L) shouldBe None
+
+    noException should be thrownBy {
+      val nullStateHandler = new NodeEventHandler(
+        getStateFn = () => null,
+        entityIdFn = () => "htcaid:node;n_test",
+        currentTickFn = () => 100L,
+        pendingSignals = mutable.Map.empty,
+        reportFn = (_, _) => (),
+        sendMessageFn = (_, _, _, _) => (),
+        getLinkDependencyFn = _ => None,
+        logWarnFn = _ => (),
+        logDebugFn = _ => ()
+      )
+      nullStateHandler.handleCancelLinkAccessRequest(requestEvent(1L), CancelLinkAccessRequestData(targetLinkId = 100L))
+    }
+  }
+
+  it should "never buffer or check capacity for a Red reply" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L))
+    val availableCapacity = mutable.Map(100L -> 0)
+    val capacityWaitQueue = mutable.Map.empty[Long, mutable.Queue[PendingLinkAccessRequest]]
+    val (handler, sent) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    handler.handleRequestLinkAccess(requestEvent(1L), RequestLinkAccessData(targetLinkId = 100L))
+
+    sent.head._3 shouldBe LinkAccessData(phase = Red, nextTick = 130L, queuePosition = 0)
+    capacityWaitQueue.get(100L) shouldBe None
+    availableCapacity(100L) shouldBe 0
+  }
+
+  // ── Capacity: registration ───────────────────────────────────────────────────────────────
+
+  "handleRegisterLinkCapacity" should "seed availableCapacity for the link, verified via a subsequent request" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
+    val availableCapacity = mutable.Map.empty[Long, Int]
+    val (handler, sent) = newHandler(newState(connections = connections, signals = signals, availableCapacity = availableCapacity))
+
+    handler.handleRegisterLinkCapacity(RegisterLinkCapacityData(linkId = 100L, capacity = 1))
+    availableCapacity(100L) shouldBe 1
+
+    handler.handleRequestLinkAccess(requestEvent(1L), RequestLinkAccessData(targetLinkId = 100L))
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L)
+    availableCapacity(100L) shouldBe 0
+
+    handler.handleRequestLinkAccess(requestEvent(2L), RequestLinkAccessData(targetLinkId = 100L))
+    sent(1)._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, capacityState = Full)
+  }
+
+  // ── Capacity: freed-slot notification and draining ───────────────────────────────────────
+
+  "handleLinkCapacityFreed" should "increment availableCapacity and grant buffered vehicles FIFO while the signal is Green" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
+    val availableCapacity = mutable.Map(100L -> 0)
+    val capacityWaitQueue = mutable.Map(
+      100L -> mutable.Queue(
+        PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "mobility.actor.Car"),
+        PendingLinkAccessRequest(actorRefId = 2L, shardRefId = "mobility.actor.Car")
+      )
+    )
+    val (handler, sent) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    handler.handleLinkCapacityFreed(LinkCapacityFreedData(linkId = 100L, freedCount = 1))
+
+    sent should have size 1
+    sent.head shouldBe ((1L, "mobility.actor.Car", LinkAccessData(phase = Green, nextTick = 100L, capacityState = Available), "ReceiveLinkAccess"))
+    capacityWaitQueue(100L) shouldBe mutable.Queue(PendingLinkAccessRequest(actorRefId = 2L, shardRefId = "mobility.actor.Car"))
+    availableCapacity(100L) shouldBe 0
+  }
+
+  it should "not drain the buffer while the relevant signal is currently Red (checked against Node's own local state, no message)" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Red, remainingTime = 30L, nextTick = 130L))
+    val availableCapacity = mutable.Map(100L -> 0)
+    val capacityWaitQueue = mutable.Map(
+      100L -> mutable.Queue(PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "mobility.actor.Car", requestedTick = 100L))
+    )
+    val (handler, sent) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    handler.handleLinkCapacityFreed(LinkCapacityFreedData(linkId = 100L, freedCount = 1))
+
+    sent shouldBe empty
+    availableCapacity(100L) shouldBe 1 // still incremented, just not drained yet
+    capacityWaitQueue(100L) should have size 1
+  }
+
+  it should "drain the buffer once the relevant signal turns Green (second drain trigger, via handleReceiveSignalChangeStatus)" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map.empty[Long, SignalState]
+    val availableCapacity = mutable.Map(100L -> 1)
+    val capacityWaitQueue = mutable.Map(
+      100L -> mutable.Queue(PendingLinkAccessRequest(actorRefId = 1L, shardRefId = "mobility.actor.Car", requestedTick = 100L))
+    )
+    val (handler, sent) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    handler.handleReceiveSignalChangeStatus(
+      requestEvent(),
+      TrafficSignalChangeStatusData(
+        signalState = SignalState(state = Green, remainingTime = 0L, nextTick = 160L),
+        nextTick = 160L,
+        phaseOrigin = 500L
+      )
+    )
+
+    sent.exists(_._3 == LinkAccessData(phase = Green, nextTick = 100L, capacityState = Available)) shouldBe true
+    capacityWaitQueue.get(100L) shouldBe None
+  }
+
+  "handleReceiveSignalChangeStatus" should "drain signalWaitingCounts for every link keyed to the phase's origin when it turns Green" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L), 101L -> Identify(id = 500L))
+    val signals = mutable.Map.empty[Long, SignalState]
+    val waitingCounts = mutable.Map(100L -> 5, 101L -> 2, 102L -> 9)
+    val (handler, _) = newHandler(newState(connections = connections, signals = signals, signalWaitingCounts = waitingCounts))
+
+    handler.handleReceiveSignalChangeStatus(
+      requestEvent(),
+      TrafficSignalChangeStatusData(
+        signalState = SignalState(state = Green, remainingTime = 0L, nextTick = 160L),
+        nextTick = 160L,
+        phaseOrigin = 500L
+      )
+    )
+
+    waitingCounts.get(100L) shouldBe None
+    waitingCounts.get(101L) shouldBe None
+    waitingCounts(102L) shouldBe 9
+  }
+
+  it should "not touch signalWaitingCounts when the phase turns Red" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map.empty[Long, SignalState]
+    val waitingCounts = mutable.Map(100L -> 4)
+    val (handler, _) = newHandler(newState(connections = connections, signals = signals, signalWaitingCounts = waitingCounts))
+
+    handler.handleReceiveSignalChangeStatus(
+      requestEvent(),
+      TrafficSignalChangeStatusData(
+        signalState = SignalState(state = Red, remainingTime = 30L, nextTick = 190L),
+        nextTick = 190L,
+        phaseOrigin = 500L
+      )
+    )
+
+    waitingCounts(100L) shouldBe 4
+  }
+
+  it should "notify the APPROACH link (from approachConnections), not the outgoing link (from connections), of a phase change" in {
+    val connections = mutable.Map(103L -> Identify(id = 500L)) // outgoing edge
+    val approachConnections = mutable.Map(100L -> Identify(id = 500L)) // approach edge
+    val signals = mutable.Map.empty[Long, SignalState]
+    val dependencies = mutable.Map(
+      100L -> ShardActorId(entityId = 100L, classType = "mobility.actor.Link", shardBucket = "res-ab"),
+      103L -> ShardActorId(entityId = 103L, classType = "mobility.actor.Link", shardBucket = "res-bc")
+    )
+    val (handler, sent) = newHandler(
+      newState(connections = connections, approachConnections = approachConnections, signals = signals),
+      getLinkDependencyFn = dependencies.get
+    )
+
+    handler.handleReceiveSignalChangeStatus(
+      requestEvent(),
+      TrafficSignalChangeStatusData(
+        signalState = SignalState(state = Red, remainingTime = 30L, nextTick = 190L),
+        nextTick = 190L,
+        phaseOrigin = 500L
+      )
+    )
+
+    val notifiedEntityIds = sent.filter(_._4 == "LinkSignalState").map(_._1)
+    notifiedEntityIds shouldBe Seq(100L)
+    notifiedEntityIds should not contain 103L
+  }
+
+  it should "still drain signalWaitingCounts/capacityWaitQueue by the OUTGOING link (connections) even though notification uses approachConnections" in {
+    val connections = mutable.Map(103L -> Identify(id = 500L))
+    val approachConnections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map.empty[Long, SignalState]
+    val waitingCounts = mutable.Map(103L -> 5)
+    val (handler, _) = newHandler(
+      newState(connections = connections, approachConnections = approachConnections, signals = signals, signalWaitingCounts = waitingCounts)
+    )
+
+    handler.handleReceiveSignalChangeStatus(
+      requestEvent(),
+      TrafficSignalChangeStatusData(
+        signalState = SignalState(state = Green, remainingTime = 0L, nextTick = 160L),
+        nextTick = 160L,
+        phaseOrigin = 500L
+      )
+    )
+
+    waitingCounts.get(103L) shouldBe None
+  }
+  "Native movement control" should "grant only the green lane and preserve connector destination lanes through a capacity checkpoint" in {
+    import model.mobility.entity.state.model.{JunctionMovement,MovementSignalBinding}
+    val state = newState(signals=mutable.Map(91L -> SignalState(Red,2,102),92L -> SignalState(Green,2,102)),
+      availableCapacity=mutable.Map(701L -> 0),
+      junctionMovements=List(JunctionMovement(5,7,700,Some(0),Some(0)),JunctionMovement(5,7,701,Some(1),Some(2))))
+      .copy(movementSignals=List(MovementSignalBinding(5,7,91,List(0)),MovementSignalBinding(5,7,92,List(1))))
+    val (handler,sent) = newHandler(state)
+    handler.handleRequestLinkAccess(requestEvent(),RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(0)))
+    sent.last._3.asInstanceOf[LinkAccessData].phase shouldBe Red
+    handler.handleRequestLinkAccess(requestEvent(2),RequestLinkAccessData(7,approachLinkId=5,approachLane=Some(1)))
+    sent.last._3.asInstanceOf[LinkAccessData].capacityState shouldBe Full
+    val restored = core.util.JsonUtil.fromJson[NodeState](core.util.JsonUtil.toJson(state))
+    restored.movementSignals.head.laneIds.head shouldBe 0
+    restored.capacityWaitQueue(701).head.approachLane shouldBe Some(1)
+    val (resumed,grants) = newHandler(restored)
+    resumed.handleLinkCapacityFreed(LinkCapacityFreedData(701,1))
+    val grant = grants.last._3.asInstanceOf[LinkAccessData]
+    grant.junctionLink.map(_.linkId) shouldBe Some(701)
+    grant.outgoingLane shouldBe Some(2)
+  }
+
+  it should "apply a same-tick native batch before draining and publish one update per approach road" in {
+    import model.mobility.entity.state.model.MovementSignalBinding
+    import model.mobility.entity.event.data.signal.SignalAspectUpdate
+    val state=newState(signals=mutable.Map(91L -> SignalState(Red,1,100),92L -> SignalState(Green,1,100)),
+      availableCapacity=mutable.Map(7L -> 1),
+      capacityWaitQueue=mutable.Map(7L -> mutable.Queue(PendingLinkAccessRequest(4,"cars",approachLinkId=5,approachLane=Some(1)))))
+      .copy(movementSignals=List(MovementSignalBinding(5,7,91,List(0)),MovementSignalBinding(5,7,92,List(1))))
+    val (handler,sent)=newHandler(state,id => Some(ShardActorId(entityId=id,classType="mobility.actor.Link")))
+    handler.handleReceiveSignalChangeStatus(requestEvent(),TrafficSignalChangeStatusData(SignalState(Green,2,102),102,91,
+      List(SignalAspectUpdate(92,SignalState(Red,2,102),102))))
+    state.signals(91).state shouldBe Green
+    state.signals(92).state shouldBe Red
+    state.capacityWaitQueue(7).size shouldBe 1
+    sent.size shouldBe 1
+    val publication=sent.head._3.asInstanceOf[model.mobility.entity.event.data.link.LinkSignalStateData]
+    publication.targetLinkId shouldBe Some(7)
+    publication.laneIds shouldBe List(0)
+    publication.updates.map(_.laneIds) shouldBe List(List(1))
+    publication.updates.head.phase shouldBe Red
+  }
+
+}

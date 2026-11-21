@@ -1,0 +1,85 @@
+package org.interscity.htc
+package model.mobility.entity.state
+
+import core.types.Tick
+
+import org.interscity.htc.model.mobility.entity.state.enumeration.{ ActorTypeEnum, MovableStatusEnum }
+import org.interscity.htc.model.mobility.entity.state.enumeration.SimulationModeEnum
+
+import scala.collection.mutable
+
+/** Hybrid bicycle state supporting both MESO and MICRO simulation modes.
+  *
+  * Bicycles are vulnerable road users with unique characteristics:
+  *   - Lower speeds (typically 15-25 km/h)
+  *   - Prefer bike lanes when available
+  *   - Can share lanes with cars if necessary
+  *   - In MICRO mode: detailed positioning, safety gaps, lane preferences
+  *
+  * @param startTick
+  *   Simulation start tick
+  * @param origin
+  *   Origin node ID
+  * @param destination
+  *   Destination node ID
+  * @param distance
+  *   Total distance traveled
+  * @param actorType
+  *   Actor type
+  * @param size
+  *   Vehicle size
+  * @param currentSimulationMode
+  *   Current mode (MESO or MICRO)
+  * @param microState
+  *   Optional microscopic bicycle state
+  */
+case class BicycleState(
+  override val startTick: Tick,
+  override val origin: Long,
+  override val destination: Long,
+  var distance: Double = 0,
+  override val actorType: ActorTypeEnum,
+  override val size: Double,
+  var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
+  var microState: Option[MicroBicycleState] = None,
+  var mesoRoundingCredit: Double = 0.0,
+  var mesoLastExitTick: Long = -1L
+) extends MovableState(
+      startTick = startTick,
+      origin = origin,
+      destination = destination,
+      actorType = actorType,
+      size = size
+    ) with org.interscity.htc.model.mobility.support.car.MesoTimingState {
+
+  def bestRoute: Option[mutable.Queue[(Long, Long)]] = movableBestRoute
+  def bestRoute_=(v: Option[mutable.Queue[(Long, Long)]]): Unit = movableBestRoute = v
+
+  def bestCost: Double = movableBestCost
+  def bestCost_=(v: Double): Unit = movableBestCost = v
+
+  def currentNode: Long = movableCurrentNode
+  def currentNode_=(v: Long): Unit = movableCurrentNode = v
+
+  def currentPath: Option[(Long, Long)] = movableCurrentPath
+  def currentPath_=(v: Option[(Long, Long)]): Unit = movableCurrentPath = v
+
+  def status: MovableStatusEnum = movableStatus
+  def status_=(v: MovableStatusEnum): Unit = movableStatus = v
+
+  def isMicroMode: Boolean = currentSimulationMode == SimulationModeEnum.MICRO
+  def isMesoMode: Boolean = currentSimulationMode == SimulationModeEnum.MESO
+
+  def activateMicroMode(initialMicroState: MicroBicycleState): Unit = {
+    currentSimulationMode = SimulationModeEnum.MICRO
+    microState = Some(initialMicroState)
+  }
+
+  def deactivateMicroMode(): Unit = {
+    currentSimulationMode = SimulationModeEnum.MESO
+    microState = None
+  }
+
+  def updateMicroState(newMicroState: MicroBicycleState): Unit =
+    if (isMicroMode) microState = Some(newMicroState)
+}
