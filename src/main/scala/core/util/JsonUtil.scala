@@ -23,12 +23,7 @@ object JsonUtil {
     override def deserializeKey(key: String, ctxt: DeserializationContext): Object = {
       val parts = key.split(":")
       if (parts.length == 2) {
-        try
-          org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair(parts(0).toLong, parts(1).toLong)
-        catch {
-          case _: Exception =>
-            org.interscity.htc.model.mobility.entity.state.model.SubRoutePair(parts(0), parts(1))
-        }
+        org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair(parts(0).toLong, parts(1).toLong)
       } else {
         throw new IllegalArgumentException(s"Invalid SubRoutePair key format: $key")
       }
@@ -44,10 +39,6 @@ object JsonUtil {
   private val subRoutePairModule = new SimpleModule()
   subRoutePairModule.addKeyDeserializer(
     classOf[org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair],
-    new SubRoutePairKeyDeserializer
-  )
-  subRoutePairModule.addKeyDeserializer(
-    classOf[org.interscity.htc.model.mobility.entity.state.model.SubRoutePair],
     new SubRoutePairKeyDeserializer
   )
 

@@ -1,9 +1,0 @@
-{
-  "status": "EXPOSED_DATA_DIAGNOSTIC_NOT_A_NEW_HELDOUT_STUDY",
-  "sampling": "Every measured through-green and each through lane; every absence/nonstopped case retained",
-  "candidate": "Nearest observed front at green-1 within [photo station-15 m, photo station+0.762 m]",
-  "stopped": "Past-1-s causal position slope <=0.2 m/s; no missing source frame",
-  "release": "Five consecutive causal speed samples above each fixed threshold 0.1/0.5/1.0 m/s within 20 s",
-  "code_sha256": "9844958aace4713fd3e4ef9d56f339c475e0582ace5173ad32354729d249842c",
-  "approach_audit_sha256": "6df3fe40ec27c909cf261eb32e655d790229f69d020bae54e95d9cd477293ad7"
-}

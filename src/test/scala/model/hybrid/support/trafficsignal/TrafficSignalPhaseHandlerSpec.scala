@@ -7,7 +7,6 @@ import model.hybrid.entity.state.TrafficSignalState
 import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
 import model.hybrid.entity.state.model.{ Phase, SignalState }
-import model.mobility.entity.state.enumeration.{ TrafficSignalPhaseStateEnum => PhaseDefStateEnum }
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -43,7 +42,7 @@ class TrafficSignalPhaseHandlerSpec extends AnyFlatSpec with Matchers {
       cycleDuration = cycleDuration,
       offset = 0L,
       nodes = List(nodeId),
-      phases = List(Phase(origin = phaseOrigin, greenStart = greenStart, greenDuration = greenDuration, state = PhaseDefStateEnum.Green)),
+      phases = List(Phase(origin = phaseOrigin, greenStart = greenStart, greenDuration = greenDuration, state = TrafficSignalPhaseStateEnum.Green)),
       signalStates = mutable.Map(phaseOrigin -> SignalState(state = Red, remainingTime = greenDuration, nextTick = 0L))
     )
 
@@ -124,8 +123,8 @@ class TrafficSignalPhaseHandlerSpec extends AnyFlatSpec with Matchers {
     h.state = h.state.copy(
       cycleDuration = 20L,
       phases = List(
-        Phase(origin = phaseOrigin, greenStart = 0L, greenDuration = 5L, state = PhaseDefStateEnum.Red),
-        Phase(origin = second, greenStart = 10L, greenDuration = 5L, state = PhaseDefStateEnum.Red)
+        Phase(origin = phaseOrigin, greenStart = 0L, greenDuration = 5L, state = TrafficSignalPhaseStateEnum.Red),
+        Phase(origin = second, greenStart = 10L, greenDuration = 5L, state = TrafficSignalPhaseStateEnum.Red)
       ),
       signalStates = mutable.Map(
         phaseOrigin -> SignalState(state = Red, remainingTime = 0L, nextTick = 0L),

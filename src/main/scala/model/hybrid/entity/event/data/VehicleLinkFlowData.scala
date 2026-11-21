@@ -1,5 +1,5 @@
 package org.interscity.htc
-package model.mobility.entity.event.data
+package model.hybrid.entity.event.data
 
 import org.interscity.htc.core.entity.event.data.BaseEventData
 
