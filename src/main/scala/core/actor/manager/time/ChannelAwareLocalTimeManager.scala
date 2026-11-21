@@ -2,6 +2,7 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.entity.event.{FinishEvent, SpontaneousEvent}
+import core.entity.event.control.execution.ReplaceScheduleEvent
 import core.metrics.core.SchedulingMetrics
 import core.runtime.EventOrder
 import core.runtime.accounting.*
@@ -510,6 +511,20 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       value.copy(id = source.handle, classType = source.id.model)
     }
     control match {
+      case e: ReplaceScheduleEvent =>
+        SchedulingMetrics.delegated.inc()
+        val target = processes.getOrElse(LogicalProcessId(e.identify.classType, e.identify.id),
+          throw new IllegalArgumentException(
+            s"delegated schedule for ${e.identify.classType}/${e.identify.id}: target is not registered on this manager"))
+        require(e.completedGeneration < 0L && !e.awaitingReply && e.next.nonEmpty,
+          "a delegated schedule only sets a wake, it never completes the owner's dispatch")
+        val order = e.next.get
+        // Through scheduleEvent, like the owner's own schedule: a node-local manager keeps additive wakes of its
+        // own and ignores the revisioned schedule that replaceSchedule writes.
+        scheduleEvent(ScheduleEvent(tick = order.tick,
+          identify = Some(target.identity.copy(id = target.handle, classType = target.id.model)),
+          revision = e.revision,
+          order = Some(org.htc.protobuf.core.entity.event.communication.LogicalEventOrder(order.tick, order.microstep, order.key))))
       case e: FinishEvent =>
         SchedulingMetrics.finish.inc()
         finishEvent(e.copy(identify = identity(e.identify)))

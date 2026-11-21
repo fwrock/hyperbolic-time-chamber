@@ -12,7 +12,7 @@ import core.actor.manager.loadbalance.migration.{ConservativeMigrationCheckpoint
 import core.api.SimulatorSettingsRegistry
 import core.entity.event.{ActorInteractionEvent, FinishEvent, SpontaneousEvent}
 import core.entity.event.control.migration.{MigrationContextEvent, MigrationPreparationFailedEvent, MigrationRestoredAckEvent, MigrationRestoreAlreadyAcceptedEvent, MigrationRestoreFailedEvent, NoPendingMigrationEvent, QueryMigrationEvent}
-import core.runtime.{EventOrder, OrderedInputQueue}
+import core.runtime.{DelegatedWake, EventOrder, OrderedInputQueue}
 import core.runtime.accounting.*
 import core.runtime.distributed.OptimisticProcessIdle
 import core.runtime.conservative.*
@@ -2156,6 +2156,37 @@ abstract class SimulationBaseActor[T <: BaseState](
       revision = nextScheduleRevision(),
       order = pendingSelf.map(o => org.htc.protobuf.core.entity.event.communication.LogicalEventOrder(o.tick, o.microstep, o.key))
     ))
+  }
+
+  /** Whether another actor may schedule this one. Only the direct conservative runtime applies a
+    * delegate's schedule, and only when the delegate is registered on the same time manager.
+    */
+  protected final def supportsDelegatedScheduling: Boolean = directConservative && usesConservativeRuntime
+
+  /** Reserves the revision a delegate will use to wake this actor. Call it right before the request that
+    * hands the wake over, and finish the current callback with [[finishAwaitingDelegate]]: the
+    * finish takes `scheduleRevision + 1`, so the reserved `+ 2` always wins at the time manager.
+    */
+  protected final def delegateWake(): DelegatedWake =
+    DelegatedWake(getClass.getName, getEntityId.toLong, scheduleRevision + 2)
+
+  /** Ends the callback without a wake of its own: the delegate sets it. The reply this actor waits for
+    * stays registered, so the manager keeps treating it as blocked until the schedule or the reply lands.
+    */
+  protected final def finishAwaitingDelegate(wake: DelegatedWake): Unit = {
+    onFinishSpontaneous(None)
+    scheduleRevision = math.max(scheduleRevision, wake.revision)
+  }
+
+  /** Wakes the actor that handed over `wake` at `tick`, which must lie strictly after the current tick. */
+  protected final def scheduleDelegated(wake: DelegatedWake, tick: Tick): Unit = {
+    require(supportsDelegatedScheduling, "delegated scheduling needs the direct conservative runtime")
+    require(tick > currentTick, s"a delegated wake must lie after the current tick: $tick <= $currentTick")
+    if (isReplaying) return
+    val order = EventOrder(tick, 0L, s"delegated:${wake.id}:${wake.revision}")
+    sendTimeManager(currentTimeManager, ReplaceScheduleEvent(
+      identify = Identify(id = wake.id, classType = wake.model),
+      revision = wake.revision, next = Some(order), completedGeneration = -1L, awaitingReply = false))
   }
 
   /** Only reporting is allowed: the globally closed final cut forbids new model effects. */

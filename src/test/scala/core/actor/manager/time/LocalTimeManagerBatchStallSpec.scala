@@ -106,6 +106,42 @@ class LocalTimeManagerBatchStallSpec extends AnyFlatSpec with Matchers with Befo
     }
   }
 
+  private def delegatedWakeRegression(delegateFirst: Boolean): Unit = {
+    val parent = TestProbe()
+    val actor = TestProbe()
+    val ltm = newManager(parent)
+    val identity = identityFor(92L, actor)
+    ltm.underlyingActor.testRegister(identity, 0L)
+    parent.receiveWhile(idle = 100.millis) { case _ => () }
+    ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(0L)
+    val dispatch = actor.expectMsgType[SpontaneousEvent]
+    ltm.underlyingActor.testRunningEventIds should contain(92L)
+
+    val ownerFinish = FinishEvent(actor.ref, identity, 0L, timeManager = ltm, generation = dispatch.generation,
+      scheduleRevision = 2L, awaitingReply = true)
+    val wake = core.runtime.EventOrder(5L, 0L, "delegated:92:3")
+    val delegated = core.entity.event.control.execution.ReplaceScheduleEvent(identity, 3L, Some(wake), -1L, false)
+    if (delegateFirst) { ltm.underlyingActor.testReplace(delegated); ltm.underlyingActor.testFinish(ownerFinish) }
+    else { ltm.underlyingActor.testFinish(ownerFinish); ltm.underlyingActor.testReplace(delegated) }
+
+    ltm.underlyingActor.testRunningEventIds should not contain 92L
+    ltm.underlyingActor.testScheduledTicks should contain(5L)
+    parent.fishForMessage(1.second) {
+      case e: org.htc.protobuf.core.entity.event.control.execution.LocalTimeReportEvent => e.hasScheduled && e.tick == 5L
+      case _ => false
+    }
+    ltm ! org.htc.protobuf.core.entity.event.control.execution.UpdateGlobalTimeEvent(5L)
+    val woken = actor.expectMsgType[SpontaneousEvent]
+    woken.tick shouldBe 5L
+    woken.order shouldBe Some(wake)
+  }
+
+  "a delegated wake" should "survive the owner's older finish even when the delegate's schedule reaches the manager first" in
+    delegatedWakeRegression(delegateFirst = true)
+
+  it should "behave the same when the owner's finish arrives first" in
+    delegatedWakeRegression(delegateFirst = false)
+
   "a queued conservative batch" should "discard a replaced self-event before allocating a dispatch" in {
     val parent = TestProbe()
     val actor = TestProbe()

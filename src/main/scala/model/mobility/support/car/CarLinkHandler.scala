@@ -117,7 +117,10 @@ class CarLinkHandler(
 
     val exitTick = mesoExitTick(tick, time, data.mesoOriginAtEnd, state)
     setMesoExitTickFn(Some(exitTick))
-    onFinishSpontaneousFn(Some(exitTick))
+    if (data.delegatedExitTick < 0L) onFinishSpontaneousFn(Some(exitTick))
+    else if (data.delegatedExitTick != exitTick)
+      logStaleEventDebugFn(
+        s"$entityId: link $linkId scheduled this car's wake at ${data.delegatedExitTick} but it computed $exitTick")
   }
 
   private def mesoExitTick(tick: Tick, timeSeconds: Double, originAtEnd: Boolean, state: CarState): Tick =

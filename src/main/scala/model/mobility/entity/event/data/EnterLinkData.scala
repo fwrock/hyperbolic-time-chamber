@@ -30,5 +30,6 @@ final case class EnterLinkData(
   sigma: Double = 0.0,
   randomSeed: Long = 0L,
   lc2013: model.mobility.entity.state.model.Lc2013Parameters = model.mobility.entity.state.model.Lc2013Parameters(),
-  mesoOriginAtEnd: Boolean = false
+  mesoOriginAtEnd: Boolean = false,
+  delegatedEntry: Option[DelegatedEntry] = None
 ) extends BaseEventData

@@ -253,6 +253,11 @@ abstract class Movable[T <: MovableState](
   protected def microEntryLane: Option[Int] = None
   protected def mesoOriginAtEnd: Boolean = false
 
+  /** Lets the Link schedule this vehicle's wake once it admits it. Only vehicles whose MESO timing the Link can
+    * reproduce override this.
+    */
+  protected def delegatedEntry(): Option[model.mobility.entity.event.data.DelegatedEntry] = None
+
   protected def enterLink(): Unit = {
     if (state.movableCurrentPath.isEmpty) {
       state.takePendingJunctionPath().foreach { path =>
@@ -268,6 +273,7 @@ abstract class Movable[T <: MovableState](
             state.movableLinkExitReported = false
             waitingTicksCounter = 0
 
+            val delegation = delegatedEntry()
             requestInteraction(
               entityId = entityId,
               shardId = shardId,
@@ -291,14 +297,15 @@ abstract class Movable[T <: MovableState](
                 initialPosition = microEntryPosition,
                 arrivalPosition = microArrivalPosition,
                 preferredLane = microEntryLane,
-                mesoOriginAtEnd = mesoOriginAtEnd
+                mesoOriginAtEnd = mesoOriginAtEnd,
+                delegatedEntry = delegation
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed,
               replyKey = Movable.enterLinkAwaitKey(entityId),
               replyKind = "EnterLinkData"
             )
-            onFinishSpontaneous(None)
+            delegation.fold(onFinishSpontaneous(None))(d => finishAwaitingDelegate(d.wake))
 
           case None =>
             state.movableStatus = Finished

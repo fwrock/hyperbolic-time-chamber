@@ -13,6 +13,24 @@ class MesoLinkTimingSpec extends AnyFlatSpec with Matchers {
     tick shouldBe 12L // 3 x ceil(3.4) = 12 against 10.2 continuous
   }
 
+  "A delegated exit tick" should "equal the one the vehicle computes itself, for any rounding state it hands over" in {
+    for {
+      carry <- Seq(false, true)
+      credit <- Seq(0.0, 0.25, 0.9)
+      lastExit <- Seq(-1L, 40L, 99L)
+      seconds <- Seq(0.2, 3.4, 17.0)
+      secondsPerTick <- Seq(1.0, 0.5)
+    } {
+      val entry = model.mobility.entity.event.data.DelegatedEntry(
+        core.runtime.DelegatedWake("c", 1L, 3L), secondsPerTick, carry, credit, lastExit)
+      val own = CarJourneyState(secondsPerTick = secondsPerTick)
+      own.mesoRoundingCredit = credit
+      own.mesoLastExitTick = lastExit
+      MesoLinkTiming.delegatedExitTick(100L, seconds, entry, originAtEnd = false) shouldBe
+        MesoLinkTiming.exitTick(100L, seconds / secondsPerTick, originAtEnd = false, carry = carry, own)
+    }
+  }
+
   "Carried rounding" should "keep the cumulative exit time within one tick of the continuous time" in {
     val j = CarJourneyState()
     var tick = 0L

@@ -38,7 +38,8 @@ class LinkVehicleFlowHandler(
   findVehicleLaneFn:              Long => Option[Int],
   findLeastOccupiedLaneFn:        () => Int,
   logDebugFn:                     String => Unit,
-  reportFn: (Map[String,Any],String) => Unit = (_,_) => ()
+  reportFn: (Map[String,Any],String) => Unit = (_,_) => (),
+  scheduleDelegatedFn: (core.runtime.DelegatedWake, Tick) => Unit = (_, _) => ()
 ) {
 
   /** Recomputes `currentSpeed`/`congestionFactor` from the link's current registered-vehicle
@@ -97,6 +98,16 @@ class LinkVehicleFlowHandler(
     ))
     recomputeAndPublishMesoDynamics()
 
+    val entryTick = currentTickFn()
+    val delegatedExit = data.delegatedEntry
+      .filter(_ => data.actorType == model.mobility.entity.state.enumeration.ActorTypeEnum.Car && !data.mesoOriginAtEnd)
+      .map { entry =>
+        val seconds = model.mobility.support.car.MesoLinkTiming.carTravelSeconds(
+          state.length, state.capacity, state.registered.size.toLong, state.freeSpeed, state.lanes)
+        (entry.wake, model.mobility.support.car.MesoLinkTiming.delegatedExitTick(entryTick, seconds, entry, originAtEnd = false))
+      }
+      .filter { case (_, exit) => exit > entryTick }
+
     sendMessageFn(
       event.actorRefId, event.shardRefId,
       LinkInfoData(
@@ -105,10 +116,12 @@ class LinkVehicleFlowHandler(
         linkNumberOfCars = state.registered.size,
         linkFreeSpeed    = state.freeSpeed,
         linkLanes        = state.lanes,
-        requestSeq       = event.seq
+        requestSeq       = event.seq,
+        delegatedExitTick = delegatedExit.fold(-1L)(_._2)
       ),
       EventTypeEnum.ReceiveEnterLinkInfo.toString
     )
+    delegatedExit.foreach { case (wake, exit) => scheduleDelegatedFn(wake, exit) }
   }
 
   def handleEnterLinkMicro(event: ActorInteractionEvent, data: EnterLinkData): Unit = {

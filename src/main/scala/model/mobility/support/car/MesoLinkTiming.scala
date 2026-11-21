@@ -16,6 +16,22 @@ trait MesoTimingState {
   * a wait at a node (signal or capacity) absorbs the credit. At least one tick per link is kept either way.
   */
 object MesoLinkTiming {
+
+  /** Seconds a Car needs for one MESO link, from the link's own snapshot; the Car and the Link both use it. */
+  def carTravelSeconds(length: Double, capacity: Double, numberOfCars: Long, freeSpeed: Double, lanes: Int): Double =
+    length / (model.mobility.util.SpeedUtil.linkEntryDensitySpeed(
+      length = length, capacity = capacity, numberOfCars = numberOfCars, freeSpeed = freeSpeed, lanes = lanes) / 3.6)
+
+  /** The exit tick the vehicle would compute itself, from the rounding state it sent along. */
+  def delegatedExitTick(tick: Tick, seconds: Double, entry: model.mobility.entity.event.data.DelegatedEntry,
+                        originAtEnd: Boolean): Tick = {
+    val state = new MesoTimingState {
+      var mesoRoundingCredit: Double = entry.roundingCredit
+      var mesoLastExitTick: Long = entry.lastExitTick
+    }
+    exitTick(tick, seconds / math.max(1e-9, entry.secondsPerTick), originAtEnd, entry.carryRounding, state)
+  }
+
   def exitTick(tick: Tick, timeTicks: Double, originAtEnd: Boolean, carry: Boolean, journey: MesoTimingState): Tick =
     if (!carry || originAtEnd) {
       journey.mesoRoundingCredit = 0.0

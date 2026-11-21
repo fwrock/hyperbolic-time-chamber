@@ -414,7 +414,12 @@ abstract class LocalTimeManagerBase(
         return
       }
       if (finish.scheduleRevision > 0L) {
-        if (finish.scheduleRevision <= scheduleRevisions(finish.identify.id)) return
+        if (finish.scheduleRevision <= scheduleRevisions(finish.identify.id)) {
+          // A delegate's newer schedule may reach us before the owner's finish. The schedule stays, but this
+          // finish still completes its own dispatch, or the owner would stay "running" forever.
+          if (releaseDispatch(finish.identify.id, finish.generation)) advanceToNextTick()
+          return
+        }
         require(finish.nextOrder.map(_.tick.toString) == finish.scheduleTick, "finish/order tick mismatch")
         replaceSchedule(ReplaceScheduleEvent(finish.identify, finish.scheduleRevision,
           finish.nextOrder, finish.generation, finish.awaitingReply))

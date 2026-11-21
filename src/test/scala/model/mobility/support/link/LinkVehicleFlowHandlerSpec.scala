@@ -3,7 +3,9 @@ package model.mobility.support.link
 
 import core.entity.event.ActorInteractionEvent
 import core.types.Tick
-import model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData }
+import model.mobility.entity.event.data.{ DelegatedEntry, EnterLinkData, LeaveLinkData }
+import model.mobility.entity.event.data.link.LinkInfoData
+import core.runtime.DelegatedWake
 import model.mobility.entity.state.LinkState
 import model.mobility.entity.state.enumeration.ActorTypeEnum
 import model.mobility.util.{ DynamicWeightCache, SpeedUtil }
@@ -48,13 +50,15 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     )
 
   private case class Fixture(handler: LinkVehicleFlowHandler, getState: () => LinkState, linkId: String,
-                            setTick: Tick => Unit, sent: mutable.Buffer[AnyRef])
+                            setTick: Tick => Unit, sent: mutable.Buffer[AnyRef],
+                            delegated: mutable.Buffer[(DelegatedWake, Tick)])
 
   private def newFixture(linkId: String, initialState: LinkState, costPublishInterval: Int = 0): Fixture = {
     usedLinkIds += linkId
     var state = initialState
     var tick: Tick = 0L
     val sent = mutable.Buffer.empty[AnyRef]
+    val delegated = mutable.Buffer.empty[(DelegatedWake, Tick)]
     val vehicleEntryTick = mutable.Map.empty[Long, Tick]
     val vehicleWaiting    = mutable.Map.empty[Long, Double]
 
@@ -89,10 +93,11 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       metricsReporter = metricsReporter,
       findVehicleLaneFn = _ => None,
       findLeastOccupiedLaneFn = () => 0,
-      logDebugFn = _ => ()
+      logDebugFn = _ => (),
+      scheduleDelegatedFn = (wake, at) => { delegated += wake -> at; () }
     )
 
-    Fixture(handler, () => state, linkId, t => tick = t, sent)
+    Fixture(handler, () => state, linkId, t => tick = t, sent, delegated)
   }
 
   private def event(carId: Long, linkId: String): ActorInteractionEvent =
@@ -132,6 +137,55 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       actorSize = 4.5,
       actorCreationType = CreationTypeEnum.LoadBalancedDistributed
     )
+
+  private val wake = DelegatedWake("org.interscity.htc.model.mobility.actor.Car", 1L, 7L)
+  private def delegating(carry: Boolean = false, credit: Double = 0.0, lastExit: Long = -1L, secondsPerTick: Double = 1.0) =
+    enterData(1L).copy(delegatedEntry = Some(DelegatedEntry(wake, secondsPerTick, carry, credit, lastExit)))
+
+  "handleEnterLinkMeso with a delegated entry" should "schedule the car's wake itself and say so in the reply" in {
+    val linkId = "311"
+    val f = newFixture(linkId, newMesoState(linkId))
+    f.setTick(100L)
+
+    f.handler.handleEnterLinkMeso(event(1L, linkId), delegating())
+
+    val reply = f.sent.collect { case i: LinkInfoData => i }.head
+    val seconds = model.mobility.support.car.MesoLinkTiming.carTravelSeconds(300.0, 20.0, 1L, 13.9, 1)
+    val expected = 100L + math.ceil(seconds).toLong
+    reply.delegatedExitTick shouldBe expected
+    f.delegated.toList shouldBe List(wake -> expected)
+  }
+
+  it should "reproduce the vehicle's own carried rounding from the state it sent" in {
+    val linkId = "312"
+    val f = newFixture(linkId, newMesoState(linkId))
+    f.setTick(100L)
+
+    f.handler.handleEnterLinkMeso(event(1L, linkId), delegating(carry = true, credit = 0.6, lastExit = 99L))
+
+    val seconds = model.mobility.support.car.MesoLinkTiming.carTravelSeconds(300.0, 20.0, 1L, 13.9, 1)
+    val own = new model.mobility.support.car.MesoTimingState { var mesoRoundingCredit = 0.6; var mesoLastExitTick = 99L }
+    f.delegated.map(_._2).toList shouldBe List(model.mobility.support.car.MesoLinkTiming.exitTick(100L, seconds, false, true, own))
+  }
+
+  it should "leave the car to schedule itself when it did not ask, and when the traversal takes no time" in {
+    val a = newFixture("313", newMesoState("313"))
+    a.handler.handleEnterLinkMeso(event(1L, "313"), enterData(1L))
+    a.sent.collect { case i: LinkInfoData => i }.head.delegatedExitTick shouldBe -1L
+    a.delegated shouldBe empty
+
+    // a traversal that would end in the same tick cannot be a later wake
+    val b = newFixture("314", newMesoState("314"))
+    b.handler.handleEnterLinkMeso(event(1L, "314"), delegating(secondsPerTick = Double.PositiveInfinity))
+    b.sent.collect { case i: LinkInfoData => i }.head.delegatedExitTick shouldBe -1L
+    b.delegated shouldBe empty
+  }
+
+  it should "not delegate for a vehicle type whose MESO timing the Link does not reproduce" in {
+    val f = newFixture("315", newMesoState("315"))
+    f.handler.handleEnterLinkMeso(event(1L, "315"), delegating().copy(actorType = ActorTypeEnum.Bus))
+    f.delegated shouldBe empty
+  }
 
   "handleEnterLinkMeso" should "start currentSpeed at freeSpeed and congestionFactor at 1.0 on an empty link" in {
     val linkId = "301"

@@ -10,6 +10,27 @@ import org.scalatest.matchers.should.Matchers
 import scala.collection.mutable
 
 class CarMesoCapacitySpec extends AnyFlatSpec with Matchers {
+  "A MESO entry whose wake the link already scheduled" should "keep the car's state but not schedule a second wake" in {
+    def run(delegatedExitTick: Long): (Option[Long], Seq[Option[Long]]) = {
+      var state=CarState(0,origin=1,destination=3,actorType=ActorTypeEnum.Car,size=7.5)
+      state.status=MovableStatusEnum.Waiting
+      var tick=4L
+      var exit: Option[Long]=None
+      val wakes=mutable.ArrayBuffer.empty[Option[Long]]
+      val reporter=new CarJourneyReporter((_,_)=>(),()=>"42",()=>tick,
+        ()=>Some(1),()=>Some(3),()=>Some(0),()=>DriverAttributes(),()=>state.journey)
+      val handler=new CarLinkHandler((_,_)=>(),()=>"42",()=>tick,reporter,
+        t=>wakes+=t,(_,_)=>(),_=>(),_=>(),_=>(),_=>(),()=>None,e=>exit=e,()=>Some(3))
+      handler.handleEnterLink(7,LinkInfoData(100,100,1,36,1,delegatedExitTick=delegatedExitTick),state)
+      (exit, wakes.toSeq)
+    }
+    val own = run(-1L)
+    own._2 shouldBe Seq(own._1)            // the car schedules its own exit tick
+    val delegated = run(own._1.get)
+    delegated._1 shouldBe own._1           // same state either way
+    delegated._2 shouldBe empty            // the link owns the schedule
+  }
+
   "MESO origin-end acknowledgement" should "record actual departure, preserve zero distance and hand off without an extra tick" in {
     var state=CarState(0,origin=1,destination=3,actorType=ActorTypeEnum.Car,size=7.5,mesoOriginLinkId=Some(7))
     state.status=MovableStatusEnum.Waiting

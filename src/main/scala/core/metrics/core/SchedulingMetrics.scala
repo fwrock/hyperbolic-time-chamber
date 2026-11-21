@@ -22,13 +22,14 @@ object SchedulingMetrics {
   val scheduleOps: Counter = Counter
     .build()
     .name("htc_tm_schedule_ops_total")
-    .help("Schedule requests that reached a local time manager, by operation (schedule/replace/finish)")
+    .help("Schedule requests that reached a local time manager, by operation (schedule/replace/finish/delegated)")
     .labelNames("op")
     .register()
 
   val schedule: Counter.Child = scheduleOps.labels("schedule")
   val replace: Counter.Child = scheduleOps.labels("replace")
   val finish: Counter.Child = scheduleOps.labels("finish")
+  val delegated: Counter.Child = scheduleOps.labels("delegated")
 
   val linkTraversals: Counter = Counter
     .build()

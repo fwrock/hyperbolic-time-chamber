@@ -247,6 +247,7 @@ class Link(
     currentTickFn               = () => currentTick,
     sendMessageFn               = (id, shard, d, et) => sendMessageTo(entityId = id, shardId = shard, data = d, eventType = et, actorType = LoadBalancedDistributed),
     scheduleEventFn             = tick => scheduleEvent(tick),
+    scheduleDelegatedFn         = (wake, tick) => scheduleDelegated(wake, tick),
     getLinkStateFn              = () => state,
     setLinkStateFn              = s => state = s,
     putVehicleEntryTickFn       = (id, t) => vehicleEntryTick.put(id, t),

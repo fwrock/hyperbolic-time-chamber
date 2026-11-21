@@ -581,6 +581,16 @@ class Car(
     emissionHandler.onMicroLeaveLink(data.linkId, data.distanceTraveled, data.travelTime)
   }
 
+  override protected def delegatedEntry(): Option[model.mobility.entity.event.data.DelegatedEntry] =
+    if (model.mobility.util.VehicleSimulationConfig.delegatedEntryScheduling && supportsDelegatedScheduling)
+      Some(model.mobility.entity.event.data.DelegatedEntry(
+        wake = delegateWake(),
+        secondsPerTick = state.journey.secondsPerTick,
+        carryRounding = model.mobility.util.VehicleSimulationConfig.mesoCarryRounding,
+        roundingCredit = state.journey.mesoRoundingCredit,
+        lastExitTick = state.journey.mesoLastExitTick))
+    else None
+
   override def actHandleReceiveEnterLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData

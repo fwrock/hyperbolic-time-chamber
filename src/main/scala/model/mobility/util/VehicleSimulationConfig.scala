@@ -25,6 +25,14 @@ object VehicleSimulationConfig {
     try com.typesafe.config.ConfigFactory.load().getBoolean("htc.meso.carry-rounding")
     catch { case _: Exception => !sys.env.get("HTC_MESO_CARRY_ROUNDING").exists(_.equalsIgnoreCase("false")) }
 
+  /** MESO: the Link schedules the Car's wake at the end of a link traversal instead of the Car doing it after the
+    * Link's reply. Needs the direct conservative runtime with the Car and the Link on the same time manager
+    * (single-node). Read from `htc.mobility.delegated-entry-scheduling` or `HTC_MOBILITY_DELEGATED_ENTRY_SCHEDULING` (default off).
+    */
+  lazy val delegatedEntryScheduling: Boolean =
+    try com.typesafe.config.ConfigFactory.load().getBoolean("htc.mobility.delegated-entry-scheduling")
+    catch { case _: Exception => sys.env.get("HTC_MOBILITY_DELEGATED_ENTRY_SCHEDULING").exists(_.equalsIgnoreCase("true")) }
+
   /** Simulation end tick - used only when extendSimulationIfPendingEventsAfterEnd is false. When
     * extension is enabled, vehicles are allowed to finish their trips naturally.
     */
