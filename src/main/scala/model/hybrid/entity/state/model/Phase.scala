@@ -3,7 +3,7 @@ package model.hybrid.entity.state.model
 
 import core.types.Tick
 
-import model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum
+import model.hybrid.entity.state.enumeration.TrafficSignalPhaseStateEnum
 
 case class Phase(
   origin: Long,

@@ -22,7 +22,7 @@ import com.sun.net.httpserver.HttpServer
 import java.net.{InetSocketAddress, URLDecoder}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.ConcurrentLinkedQueue
-import model.mobility.entity.event.data.VehicleLinkFlowData
+import model.hybrid.entity.event.data.VehicleLinkFlowData
 import com.fasterxml.jackson.databind.ObjectMapper
 
 class ReportRunIsolationSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {

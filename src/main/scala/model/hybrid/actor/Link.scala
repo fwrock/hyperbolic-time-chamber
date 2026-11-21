@@ -23,7 +23,7 @@ import org.interscity.htc.model.hybrid.entity.event.data.link.LinkInfoData
 import org.interscity.htc.model.hybrid.util.DynamicWeightCache
 import org.interscity.htc.model.hybrid.micro.strategy.{ DefaultMicroSimulationStrategy, LaneChangeStrategy, MicroSimulationStrategy, NoLaneChangeStrategy }
 import org.interscity.htc.core.enumeration.ReportTypeEnum
-import org.interscity.htc.model.mobility.entity.event.data.VehicleLinkFlowData
+import org.interscity.htc.model.hybrid.entity.event.data.VehicleLinkFlowData
 import org.interscity.htc.core.metrics.model.hybrid.LinkMetrics
 import org.interscity.htc.model.hybrid.entity.event.data.link.{ LinkSignalStateData, RegisterLinkCapacityData, SubscribeMicroBoundaryData, MicroBoundaryUpdateData }
 import org.interscity.htc.model.hybrid.entity.event.data.routing.LinkCostChangedData

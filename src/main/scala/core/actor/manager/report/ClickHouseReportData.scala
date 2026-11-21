@@ -2,7 +2,7 @@ package org.interscity.htc
 package core.actor.manager.report
 
 import core.entity.event.control.report.ReportEvent
-import model.mobility.entity.event.data.VehicleLinkFlowData
+import model.hybrid.entity.event.data.VehicleLinkFlowData
 import system.database.clickhouse.ClickHouseClientManager
 
 import org.apache.pekko.actor.ActorRef
