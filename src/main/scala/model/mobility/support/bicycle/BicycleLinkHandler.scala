@@ -31,6 +31,8 @@ class BicycleLinkHandler(
 
   def handleEnterLink(linkId: Long, data: LinkInfoData, state: BicycleState): Unit = {
     consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
+    state.mesoLinkLength = data.linkLength
+    state.leaveAckRequired = data.leaveAckRequired
     val bicycleSpeed = model.mobility.util.MesoTrafficConfig.bicycleSpeedMps
     val time         = data.linkLength / bicycleSpeed
     state.status = Moving
@@ -76,12 +78,21 @@ class BicycleLinkHandler(
       return
     }
     consumeAwaitedReplyFn(awaitKey)
-    state.distance += data.linkLength
+    completeLeave(linkId, data.linkLength, state)
+  }
+
+  /** A plain MESO link only repeats the length the vehicle stored at entry, so the vehicle completes the leave itself. */
+  def leaveWithoutReply(linkId: Long, state: BicycleState): Unit =
+    completeLeave(linkId, state.mesoLinkLength, state)
+
+  private def completeLeave(linkId: Long, linkLength: Double, state: BicycleState): Unit = {
+    state.distance += linkLength
     journeyReporter.sumoArrivalSpeed = 0.0
     journeyReporter.sumoArrivalLane  = Some(s"${linkId}_0")
-    journeyReporter.sumoArrivalPos   = data.linkLength
+    journeyReporter.sumoArrivalPos   = linkLength
     journeyReporter.updateHaltingState(0.0, 0.0)
     setMesoExitTickFn(None)
+    state.leaveAckRequired = true
     reportFn(
       Map(
         "event_type"     -> "leave_link",

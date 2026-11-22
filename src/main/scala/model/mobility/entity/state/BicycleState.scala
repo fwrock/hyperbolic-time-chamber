@@ -43,7 +43,11 @@ case class BicycleState(
   var currentSimulationMode: SimulationModeEnum = SimulationModeEnum.MESO,
   var microState: Option[MicroBicycleState] = None,
   var mesoRoundingCredit: Double = 0.0,
-  var mesoLastExitTick: Long = -1L
+  var mesoLastExitTick: Long = -1L,
+  /** Length of the MESO link the vehicle is on, kept so a leave that the Link does not answer can still be completed. */
+  var mesoLinkLength: Double = 0.0,
+  /** Whether the current MESO link will answer this vehicle's leave; set from the entry reply, so a lost value only restores the reply. */
+  var leaveAckRequired: Boolean = true
 ) extends MovableState(
       startTick = startTick,
       origin = origin,

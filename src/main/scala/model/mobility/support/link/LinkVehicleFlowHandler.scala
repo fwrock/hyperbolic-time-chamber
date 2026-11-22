@@ -414,6 +414,7 @@ object LinkVehicleFlowHandler {
   /** Vehicle types whose leave handler needs nothing from the Link beyond the length they stored at entry. */
   def skipsLeaveReply(actorType: model.mobility.entity.state.enumeration.ActorTypeEnum): Boolean = {
     import model.mobility.entity.state.enumeration.ActorTypeEnum
-    actorType == ActorTypeEnum.Car || actorType == ActorTypeEnum.Bus
+    actorType == ActorTypeEnum.Car || actorType == ActorTypeEnum.Bus || actorType == ActorTypeEnum.Bicycle ||
+      actorType == ActorTypeEnum.Motorcycle
   }
 }

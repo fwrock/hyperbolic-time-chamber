@@ -426,6 +426,11 @@ class Bicycle(
 
   override protected def microEntryVelocity: Double = journeyReporter.sumoArrivalSpeed
 
+  override protected def leaveAckRequired: Boolean = state.leaveAckRequired || !isDirectConservativeRuntime
+
+  override protected def completeLeaveWithoutReply(linkEntityId: Long): Unit =
+    linkHandler.leaveWithoutReply(linkEntityId, state)
+
   override def leavingLink(): Unit = {
     mesoExitTick = None
     signalWaitUntilTick = None
