@@ -62,6 +62,10 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private val directRoots = mutable.Queue.empty[(Process, DirectExecute)]
   private val directRootSlots = mutable.Set.empty[DirectWorkId]
   private val directProcessed = mutable.Map.empty[DirectWorkId, DirectProcessed]
+  /** Receipt ids by tick. A hash map keeps its bucket table at the size of its busiest moment, so scanning it for old
+    * receipts on every tick costs the startup burst each time; dropping through this index costs only what expired.
+    */
+  private val directProcessedByTick = mutable.TreeMap.empty[Long, mutable.ArrayBuffer[DirectWorkId]]
   private val directBirths = mutable.Map.empty[LogicalProcessId, DirectExecute]
   private var directTick: Option[Long] = None
   private var directClosedTick: Option[Long] = None
@@ -265,6 +269,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
             if (event.blocked > 0) blockedProcesses.add(process.ref) else blockedProcesses.remove(process.ref)
             if (event.terminal) terminalProcesses.add(process.ref) else terminalProcesses.remove(process.ref)
             directProcessed(event.completion.work.id) = event
+            directProcessedByTick.getOrElseUpdate(event.completion.work.tick, mutable.ArrayBuffer.empty) += event.completion.work.id
             directCallbacks += 1L
             directChildren += event.completion.children.size
         }
@@ -401,7 +406,9 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
         if (!directTick.contains(event.tick)) {
           require(directRoots.isEmpty && directRootSlots.isEmpty, "direct dispatch still in flight")
           directLedger.begin(event.tick)
-          directProcessed.filterInPlace((_, receipt) => receipt.completion.work.tick >= event.tick)
+          directProcessedByTick.rangeUntil(event.tick).keysIterator.toVector.foreach { tick =>
+            directProcessedByTick.remove(tick).foreach(_.foreach(directProcessed.remove))
+          }
           directTick = Some(event.tick)
         }
       }
