@@ -22,5 +22,9 @@ case class BusJourneyState(
   var sumoRerouteNo: Int = 0,
   var sumoTripInfoReported: Boolean = false,
   var mesoRoundingCredit: Double = 0.0,
-  var mesoLastExitTick: Long = -1L
+  var mesoLastExitTick: Long = -1L,
+  /** Length of the MESO link the bus is on, kept so a leave that the Link does not answer can still be completed. */
+  var mesoLinkLength: Double = 0.0,
+  /** Whether the current MESO link will answer this bus's leave; set from the entry reply, so a lost value only restores the reply. */
+  var leaveAckRequired: Boolean = true
 ) extends org.interscity.htc.model.mobility.support.car.MesoTimingState

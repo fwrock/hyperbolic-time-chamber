@@ -414,10 +414,17 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     f.sent.collect { case i: LinkInfoData => i }.head.leaveAckRequired shouldBe false
   }
 
-  it should "keep the ack for every other vehicle type" in {
+  it should "also let a Bus skip the leave reply" in {
     val linkId = "9101"
     val f = newFixture(linkId, newMesoState(linkId), leaveWithoutReply = true)
     f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L, ActorTypeEnum.Bus))
+    f.sent.collect { case i: LinkInfoData => i }.head.leaveAckRequired shouldBe false
+  }
+
+  it should "keep the ack for the vehicle types whose handler still needs it" in {
+    val linkId = "9106"
+    val f = newFixture(linkId, newMesoState(linkId), leaveWithoutReply = true)
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L, ActorTypeEnum.Bicycle))
     f.sent.collect { case i: LinkInfoData => i }.head.leaveAckRequired shouldBe true
   }
 

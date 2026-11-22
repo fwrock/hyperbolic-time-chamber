@@ -119,8 +119,8 @@ class LinkVehicleFlowHandler(
         linkLanes        = state.lanes,
         requestSeq       = event.seq,
         delegatedExitTick = delegatedExit.fold(-1L)(_._2),
-        leaveAckRequired = !(leaveWithoutReplyFn() &&
-          data.actorType == model.mobility.entity.state.enumeration.ActorTypeEnum.Car && !data.mesoOriginAtEnd)
+        leaveAckRequired = !(leaveWithoutReplyFn() && LinkVehicleFlowHandler.skipsLeaveReply(data.actorType) &&
+          !data.mesoOriginAtEnd)
       ),
       EventTypeEnum.ReceiveEnterLinkInfo.toString
     )
@@ -406,5 +406,14 @@ class LinkVehicleFlowHandler(
       ),
       EventTypeEnum.ReceiveLeaveLinkInfo.toString
     )
+  }
+}
+
+object LinkVehicleFlowHandler {
+
+  /** Vehicle types whose leave handler needs nothing from the Link beyond the length they stored at entry. */
+  def skipsLeaveReply(actorType: model.mobility.entity.state.enumeration.ActorTypeEnum): Boolean = {
+    import model.mobility.entity.state.enumeration.ActorTypeEnum
+    actorType == ActorTypeEnum.Car || actorType == ActorTypeEnum.Bus
   }
 }

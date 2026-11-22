@@ -42,6 +42,8 @@ class BusLinkHandler(
     // EnterLinkData -> ReceiveEnterLinkInfo is single-shot/terminal (see
     // CarLinkHandler.handleEnterLink), so always safe to consume once received.
     consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
+    state.journey.mesoLinkLength = data.linkLength
+    state.journey.leaveAckRequired = data.leaveAckRequired
 
     val speed = linkEntryDensitySpeed(
       length       = data.linkLength,
@@ -105,13 +107,23 @@ class BusLinkHandler(
       }
     }
     consumeAwaitedReplyFn(awaitKey)
+    completeLeave(linkId, data.linkLength, state)
+  }
 
-    state.distance += data.linkLength
+  /** A plain MESO link only repeats the length the bus stored at entry, so the bus completes the leave itself. */
+  def leaveWithoutReply(linkId: Long, state: BusState): Unit =
+    completeLeave(linkId, state.journey.mesoLinkLength, state)
+
+  private def completeLeave(linkId: Long, linkLength: Double, state: BusState): Unit = {
+    val tick     = currentTickFn()
+    val entityId = entityIdFn()
+    state.distance += linkLength
     journeyReporter.sumoArrivalSpeed = 0.0
     journeyReporter.sumoArrivalLane  = Some(s"${linkId}_0")
-    journeyReporter.sumoArrivalPos   = data.linkLength
+    journeyReporter.sumoArrivalPos   = linkLength
     journeyReporter.updateHaltingState(0.0, 0.0)
     setMesoExitTickFn(None)
+    state.journey.leaveAckRequired = true
 
     reportFn(
       Map(
