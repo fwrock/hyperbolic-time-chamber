@@ -32,6 +32,7 @@ class NodeLocalTimeManager(
   private val drains = mutable.LongMap.empty[ActorRef]
   private val granted = mutable.Set.empty[ActorRef]
   private val forwarded = mutable.Queue.empty[(ActorRef, DirectWorkCompletion)]
+  private val delegatedAcks = mutable.Queue.empty[(ActorRef, Long)]
   private var partitions = Vector.empty[ActorRef]
   private var activeTick: Option[Long] = None
   private var bootstrap = false
@@ -115,10 +116,20 @@ class NodeLocalTimeManager(
     flushCompletions()
   }
 
+  /** A delegated wake is only confirmed once every wake admitted so far has a storage receipt. */
+  override protected def acknowledgeDelegated(to: ActorRef, token: Long): Unit = {
+    delegatedAcks.enqueue(to -> token)
+    flushCompletions()
+  }
+
   private def flushCompletions(): Unit = if (!assignments.hasPendingAcceptance) {
     while (forwarded.nonEmpty) {
       val (owner, completion) = forwarded.dequeue()
       owner ! DirectAccounted(conservativeEpoch, completion)
+    }
+    while (delegatedAcks.nonEmpty) {
+      val (to, token) = delegatedAcks.dequeue()
+      to ! DelegatedSchedulesAccepted(conservativeEpoch, token)
     }
   }
 

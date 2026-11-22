@@ -2159,7 +2159,7 @@ abstract class SimulationBaseActor[T <: BaseState](
   }
 
   /** Whether another actor may schedule this one. Only the direct conservative runtime applies a
-    * delegate's schedule, and only when the delegate is registered on the same time manager.
+    * delegate's schedule. The delegate's time manager forwards it to this actor's owner when they differ.
     */
   protected final def supportsDelegatedScheduling: Boolean = directConservative && usesConservativeRuntime
 

@@ -30,6 +30,7 @@ object SchedulingMetrics {
   val replace: Counter.Child = scheduleOps.labels("replace")
   val finish: Counter.Child = scheduleOps.labels("finish")
   val delegated: Counter.Child = scheduleOps.labels("delegated")
+  val delegatedBatch: Counter.Child = scheduleOps.labels("delegated_batch")
 
   val linkTraversals: Counter = Counter
     .build()
