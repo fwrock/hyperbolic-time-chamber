@@ -542,6 +542,17 @@ class Car(
     if (!held) state.journey.retainedMicroExitLinkId = None
   }
 
+  override protected def leaveAckRequired: Boolean = state.journey.leaveAckRequired || !isDirectConservativeRuntime
+
+  override protected def completeLeaveWithoutReply(linkEntityId: Long): Unit = {
+    val entryTick = linkEntryTick
+    val length    = currentLinkLength
+    linkHandler.leaveWithoutReply(linkEntityId, length, state)
+    entryTick.foreach { entry =>
+      emissionHandler.onLeaveLink(linkEntityId, length, (currentTick - entry).toDouble)
+    }
+  }
+
   override protected def holdPreviousLinkUntilNextAdmitted: Boolean =
     state.journey.retainedMicroExitLinkId.nonEmpty && !state.movableBestRoute.forall(_.isEmpty)
 

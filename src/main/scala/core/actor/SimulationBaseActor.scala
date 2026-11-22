@@ -2161,7 +2161,10 @@ abstract class SimulationBaseActor[T <: BaseState](
   /** Whether another actor may schedule this one. Only the direct conservative runtime applies a
     * delegate's schedule. The delegate's time manager forwards it to this actor's owner when they differ.
     */
-  protected final def supportsDelegatedScheduling: Boolean = directConservative && usesConservativeRuntime
+  protected final def supportsDelegatedScheduling: Boolean = isDirectConservativeRuntime
+
+  /** The direct conservative runtime, where a fire-and-forget exchange is complete once the sender's callback ends. */
+  protected final def isDirectConservativeRuntime: Boolean = directConservative && usesConservativeRuntime
 
   /** Reserves the revision a delegate will use to wake this actor. Call it right before the request that
     * hands the wake over, and finish the current callback with [[finishAwaitingDelegate]]: the

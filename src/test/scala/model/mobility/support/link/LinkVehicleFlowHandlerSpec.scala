@@ -53,7 +53,8 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
                             setTick: Tick => Unit, sent: mutable.Buffer[AnyRef],
                             delegated: mutable.Buffer[(DelegatedWake, Tick)])
 
-  private def newFixture(linkId: String, initialState: LinkState, costPublishInterval: Int = 0): Fixture = {
+  private def newFixture(linkId: String, initialState: LinkState, costPublishInterval: Int = 0,
+                           leaveWithoutReply: Boolean = false): Fixture = {
     usedLinkIds += linkId
     var state = initialState
     var tick: Tick = 0L
@@ -94,7 +95,8 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       findVehicleLaneFn = _ => None,
       findLeastOccupiedLaneFn = () => 0,
       logDebugFn = _ => (),
-      scheduleDelegatedFn = (wake, at) => { delegated += wake -> at; () }
+      scheduleDelegatedFn = (wake, at) => { delegated += wake -> at; () },
+      leaveWithoutReplyFn = () => leaveWithoutReply
     )
 
     Fixture(handler, () => state, linkId, t => tick = t, sent, delegated)
@@ -403,5 +405,56 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     val entered = f.getState().vehiclesByLane(0).find(_.actorId == 1).get
     entered.position shouldBe 0.2 +- 1e-9
     entered.velocity shouldBe 0.0
+  }
+
+  "handleEnterLinkMeso with leave-without-reply" should "tell a Car that the Link will not answer its leave" in {
+    val linkId = "9100"
+    val f = newFixture(linkId, newMesoState(linkId), leaveWithoutReply = true)
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
+    f.sent.collect { case i: LinkInfoData => i }.head.leaveAckRequired shouldBe false
+  }
+
+  it should "keep the ack for every other vehicle type" in {
+    val linkId = "9101"
+    val f = newFixture(linkId, newMesoState(linkId), leaveWithoutReply = true)
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L, ActorTypeEnum.Bus))
+    f.sent.collect { case i: LinkInfoData => i }.head.leaveAckRequired shouldBe true
+  }
+
+  it should "keep the ack for a Car that starts at the end of the link" in {
+    val linkId = "9102"
+    val f = newFixture(linkId, newMesoState(linkId), leaveWithoutReply = true)
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L).copy(mesoOriginAtEnd = true))
+    f.sent.collect { case i: LinkInfoData => i }.head.leaveAckRequired shouldBe true
+  }
+
+  it should "keep the ack when the option is off" in {
+    val linkId = "9103"
+    val f = newFixture(linkId, newMesoState(linkId), leaveWithoutReply = false)
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
+    f.sent.collect { case i: LinkInfoData => i }.head.leaveAckRequired shouldBe true
+  }
+
+  private def leaveData(replyRequired: Boolean): LeaveLinkData =
+    LeaveLinkData(ActorTypeEnum.Car, 4.5, CreationTypeEnum.LoadBalancedDistributed, replyRequired)
+
+  "handleLeaveLink on a MESO link" should "send no reply when the vehicle did not ask for one, and still free the link" in {
+    val linkId = "9104"
+    val f = newFixture(linkId, newMesoState(linkId), leaveWithoutReply = true)
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
+    f.sent.clear()
+    f.handler.handleLeaveLink(event(1L, linkId), leaveData(replyRequired = false), wasRegistered = true)
+    f.sent.collect { case i: LinkInfoData => i } shouldBe empty
+    f.sent.exists(_.getClass.getSimpleName == "LinkCapacityFreedData") shouldBe true
+    f.getState().registered.size shouldBe 0
+  }
+
+  it should "reply when the vehicle asked for one" in {
+    val linkId = "9105"
+    val f = newFixture(linkId, newMesoState(linkId))
+    f.handler.handleEnterLinkMeso(event(1L, linkId), enterData(1L))
+    f.sent.clear()
+    f.handler.handleLeaveLink(event(1L, linkId), leaveData(replyRequired = true), wasRegistered = true)
+    f.sent.collect { case i: LinkInfoData => i } should have size 1
   }
 }

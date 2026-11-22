@@ -22,5 +22,7 @@ final case class LinkInfoData(
   mesoEntryWaitSeconds: Double = 0.0,
   mesoExitWaitSeconds: Double = 0.0,
   /** The tick at which the Link already scheduled the vehicle's wake, or -1 when the vehicle must schedule itself. */
-  delegatedExitTick: Long = -1L
+  delegatedExitTick: Long = -1L,
+  /** False when the Link will not answer this vehicle's `LeaveLinkData` (plain MESO link, vehicle opted in). */
+  leaveAckRequired: Boolean = true
 ) extends BaseEventData

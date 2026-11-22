@@ -13,5 +13,7 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 case class LeaveLinkData(
   actorType: ActorTypeEnum,
   actorSize: Double,
-  actorCreationType: CreationTypeEnum
+  actorCreationType: CreationTypeEnum,
+  /** False when the vehicle does not wait for `ReceiveLeaveLinkInfo`; the Link then sends none (plain MESO only). */
+  replyRequired: Boolean = true
 ) extends BaseEventData

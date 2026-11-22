@@ -39,7 +39,8 @@ class LinkVehicleFlowHandler(
   findLeastOccupiedLaneFn:        () => Int,
   logDebugFn:                     String => Unit,
   reportFn: (Map[String,Any],String) => Unit = (_,_) => (),
-  scheduleDelegatedFn: (core.runtime.DelegatedWake, Tick) => Unit = (_, _) => ()
+  scheduleDelegatedFn: (core.runtime.DelegatedWake, Tick) => Unit = (_, _) => (),
+  leaveWithoutReplyFn: () => Boolean = () => model.mobility.util.VehicleSimulationConfig.leaveWithoutReply
 ) {
 
   /** Recomputes `currentSpeed`/`congestionFactor` from the link's current registered-vehicle
@@ -117,7 +118,9 @@ class LinkVehicleFlowHandler(
         linkFreeSpeed    = state.freeSpeed,
         linkLanes        = state.lanes,
         requestSeq       = event.seq,
-        delegatedExitTick = delegatedExit.fold(-1L)(_._2)
+        delegatedExitTick = delegatedExit.fold(-1L)(_._2),
+        leaveAckRequired = !(leaveWithoutReplyFn() &&
+          data.actorType == model.mobility.entity.state.enumeration.ActorTypeEnum.Car && !data.mesoOriginAtEnd)
       ),
       EventTypeEnum.ReceiveEnterLinkInfo.toString
     )
@@ -338,7 +341,7 @@ class LinkVehicleFlowHandler(
     }
 
     if (state.isMicroMode) sendLeaveLinkMicro(event, data, entryTick)
-    else sendLeaveLinkDataMeso(event)
+    else if (data.replyRequired) sendLeaveLinkDataMeso(event)
   }
 
   private def sendLeaveLinkMicro(

@@ -67,6 +67,7 @@ class CarLinkHandler(
       return
     }
     consumeAwaitedReplyFn(awaitKey)
+    state.journey.leaveAckRequired = data.leaveAckRequired
 
     if (journeyReporter.sumoDepartTick.nonEmpty && data.mesoEntryWaitSeconds > 0)
       journeyReporter.updateHaltingState(0.0,data.mesoEntryWaitSeconds)
@@ -152,16 +153,31 @@ class CarLinkHandler(
     // LeaveLinkData -> ReceiveLeaveLinkInfo is single-shot/terminal (same as EnterLinkData above),
     // so always safe to consume once accepted.
     consumeAwaitedReplyFn(awaitKey)
+    completeLeave(linkId, data.linkLength, data.mesoExitWaitSeconds, data.mesoOriginAtEnd, state)
+  }
 
-    if (data.mesoExitWaitSeconds > 0) journeyReporter.updateHaltingState(0.0,data.mesoExitWaitSeconds)
-    state.distance += data.linkLength
+  /** A plain MESO link only repeats the length the Car stored at entry, so the Car completes the leave itself. */
+  def leaveWithoutReply(linkId: Long, linkLength: Double, state: CarState): Unit =
+    completeLeave(linkId, linkLength, 0.0, originAtEnd = false, state)
+
+  private def completeLeave(
+    linkId: Long,
+    linkLength: Double,
+    exitWaitSeconds: Double,
+    originAtEnd: Boolean,
+    state: CarState
+  ): Unit = {
+    val tick     = currentTickFn()
+    val entityId = entityIdFn()
+    if (exitWaitSeconds > 0) journeyReporter.updateHaltingState(0.0, exitWaitSeconds)
+    state.distance += linkLength
     journeyReporter.sumoArrivalSpeed = 0.0
     journeyReporter.sumoArrivalLane  = Some(s"${linkId}_0")
-    journeyReporter.sumoArrivalPos   = data.linkLength
+    journeyReporter.sumoArrivalPos   = linkLength
 
     getLinkEntryTickFn().foreach { entryTick =>
       val travelTimeSecs = (tick - entryTick).toDouble // 1 tick = 1 second
-      val actualSpeed    = if (travelTimeSecs > 0) data.linkLength / travelTimeSecs else 0.0
+      val actualSpeed    = if (travelTimeSecs > 0) linkLength / travelTimeSecs else 0.0
       journeyReporter.updateHaltingState(actualSpeed, travelTimeSecs)
     }
 
@@ -172,17 +188,18 @@ class CarLinkHandler(
 
     reportFn(
       Map(
-        "event_type"     -> (if (data.mesoOriginAtEnd) "meso_origin_left" else "leave_link"),
+        "event_type"     -> (if (originAtEnd) "meso_origin_left" else "leave_link"),
         "car_id"         -> entityId,
         "link_id"        -> linkId,
         "mode"           -> "MESO",
-        "link_length"    -> data.linkLength,
+        "link_length"    -> linkLength,
         "total_distance" -> state.distance,
         "tick"           -> tick
       ),
-      if (data.mesoOriginAtEnd) "meso_origin_left" else "leave_link"
+      if (originAtEnd) "meso_origin_left" else "leave_link"
     )
     state.journey.mesoOriginActive = false
+    state.journey.leaveAckRequired = true
 
     val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {
@@ -190,7 +207,7 @@ class CarLinkHandler(
       finishAndCleanupFn("reached_destination", tripDest)
     } else {
       // Default keeps one tick between leaving a link and entering the next; `htc.meso.immediate-node-transfer` makes the transfer immediate (t' = t).
-      onFinishSpontaneousFn(Some(if (data.mesoOriginAtEnd || model.mobility.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) tick else tick + 1))
+      onFinishSpontaneousFn(Some(if (originAtEnd || model.mobility.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) tick else tick + 1))
     }
   }
 }

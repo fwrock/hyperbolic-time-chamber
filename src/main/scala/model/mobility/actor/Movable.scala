@@ -350,21 +350,36 @@ abstract class Movable[T <: MovableState](
     */
   protected def holdPreviousLinkUntilNextAdmitted: Boolean = false
 
+  /** Whether the Link answers this vehicle's `LeaveLinkData`. Vehicles opt out only where the reply is redundant. */
+  protected def leaveAckRequired: Boolean = true
+
+  /** Runs what the vehicle would have done on `ReceiveLeaveLinkInfo`, for a leave sent without a reply. It must end
+    * the current callback like that handler does.
+    */
+  protected def completeLeaveWithoutReply(linkEntityId: Long): Unit = ()
+
   protected def leavingLink(): Unit =
     state.movableCurrentPath match {
       case Some((linkEdgeGraphId, nextNodeId)) =>
         resolveLink(linkEdgeGraphId) match {
           case Some((entityId, shardId)) =>
+            val awaitsReply = leaveAckRequired
             val leave = LeaveLinkData(
               actorType = state.actorType,
               actorSize = state.size,
-              actorCreationType = LoadBalancedDistributed
+              actorCreationType = LoadBalancedDistributed,
+              replyRequired = awaitsReply
             )
             if (!state.movableLinkExitReported) {
-              requestInteraction(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString,
-                Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
               state.movableCurrentPath = None
-              onFinishSpontaneous(None)
+              if (awaitsReply) {
+                requestInteraction(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString,
+                  Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
+                onFinishSpontaneous(None)
+              } else {
+                sendMessageTo(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString)
+                completeLeaveWithoutReply(entityId)
+              }
               return
             }
             val routeContinues = !state.movableBestRoute.forall(_.isEmpty)

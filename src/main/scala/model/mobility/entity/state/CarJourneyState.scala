@@ -33,7 +33,9 @@ case class CarJourneyState(
   var lastMicroLane: Option[Int] = None,
   @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
   var pendingRoadLane: Option[Int] = None,
-  var mesoOriginActive: Boolean = false
+  var mesoOriginActive: Boolean = false,
+  /** Whether the current MESO link will answer this Car's leave; set from the entry reply, so a lost value only restores the reply. */
+  var leaveAckRequired: Boolean = true
 ) extends org.interscity.htc.model.mobility.support.car.MesoTimingState {
   def entryRemainderAt(tick: Tick): Double =
     if (boundaryExitTick.contains(tick) && sumoArrivalSpeed > 0.0) boundaryRemainderSeconds else 0.0
