@@ -26,5 +26,9 @@ case class BusJourneyState(
   /** Length of the MESO link the bus is on, kept so a leave that the Link does not answer can still be completed. */
   var mesoLinkLength: Double = 0.0,
   /** Whether the current MESO link will answer this bus's leave; set from the entry reply, so a lost value only restores the reply. */
-  var leaveAckRequired: Boolean = true
+  var leaveAckRequired: Boolean = true,
+  /** The Link took the bus off the link when the Node granted the crossing, so the bus sends no leave. */
+  var leaveHandledByLink: Boolean = false,
+  /** The Link held the entry reply until the exit tick, so the bus ran its exit chain in fewer wakes than it otherwise would. */
+  var linkOwnedExit: Boolean = false
 ) extends org.interscity.htc.model.mobility.support.car.MesoTimingState

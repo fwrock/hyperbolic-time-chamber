@@ -115,12 +115,19 @@ class LinkVehicleFlowHandler(
       .filter { case (_, exit) => exit > entryTick }
 
     val ownedExit = data.delegatedEntry
-      .filter(e => e.deferReply && data.actorType == model.mobility.entity.state.enumeration.ActorTypeEnum.Car &&
-        !data.mesoOriginAtEnd)
-      .map { entry =>
-        val seconds = model.mobility.support.car.MesoLinkTiming.carTravelSeconds(
-          state.length, state.capacity, state.registered.size.toLong, state.freeSpeed, state.lanes)
-        model.mobility.support.car.MesoLinkTiming.delegatedExitTick(entryTick, seconds, entry, originAtEnd = false)
+      .filter(e => e.deferReply && !data.mesoOriginAtEnd)
+      .flatMap { entry =>
+        import model.mobility.support.car.MesoLinkTiming
+        import model.mobility.entity.state.enumeration.ActorTypeEnum
+        def travel(f: (Double, Double, Long, Double, Int) => Double) =
+          f(state.length, state.capacity, state.registered.size.toLong, state.freeSpeed, state.lanes)
+        data.actorType match {
+          case ActorTypeEnum.Car =>
+            Some(MesoLinkTiming.delegatedExitTick(entryTick, travel(MesoLinkTiming.carTravelSeconds), entry, originAtEnd = false))
+          case ActorTypeEnum.Bus =>
+            Some(MesoLinkTiming.busDelegatedExitTick(entryTick, travel(MesoLinkTiming.busTravelSeconds), entry))
+          case _ => None
+        }
       }
       .filter(_ > entryTick)
 

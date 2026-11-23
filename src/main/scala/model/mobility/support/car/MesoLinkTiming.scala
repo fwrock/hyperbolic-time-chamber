@@ -32,6 +32,23 @@ object MesoLinkTiming {
     exitTick(tick, seconds / math.max(1e-9, entry.secondsPerTick), originAtEnd, entry.carryRounding, state)
   }
 
+  /** Seconds a Bus needs for one MESO link: the same density speed as the Car, but a stopped link costs its length. */
+  def busTravelSeconds(length: Double, capacity: Double, numberOfCars: Long, freeSpeed: Double, lanes: Int): Double = {
+    val speed = model.mobility.util.SpeedUtil.linkEntryDensitySpeed(
+      length = length, capacity = capacity, numberOfCars = numberOfCars, freeSpeed = freeSpeed, lanes = lanes)
+    if (speed > 0.0) length / (speed / 3.6) else length
+  }
+
+  /** The exit tick the Bus would compute itself: truncated without carried rounding, which counts the time in ticks of one second. */
+  def busDelegatedExitTick(tick: Tick, seconds: Double, entry: model.mobility.entity.event.data.DelegatedEntry): Tick =
+    if (entry.carryRounding) {
+      val state = new MesoTimingState {
+        var mesoRoundingCredit: Double = entry.roundingCredit
+        var mesoLastExitTick: Long = entry.lastExitTick
+      }
+      exitTick(tick, seconds, originAtEnd = false, carry = true, state)
+    } else tick + seconds.toLong
+
   def exitTick(tick: Tick, timeTicks: Double, originAtEnd: Boolean, carry: Boolean, journey: MesoTimingState): Tick =
     if (!carry || originAtEnd) {
       journey.mesoRoundingCredit = 0.0

@@ -36,7 +36,7 @@ class BusLinkHandler(
   private def leaveLinkAwaitKey(linkId: Long): String = model.mobility.actor.Movable.leaveLinkAwaitKey(linkId)
 
   def handleEnterLink(linkId: Long, data: LinkInfoData, state: BusState): Unit = {
-    val tick     = currentTickFn()
+    val tick     = if (data.entryTick >= 0L) data.entryTick else currentTickFn()
     val entityId = entityIdFn()
 
     // EnterLinkData -> ReceiveEnterLinkInfo is single-shot/terminal (see
@@ -84,7 +84,8 @@ class BusLinkHandler(
     // Legacy truncated the traversal time; with carried rounding the exit follows the continuous time (at least one tick).
     val exitTick = if (model.mobility.util.VehicleSimulationConfig.mesoCarryRounding) model.mobility.support.car.MesoLinkTiming.exitTick(tick, time, originAtEnd = false, carry = true, state.journey) else tick + time.toLong
     setMesoExitTickFn(Some(exitTick))
-    onFinishSpontaneousFn(Some(exitTick))
+    // A reply the Link held until the exit tick: the caller continues the wake in this very callback.
+    if (!(data.entryTick >= 0L && exitTick <= currentTickFn())) onFinishSpontaneousFn(Some(exitTick))
   }
 
   def handleLeaveLink(linkId: Long, data: LinkInfoData, state: BusState): Unit = {
@@ -124,6 +125,9 @@ class BusLinkHandler(
     journeyReporter.updateHaltingState(0.0, 0.0)
     setMesoExitTickFn(None)
     state.journey.leaveAckRequired = true
+    state.journey.leaveHandledByLink = false
+    val linkOwnedExit = state.journey.linkOwnedExit
+    state.journey.linkOwnedExit = false
 
     reportFn(
       Map(
@@ -144,7 +148,9 @@ class BusLinkHandler(
       finishJourneyFn("reached_destination", state.destination)
       onFinishDestructFn()
     } else {
-      onFinishSpontaneousFn(Some(if (model.mobility.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) tick else tick + 1))
+      // The time manager grants a same-tick continuation only to a wake that has not yet run twice in the tick, and the
+      // exit chain always has: with the Link owning the exit it runs inline, so the continuation moves to the next tick here.
+      onFinishSpontaneousFn(Some(if (model.mobility.util.VehicleSimulationConfig.mesoImmediateNodeTransfer && !linkOwnedExit) tick else tick + 1))
     }
   }
 }

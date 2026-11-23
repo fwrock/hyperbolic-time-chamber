@@ -456,7 +456,50 @@ class Bus(
   override def actHandleReceiveEnterLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData
-  ): Unit = linkHandler.handleEnterLink(event.actorRefId, data, state)
+  ): Unit = {
+    linkHandler.handleEnterLink(event.actorRefId, data, state)
+    // The Link held this reply until the exit tick, so the bus's wake is this very callback.
+    if (data.entryTick >= 0L && state.status == Moving && !state.isMicroMode && mesoExitTick.forall(_ <= currentTick)) {
+      state.journey.linkOwnedExit = true
+      mesoExitTick = None
+      data.access match {
+        case Some(access) =>
+          state.journey.leaveHandledByLink = data.leaveDone
+          state.status = WaitingSignalState
+          signalHandler.handleLinkAccess(access, state)
+        case None => requestSignalState()
+      }
+    }
+  }
+
+  override protected def linkAccessRequest(): Option[model.mobility.entity.event.data.LinkAccessRequest] =
+    if (!model.mobility.util.VehicleSimulationConfig.linkRequestsAccess || state.bestRoute.forall(_.isEmpty) ||
+      state.currentPath.isEmpty) None
+    else {
+      val nodeId = getCurrentNode
+      val linkId = getNextLink
+      if (nodeId == 0L || linkId == 0L) None
+      else model.mobility.util.CityMapUtil.nodesById.get(nodeId).map { node =>
+        model.mobility.entity.event.data.LinkAccessRequest(node.id, node.classType,
+          model.mobility.entity.event.data.vehicle.RequestLinkAccessData(
+            targetLinkId = linkId,
+            signalAlreadyCleared = state.movableLinkExitReported,
+            approachLinkId = state.currentPath.map(_._1).getOrElse(0L)))
+      }
+    }
+
+  override protected def delegatedEntry(): Option[model.mobility.entity.event.data.DelegatedEntry] =
+    if (model.mobility.util.VehicleSimulationConfig.linkOwnedExit && supportsDelegatedScheduling)
+      Some(model.mobility.entity.event.data.DelegatedEntry(
+        wake = core.runtime.DelegatedWake(getClass.getName, getEntityId.toLong, 0L),
+        secondsPerTick = 1.0,
+        carryRounding = model.mobility.util.VehicleSimulationConfig.mesoCarryRounding,
+        roundingCredit = state.journey.mesoRoundingCredit,
+        lastExitTick = state.journey.mesoLastExitTick,
+        deferReply = true))
+    else None
+
+  override protected def leaveHandledByLink: Boolean = state.journey.leaveHandledByLink
 
   /** Handle leaving MESO link.
     */
