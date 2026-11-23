@@ -11,5 +11,7 @@ final case class DelegatedEntry(
   secondsPerTick: Double,
   carryRounding: Boolean,
   roundingCredit: Double,
-  lastExitTick: Long
+  lastExitTick: Long,
+  /** The Link keeps the entry reply until the exit tick instead of waking the vehicle: `wake` is unused. */
+  deferReply: Boolean = false
 )

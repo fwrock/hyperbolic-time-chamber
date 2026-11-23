@@ -27,5 +27,10 @@ case class PendingLinkAccessRequest(
   approachLinkId: Long = 0L,
   @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
   approachLane: Option[Int] = None,
-  requestedTick: Long = 0L
-)
+  requestedTick: Long = 0L,
+  requesterId: Long = 0L,
+  requesterShard: String = ""
+) {
+  /** The vehicle the request orders by: the requester when a Link asked on its behalf, else the sender. */
+  def orderId: Long = if (requesterId != 0L) requesterId else actorRefId
+}

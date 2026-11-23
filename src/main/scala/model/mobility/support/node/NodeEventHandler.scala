@@ -102,7 +102,7 @@ class NodeEventHandler(
     if (state != null) {
       state.capacityWaitQueue.keys.toList.foreach { key =>
         state.capacityWaitQueue.get(key).foreach { queue =>
-          queue.dequeueAll(p => p.actorRefId == event.actorRefId &&
+          queue.dequeueAll(p => p.orderId == event.actorRefId &&
             (key == data.targetLinkId || p.targetLinkId == data.targetLinkId))
           if (queue.isEmpty) state.capacityWaitQueue.remove(key)
         }
@@ -119,9 +119,7 @@ class NodeEventHandler(
       val nativeSignal = Option.when(state.junction.bindingsFor(data.approachLinkId,data.targetLinkId).nonEmpty)(signalFor(data.approachLinkId,data.targetLinkId,data.approachLane)).flatten
       nativeSignal match {
         case Some(sig) if sig.state == Red || sig.state == TrafficSignalPhaseStateEnum.Yellow =>
-          sendMessageFn(event.actorRefId,event.shardRefId,
-            LinkAccessData(Red,math.max(currentTickFn()+1,sig.nextTick),requestSeq=event.seq),
-            EventTypeEnum.ReceiveLinkAccess.toString)
+          replyToRequester(event, data, LinkAccessData(Red,math.max(currentTickFn()+1,sig.nextTick),requestSeq=event.seq))
         case Some(_) if state.junction.bindingsFor(data.approachLinkId,data.targetLinkId).nonEmpty =>
           replyGreenOrBufferForCapacity(event,data)
         case _ => state.connections.get(data.targetLinkId) match {
@@ -142,17 +140,13 @@ class NodeEventHandler(
                   "phase_state"    -> sig.state.toString,
                   "remaining_time" -> sig.remainingTime,
                   "queue_position" -> queuePos,
-                  "vehicle_id"     -> event.actorRefId,
+                  "vehicle_id"     -> requesterOf(event, data),
                   "tick"           -> currentTickFn()
                 ),
                 "node_signal_requested"
               )
-              sendMessageFn(
-                event.actorRefId,
-                event.shardRefId,
-                LinkAccessData(phase = sig.state, nextTick = sig.nextTick, queuePosition = queuePos, requestSeq = event.seq),
-                EventTypeEnum.ReceiveLinkAccess.toString
-              )
+              replyToRequester(event, data,
+                LinkAccessData(phase = sig.state, nextTick = sig.nextTick, queuePosition = queuePos, requestSeq = event.seq))
             case Some(_) =>
               state.signalWaitingCounts.remove(data.targetLinkId)
               replyGreenOrBufferForCapacity(event, data)
@@ -173,13 +167,20 @@ class NodeEventHandler(
       logWarnFn(
         s"Node ${entityIdFn()} state not initialized, deferring link access request for link: ${data.targetLinkId}"
       )
-      sendMessageFn(
-        event.actorRefId,
-        event.shardRefId,
-        LinkAccessData(phase = Green, nextTick = currentTickFn(), requestSeq = event.seq),
-        EventTypeEnum.ReceiveLinkAccess.toString
-      )
+      replyToRequester(event, data, LinkAccessData(phase = Green, nextTick = currentTickFn(), requestSeq = event.seq))
     }
+
+  private def requesterOf(event: ActorInteractionEvent, data: RequestLinkAccessData): Long =
+    if (data.requesterId != 0L) data.requesterId else event.actorRefId
+
+  private def seqOf(event: ActorInteractionEvent, data: RequestLinkAccessData): Long =
+    if (data.requesterId != 0L) data.requesterSeq else event.seq
+
+  /** The answer goes to the sender; it names the vehicle when the sender asked on its behalf. */
+  private def replyToRequester(event: ActorInteractionEvent, data: RequestLinkAccessData, access: LinkAccessData): Unit =
+    sendMessageFn(event.actorRefId, event.shardRefId,
+      access.copy(requesterId = data.requesterId, requesterShard = data.requesterShard, requestSeq = seqOf(event, data)),
+      EventTypeEnum.ReceiveLinkAccess.toString)
 
   /** Shared by every "signal says go" outcome (Green, no signal registered, uncontrolled
     * intersection) — capacity backpressure is orthogonal to signal control, so all three funnel
@@ -205,39 +206,41 @@ class NodeEventHandler(
     val admissionLinkId = junction.map(_.linkId).getOrElse(data.targetLinkId)
     val capacityKnown = state.availableCapacity.contains(admissionLinkId)
     val hasCapacity = !capacityKnown || state.availableCapacity(admissionLinkId) > 0
-    val key = (currentTickFn(), event.actorRefId, event.seq)
+    val key = (currentTickFn(), requesterOf(event, data), seqOf(event, data))
     junction.foreach(j => ensureObserved(j.linkId))
     val batchedNow = batched(junction.map(_.linkId).getOrElse(data.targetLinkId)) && (junction.nonEmpty || state.batchAllRequests)
     if (hasCapacity && !batchedNow && !conflictBlocked(junction.map(_.linkId), key)) {
       if (capacityKnown) state.availableCapacity(admissionLinkId) -= 1
-      sendGrant(event.actorRefId, event.shardRefId, event.seq, data.targetLinkId, junction,movement.flatMap(_.outgoingLane))
+      sendGrant(event.actorRefId, event.shardRefId, seqOf(event, data), data.targetLinkId, junction,movement.flatMap(_.outgoingLane),
+        data.requesterId, data.requesterShard)
     } else {
       state.capacityWaitQueue.getOrElseUpdate(admissionLinkId, mutable.Queue.empty)
         .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId,
-          requestSeq = event.seq, signalAlreadyCleared = data.signalAlreadyCleared,
+          requestSeq = seqOf(event, data), signalAlreadyCleared = data.signalAlreadyCleared,
           targetLinkId = if (junction.nonEmpty) data.targetLinkId else 0L, junctionLink = junction,
           outgoingLane=movement.flatMap(_.outgoingLane),approachLinkId=data.approachLinkId,approachLane=data.approachLane,
-          requestedTick=currentTickFn()))
+          requestedTick=currentTickFn(), requesterId = data.requesterId, requesterShard = data.requesterShard))
       if (batchedNow) requestDecision()
-      sendMessageFn(event.actorRefId, event.shardRefId,
-        LinkAccessData(phase = Green, nextTick = currentTickFn(), capacityState = LinkCapacityStateEnum.Full,
-          requestSeq = event.seq), EventTypeEnum.ReceiveLinkAccess.toString)
+      replyToRequester(event, data, LinkAccessData(phase = Green, nextTick = currentTickFn(),
+        capacityState = LinkCapacityStateEnum.Full, requestSeq = event.seq))
     }
   }
 
   private def sendGrant(vehicleId: Long, shardId: String, requestSeq: Long, targetLinkId: Long,
-                        junction: Option[model.mobility.entity.state.model.PrecomputedRouteItem], outgoingLane: Option[Int] = None): Unit = {
+                        junction: Option[model.mobility.entity.state.model.PrecomputedRouteItem], outgoingLane: Option[Int] = None,
+                        requesterId: Long = 0L, requesterShard: String = ""): Unit = {
     junction.foreach { path =>
       if (state.conflicts.nonEmpty) {
         state.occupiedConnectors(path.linkId) = state.occupiedConnectors.getOrElse(path.linkId, 0) + 1
         refreshPermissions()
       }
-      reportFn(Map("node_id" -> entityIdFn(), "vehicle_id" -> vehicleId,
+      reportFn(Map("node_id" -> entityIdFn(), "vehicle_id" -> (if (requesterId != 0L) requesterId else vehicleId),
         "connector_link_id" -> path.linkId, "target_link_id" -> targetLinkId,
         "tick" -> currentTickFn()), "junction_connector_admitted")
     }
     sendMessageFn(vehicleId, shardId,
-      LinkAccessData(phase = Green, nextTick = currentTickFn(), requestSeq = requestSeq, junctionLink = junction,outgoingLane=outgoingLane),
+      LinkAccessData(phase = Green, nextTick = currentTickFn(), requestSeq = requestSeq, junctionLink = junction,outgoingLane=outgoingLane,
+        requesterId = requesterId, requesterShard = requesterShard),
       EventTypeEnum.ReceiveLinkAccess.toString)
   }
 
@@ -271,7 +274,7 @@ class NodeEventHandler(
         state.occupiedConnectors.getOrElse(other, 0) > 0 ||
           state.capacityWaitQueue.get(other).exists(_.exists { p =>
             (!deciding || p.requestedTick < currentTickFn()) && {
-            val theirs = (p.requestedTick, p.actorRefId, p.requestSeq)
+            val theirs = (p.requestedTick, p.orderId, p.requestSeq)
             otherWins || (rule.priorityConnector.isEmpty && Ordering[(Long, Long, Long)].lt(theirs, mine)) }
           }) ||
           (otherWins && rule.gapAcceptance.exists(gap => !gapAccepted(other, gap, state.occupiedConnectors.getOrElse(c, 0))))
@@ -425,14 +428,15 @@ class NodeEventHandler(
         state.availableCapacity.getOrElse(c, 0) > 0 &&
           (p.signalAlreadyCleared || signalFor(p.approachLinkId, target, p.approachLane)
             .forall(s => s.state == Green || s.state == TrafficSignalPhaseStateEnum.Off)) &&
-          !conflictBlocked(Some(c), (p.requestedTick, p.actorRefId, p.requestSeq))
-      }.sortBy { case (_, p) => (p.requestedTick, p.actorRefId, p.requestSeq) }
+          !conflictBlocked(Some(c), (p.requestedTick, p.orderId, p.requestSeq))
+      }.sortBy { case (_, p) => (p.requestedTick, p.orderId, p.requestSeq) }
       candidates.headOption.foreach { case (c, _) =>
         val queue = state.capacityWaitQueue(c)
         val pending = queue.dequeue()
         state.availableCapacity(c) = state.availableCapacity.getOrElse(c, 0) - 1
         sendGrant(pending.actorRefId, pending.shardRefId, pending.requestSeq,
-          if (pending.targetLinkId == 0L) c else pending.targetLinkId, pending.junctionLink, pending.outgoingLane)
+          if (pending.targetLinkId == 0L) c else pending.targetLinkId, pending.junctionLink, pending.outgoingLane,
+          pending.requesterId, pending.requesterShard)
         if (queue.isEmpty) state.capacityWaitQueue.remove(c)
         progressed = true
       }
@@ -457,12 +461,13 @@ class NodeEventHandler(
       state.capacityWaitQueue.get(linkId).foreach { queue =>
         var available = state.availableCapacity.getOrElse(linkId, 0)
         var stopped = false
-        queue.toList.filter(_.requestedTick < currentTickFn()).sortBy(p => (p.requestedTick, p.actorRefId, p.requestSeq)).foreach { pending =>
+        queue.toList.filter(_.requestedTick < currentTickFn()).sortBy(p => (p.requestedTick, p.orderId, p.requestSeq)).foreach { pending =>
           if (!stopped && available > 0 && mayProceed(pending)) {
             queue.dequeueAll(_ eq pending)
             available -= 1
             sendGrant(pending.actorRefId, pending.shardRefId, pending.requestSeq,
-              if (pending.targetLinkId == 0L) linkId else pending.targetLinkId, pending.junctionLink, pending.outgoingLane)
+              if (pending.targetLinkId == 0L) linkId else pending.targetLinkId, pending.junctionLink, pending.outgoingLane,
+              pending.requesterId, pending.requesterShard)
           } else stopped = true
         }
         state.availableCapacity(linkId) = available
@@ -476,7 +481,8 @@ class NodeEventHandler(
         val pending = queue.dequeue()
         available -= 1
         sendGrant(pending.actorRefId, pending.shardRefId, pending.requestSeq,
-          if (pending.targetLinkId == 0L) linkId else pending.targetLinkId, pending.junctionLink,pending.outgoingLane)
+          if (pending.targetLinkId == 0L) linkId else pending.targetLinkId, pending.junctionLink,pending.outgoingLane,
+          pending.requesterId, pending.requesterShard)
       }
       state.availableCapacity(linkId) = available
       if (queue.isEmpty) state.capacityWaitQueue.remove(linkId)

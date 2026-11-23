@@ -24,5 +24,11 @@ final case class LinkInfoData(
   /** The tick at which the Link already scheduled the vehicle's wake, or -1 when the vehicle must schedule itself. */
   delegatedExitTick: Long = -1L,
   /** False when the Link will not answer this vehicle's `LeaveLinkData` (plain MESO link, vehicle opted in). */
-  leaveAckRequired: Boolean = true
+  leaveAckRequired: Boolean = true,
+  /** The tick the vehicle entered the link when the Link held this reply until the exit tick, or -1. */
+  entryTick: Long = -1L,
+  /** The Node's answer to the access request the Link made for the vehicle at the exit tick. */
+  access: Option[model.mobility.entity.event.node.LinkAccessData] = None,
+  /** The Link already removed the vehicle from the link when it saw the Node's grant: the vehicle sends no leave. */
+  leaveDone: Boolean = false
 ) extends BaseEventData

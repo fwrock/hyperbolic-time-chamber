@@ -542,6 +542,8 @@ class Car(
     if (!held) state.journey.retainedMicroExitLinkId = None
   }
 
+  override protected def leaveHandledByLink: Boolean = state.journey.leaveHandledByLink
+
   override protected def leaveAckRequired: Boolean = state.journey.leaveAckRequired || !isDirectConservativeRuntime
 
   override protected def completeLeaveWithoutReply(linkEntityId: Long): Unit = {
@@ -592,8 +594,34 @@ class Car(
     emissionHandler.onMicroLeaveLink(data.linkId, data.distanceTraveled, data.travelTime)
   }
 
+  override protected def linkAccessRequest(): Option[model.mobility.entity.event.data.LinkAccessRequest] =
+    if (!model.mobility.util.VehicleSimulationConfig.linkRequestsAccess || state.bestRoute.forall(_.isEmpty) ||
+      state.currentPath.isEmpty) None
+    else {
+      val nodeId = getCurrentNode
+      val linkId = getNextLink
+      if (nodeId == 0L || linkId == 0L) None
+      else model.mobility.util.CityMapUtil.nodesById.get(nodeId).map { node =>
+        model.mobility.entity.event.data.LinkAccessRequest(node.id, node.classType,
+          model.mobility.entity.event.data.vehicle.RequestLinkAccessData(
+            targetLinkId = linkId,
+            signalAlreadyCleared = state.movableLinkExitReported,
+            approachLinkId = state.currentPath.map(_._1).getOrElse(0L),
+            approachLane = state.journey.lastMicroLane,
+            followingLinkId = state.bestRoute.flatMap(_.iterator.drop(1).nextOption()).map(_._1).getOrElse(0L)))
+      }
+    }
+
   override protected def delegatedEntry(): Option[model.mobility.entity.event.data.DelegatedEntry] =
-    if (model.mobility.util.VehicleSimulationConfig.delegatedEntryScheduling && supportsDelegatedScheduling)
+    if (model.mobility.util.VehicleSimulationConfig.linkOwnedExit && supportsDelegatedScheduling)
+      Some(model.mobility.entity.event.data.DelegatedEntry(
+        wake = core.runtime.DelegatedWake(getClass.getName, getEntityId.toLong, 0L),
+        secondsPerTick = state.journey.secondsPerTick,
+        carryRounding = model.mobility.util.VehicleSimulationConfig.mesoCarryRounding,
+        roundingCredit = state.journey.mesoRoundingCredit,
+        lastExitTick = state.journey.mesoLastExitTick,
+        deferReply = true))
+    else if (model.mobility.util.VehicleSimulationConfig.delegatedEntryScheduling && supportsDelegatedScheduling)
       Some(model.mobility.entity.event.data.DelegatedEntry(
         wake = delegateWake(),
         secondsPerTick = state.journey.secondsPerTick,
@@ -605,7 +633,23 @@ class Car(
   override def actHandleReceiveEnterLinkInfo(
     event: ActorInteractionEvent,
     data: LinkInfoData
-  ): Unit = linkHandler.handleEnterLink(event.actorRefId, data, state)
+  ): Unit = {
+    linkHandler.handleEnterLink(event.actorRefId, data, state)
+    // The Link held this reply until the exit tick, so the vehicle's wake is this very callback.
+    if (data.entryTick >= 0L && state.status == Moving && !state.isMicroMode) {
+      val exitReached = mesoExitTick.forall(_ <= currentTick)
+      if (exitReached) {
+        mesoExitTick = None
+        data.access match {
+          case Some(access) =>
+            state.journey.leaveHandledByLink = data.leaveDone
+            state.status = WaitingSignalState
+            signalHandler.handleLinkAccess(access, state, eventTick = event.tick, eventSeq = event.seq)
+          case None => requestSignalState()
+        }
+      }
+    }
+  }
 
   override def actHandleReceiveLeaveLinkInfo(
     event: ActorInteractionEvent,

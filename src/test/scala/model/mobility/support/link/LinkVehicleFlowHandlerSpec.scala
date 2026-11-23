@@ -14,6 +14,8 @@ import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.interscity.htc.model.mobility.entity.event.node.LinkAccessData
+import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Green
 
 import scala.collection.mutable
 
@@ -51,7 +53,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
 
   private case class Fixture(handler: LinkVehicleFlowHandler, getState: () => LinkState, linkId: String,
                             setTick: Tick => Unit, sent: mutable.Buffer[AnyRef],
-                            delegated: mutable.Buffer[(DelegatedWake, Tick)])
+                            delegated: mutable.Buffer[(DelegatedWake, Tick)], scheduled: mutable.Buffer[Tick])
 
   private def newFixture(linkId: String, initialState: LinkState, costPublishInterval: Int = 0,
                            leaveWithoutReply: Boolean = false): Fixture = {
@@ -60,6 +62,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     var tick: Tick = 0L
     val sent = mutable.Buffer.empty[AnyRef]
     val delegated = mutable.Buffer.empty[(DelegatedWake, Tick)]
+    val scheduled = mutable.Buffer.empty[Tick]
     val vehicleEntryTick = mutable.Map.empty[Long, Tick]
     val vehicleWaiting    = mutable.Map.empty[Long, Double]
 
@@ -80,7 +83,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       entityIdFn = () => linkId,
       currentTickFn = () => tick,
       sendMessageFn = (_, _, data, _) => { sent += data; () },
-      scheduleEventFn = _ => (),
+      scheduleEventFn = t => { scheduled += t; () },
       getLinkStateFn = () => state,
       setLinkStateFn = s => state = s,
       putVehicleEntryTickFn = (id, t) => vehicleEntryTick.put(id, t),
@@ -99,7 +102,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       leaveWithoutReplyFn = () => leaveWithoutReply
     )
 
-    Fixture(handler, () => state, linkId, t => tick = t, sent, delegated)
+    Fixture(handler, () => state, linkId, t => tick = t, sent, delegated, scheduled)
   }
 
   private def event(carId: Long, linkId: String): ActorInteractionEvent =
@@ -187,6 +190,113 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     val f = newFixture("315", newMesoState("315"))
     f.handler.handleEnterLinkMeso(event(1L, "315"), delegating().copy(actorType = ActorTypeEnum.Bus))
     f.delegated shouldBe empty
+  }
+
+  private def owning(carId: Long = 1L) =
+    enterData(carId).copy(delegatedEntry = Some(DelegatedEntry(wake, 1.0, false, 0.0, -1L, deferReply = true)))
+
+  "handleEnterLinkMeso with a deferred reply" should "hold the reply, schedule the Link for the exit tick and answer then" in {
+    val linkId = "316"
+    val f = newFixture(linkId, newMesoState(linkId))
+    f.setTick(100L)
+
+    f.handler.handleEnterLinkMeso(event(1L, linkId), owning())
+
+    val seconds = model.mobility.support.car.MesoLinkTiming.carTravelSeconds(300.0, 20.0, 1L, 13.9, 1)
+    val exit = 100L + math.ceil(seconds).toLong
+    f.sent.collect { case i: LinkInfoData => i } shouldBe empty
+    f.delegated shouldBe empty
+    f.scheduled.toList shouldBe List(exit)
+    // recomputing the MESO dynamics replaced the state, and the pending reply must have survived that
+    f.getState().pendingMesoExits.map(_.exitTick) shouldBe List(exit)
+
+    f.setTick(exit - 1)
+    f.handler.answerDueExits() shouldBe Some(exit)
+    f.sent shouldBe empty
+
+    f.setTick(exit)
+    f.handler.answerDueExits() shouldBe None
+    val reply = f.sent.collect { case i: LinkInfoData => i }.head
+    reply.entryTick shouldBe 100L
+    reply.linkNumberOfCars shouldBe 1
+    f.getState().pendingMesoExits shouldBe empty
+  }
+
+  it should "schedule the Link again only for an exit earlier than the one it already waits for, and answer in exit order" in {
+    val linkId = "317"
+    val f = newFixture(linkId, newMesoState(linkId, length = 300.0))
+    f.setTick(100L)
+    f.handler.handleEnterLinkMeso(event(1L, linkId), owning(1L))
+    val first = f.scheduled.last
+    f.setTick(100L)
+    f.handler.handleEnterLinkMeso(event(2L, linkId), owning(2L))
+    // the second car sees one more vehicle on the link, so it is slower and exits later
+    f.scheduled.toList shouldBe List(first)
+    val exits = f.getState().pendingMesoExits.map(_.exitTick)
+    exits shouldBe exits.sorted
+    exits.head shouldBe first
+
+    f.setTick(exits.last)
+    f.handler.answerDueExits() shouldBe None
+    f.sent.collect { case i: LinkInfoData => i } should have size 2
+  }
+
+  it should "answer at once when the traversal takes no time, so the car schedules itself" in {
+    val f = newFixture("318", newMesoState("318"))
+    f.handler.handleEnterLinkMeso(event(1L, "318"),
+      owning().copy(delegatedEntry = Some(DelegatedEntry(wake, Double.PositiveInfinity, false, 0.0, -1L, deferReply = true))))
+    f.scheduled shouldBe empty
+    val reply = f.sent.collect { case i: LinkInfoData => i }.head
+    reply.entryTick shouldBe -1L
+    f.getState().pendingMesoExits shouldBe empty
+  }
+
+  private def asking(carId: Long = 1L) = {
+    val request = model.mobility.entity.event.data.LinkAccessRequest(2L, "mobility.actor.Node",
+      model.mobility.entity.event.data.vehicle.RequestLinkAccessData(targetLinkId = 400L))
+    owning(carId).copy(accessRequest = Some(request))
+  }
+
+  private def sentWithEvent(f: Fixture) = f.sent.collect { case i: LinkInfoData => i }
+
+  "A deferred reply with an access request" should "ask the Node for the vehicle at the exit tick and answer once with the Node's reply" in {
+    val f = newFixture("319", newMesoState("319"))
+    f.setTick(100L)
+    f.handler.handleEnterLinkMeso(event(1L, "319"), asking())
+    val exit = f.scheduled.last
+
+    f.setTick(exit)
+    f.handler.answerDueExits() shouldBe None
+    val request = f.sent.collect { case r: model.mobility.entity.event.data.vehicle.RequestLinkAccessData => r }.head
+    request.requesterId shouldBe 1L
+    request.targetLinkId shouldBe 400L
+    sentWithEvent(f) shouldBe empty
+    f.getState().accessAwaiting should have size 1
+
+    val grant = LinkAccessData(phase = Green, nextTick = exit, requesterId = 1L, requesterShard = "mobility.actor.Car")
+    f.handler.forwardNodeAccess(grant)
+    val fused = sentWithEvent(f).head
+    fused.access shouldBe Some(grant)
+    fused.entryTick shouldBe 100L
+    fused.leaveDone shouldBe false
+    f.getState().accessAwaiting shouldBe empty
+  }
+
+  it should "forward a later grant for a vehicle the Node buffered straight to the vehicle" in {
+    val f = newFixture("320", newMesoState("320"))
+    f.setTick(100L)
+    f.handler.handleEnterLinkMeso(event(1L, "320"), asking())
+    f.setTick(f.scheduled.last)
+    f.handler.answerDueExits()
+
+    f.handler.forwardNodeAccess(LinkAccessData(phase = Green, nextTick = 0L, capacityState = model.mobility.entity.state.enumeration.LinkCapacityStateEnum.Full,
+      requesterId = 1L, requesterShard = "mobility.actor.Car"))
+    sentWithEvent(f).head.access.map(_.capacityState) shouldBe Some(model.mobility.entity.state.enumeration.LinkCapacityStateEnum.Full)
+
+    f.sent.clear()
+    val later = LinkAccessData(phase = Green, nextTick = 5L, requesterId = 1L, requesterShard = "mobility.actor.Car")
+    f.handler.forwardNodeAccess(later)
+    f.sent.toList shouldBe List(later.copy(requesterId = 0L, requesterShard = ""))
   }
 
   "handleEnterLinkMeso" should "start currentSpeed at freeSpeed and congestionFactor at 1.0 on an empty link" in {

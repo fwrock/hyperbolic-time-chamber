@@ -35,7 +35,9 @@ case class CarJourneyState(
   var pendingRoadLane: Option[Int] = None,
   var mesoOriginActive: Boolean = false,
   /** Whether the current MESO link will answer this Car's leave; set from the entry reply, so a lost value only restores the reply. */
-  var leaveAckRequired: Boolean = true
+  var leaveAckRequired: Boolean = true,
+  /** The Link took the Car off the link when the Node granted the crossing, so the Car sends no leave. */
+  var leaveHandledByLink: Boolean = false
 ) extends org.interscity.htc.model.mobility.support.car.MesoTimingState {
   def entryRemainderAt(tick: Tick): Double =
     if (boundaryExitTick.contains(tick) && sumoArrivalSpeed > 0.0) boundaryRemainderSeconds else 0.0

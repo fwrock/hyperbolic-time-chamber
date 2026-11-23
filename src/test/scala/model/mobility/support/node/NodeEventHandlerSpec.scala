@@ -345,6 +345,46 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
 
   // ── Capacity: cancellation (destroyed while buffered) ────────────────────────────────────
 
+  "handleRequestLinkAccess on behalf of a vehicle" should "answer the sender and name the requester and its sequence" in {
+    val (handler, sent) = newHandler(newState())
+
+    handler.handleRequestLinkAccess(requestEvent(9L),
+      RequestLinkAccessData(targetLinkId = 999L, requesterId = 1L, requesterShard = "mobility.actor.Car", requesterSeq = 7L))
+
+    sent should have size 1
+    val (to, _, data, _) = sent.head
+    to shouldBe 9L
+    data shouldBe LinkAccessData(phase = Green, nextTick = 100L, requestSeq = 7L, requesterId = 1L, requesterShard = "mobility.actor.Car")
+  }
+
+  it should "buffer by the requester, grant it later to the sender with the requester's identity, and cancel by the requester" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))
+    val availableCapacity = mutable.Map(100L -> 0)
+    val capacityWaitQueue = mutable.Map.empty[Long, mutable.Queue[PendingLinkAccessRequest]]
+    val (handler, sent) = newHandler(
+      newState(connections = connections, signals = signals, availableCapacity = availableCapacity, capacityWaitQueue = capacityWaitQueue)
+    )
+
+    handler.handleRequestLinkAccess(requestEvent(9L),
+      RequestLinkAccessData(targetLinkId = 100L, requesterId = 1L, requesterShard = "mobility.actor.Car", requesterSeq = 7L))
+    sent.head._3 shouldBe LinkAccessData(phase = Green, nextTick = 100L, capacityState = Full, requestSeq = 7L,
+      requesterId = 1L, requesterShard = "mobility.actor.Car")
+    capacityWaitQueue(100L).head.orderId shouldBe 1L
+
+    handler.handleLinkCapacityFreed(LinkCapacityFreedData(linkId = 100L, freedCount = 1))
+    val (to, _, grant, _) = sent.last
+    to shouldBe 9L
+    grant.asInstanceOf[LinkAccessData] should have(
+      Symbol("requesterId")(1L), Symbol("requesterShard")("mobility.actor.Car"), Symbol("requestSeq")(7L), Symbol("phase")(Green))
+
+    availableCapacity(100L) = 0
+    handler.handleRequestLinkAccess(requestEvent(9L),
+      RequestLinkAccessData(targetLinkId = 100L, requesterId = 2L, requesterShard = "mobility.actor.Car", requesterSeq = 8L))
+    handler.handleCancelLinkAccessRequest(requestEvent(2L), CancelLinkAccessRequestData(targetLinkId = 100L))
+    capacityWaitQueue.get(100L) shouldBe None
+  }
+
   "handleCancelLinkAccessRequest" should "remove the matching entry from capacityWaitQueue, and the link entirely once it's the last one" in {
     val connections = mutable.Map(100L -> Identify(id = 500L))
     val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))

@@ -11,5 +11,12 @@ case class RequestLinkAccessData(
   signalAlreadyCleared: Boolean = false,
   approachLinkId: Long = 0L,
   approachLane: Option[Int] = None,
-  followingLinkId: Long = 0L
+  followingLinkId: Long = 0L,
+  /** Set when a Link asks on behalf of a vehicle: the Node orders, cancels and reports by this id and the reply
+    * (which goes to the sender) names it again. 0 means the sender is the requester.
+    */
+  requesterId: Long = 0L,
+  requesterShard: String = "",
+  /** The requester's own send sequence, which the answer echoes so the requester can correlate it. */
+  requesterSeq: Long = 0L
 ) extends BaseEventData

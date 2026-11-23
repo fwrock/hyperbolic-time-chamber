@@ -104,7 +104,9 @@ case class LinkState(
   microEntry: model.MicroEntryConfig = model.MicroEntryConfig(),
   var pendingMicroEntries: List[model.PendingMicroEntry] = Nil,
   mesoCapacity: Option[model.MesoCapacityConfig] = None,
-  mesoCapacityState: model.MesoCapacityState = model.MesoCapacityState()
+  mesoCapacityState: model.MesoCapacityState = model.MesoCapacityState(),
+  var pendingMesoExits: List[model.PendingEntryReply] = Nil,
+  var accessAwaiting: List[model.PendingEntryReply] = Nil
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,

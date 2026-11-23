@@ -39,7 +39,7 @@ class CarLinkHandler(
   private def leaveLinkAwaitKey(linkId: Long): String = model.mobility.actor.Movable.leaveLinkAwaitKey(linkId)
 
   def handleEnterLink(linkId: Long, data: LinkInfoData, state: CarState): Unit = {
-    val tick     = currentTickFn()
+    val tick     = if (data.entryTick >= 0L) data.entryTick else currentTickFn()
     val entityId = entityIdFn()
 
     // EnterLinkData -> ReceiveEnterLinkInfo is a single-shot, terminal reply (confirmed against
@@ -118,7 +118,8 @@ class CarLinkHandler(
 
     val exitTick = mesoExitTick(tick, time, data.mesoOriginAtEnd, state)
     setMesoExitTickFn(Some(exitTick))
-    if (data.delegatedExitTick < 0L) onFinishSpontaneousFn(Some(exitTick))
+    if (data.entryTick >= 0L && exitTick <= currentTickFn()) ()
+    else if (data.delegatedExitTick < 0L) onFinishSpontaneousFn(Some(exitTick))
     else if (data.delegatedExitTick != exitTick)
       logStaleEventDebugFn(
         s"$entityId: link $linkId scheduled this car's wake at ${data.delegatedExitTick} but it computed $exitTick")
@@ -200,6 +201,7 @@ class CarLinkHandler(
     )
     state.journey.mesoOriginActive = false
     state.journey.leaveAckRequired = true
+    state.journey.leaveHandledByLink = false
 
     val routeDepleted = state.currentPath.isEmpty && state.bestRoute.forall(_.isEmpty)
     if (routeDepleted && state.status != Finished) {

@@ -12,8 +12,11 @@ import org.interscity.htc.model.mobility.entity.event.data.{
 }
 import org.interscity.htc.model.mobility.entity.state.LinkState
 import org.interscity.htc.model.mobility.entity.state.enumeration.{ EventTypeEnum, SimulationModeEnum, microMaxAcceleration, microMaxDeceleration }
-import org.interscity.htc.model.mobility.entity.state.model.{ LinkRegister, VehicleInLane }
+import org.interscity.htc.model.mobility.entity.state.model.{ LinkRegister, PendingEntryReply, VehicleInLane }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.model.mobility.entity.event.node.LinkAccessData
+import org.interscity.htc.model.mobility.entity.state.enumeration.LinkCapacityStateEnum
+import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Green
 import org.interscity.htc.model.mobility.util.SpeedUtil
 
 import scala.collection.mutable
@@ -40,7 +43,9 @@ class LinkVehicleFlowHandler(
   logDebugFn:                     String => Unit,
   reportFn: (Map[String,Any],String) => Unit = (_,_) => (),
   scheduleDelegatedFn: (core.runtime.DelegatedWake, Tick) => Unit = (_, _) => (),
-  leaveWithoutReplyFn: () => Boolean = () => model.mobility.util.VehicleSimulationConfig.leaveWithoutReply
+  leaveWithoutReplyFn: () => Boolean = () => model.mobility.util.VehicleSimulationConfig.leaveWithoutReply,
+  leavesAtGrantFn: () => Boolean = () => model.mobility.util.VehicleSimulationConfig.linkLeavesAtGrant,
+  leaveVehicleFn: Long => Unit = _ => ()
 ) {
 
   /** Recomputes `currentSpeed`/`congestionFactor` from the link's current registered-vehicle
@@ -109,22 +114,84 @@ class LinkVehicleFlowHandler(
       }
       .filter { case (_, exit) => exit > entryTick }
 
-    sendMessageFn(
-      event.actorRefId, event.shardRefId,
-      LinkInfoData(
-        linkLength       = state.length,
-        linkCapacity     = state.capacity,
-        linkNumberOfCars = state.registered.size,
-        linkFreeSpeed    = state.freeSpeed,
-        linkLanes        = state.lanes,
-        requestSeq       = event.seq,
-        delegatedExitTick = delegatedExit.fold(-1L)(_._2),
-        leaveAckRequired = !(leaveWithoutReplyFn() && LinkVehicleFlowHandler.skipsLeaveReply(data.actorType) &&
-          !data.mesoOriginAtEnd)
-      ),
-      EventTypeEnum.ReceiveEnterLinkInfo.toString
+    val ownedExit = data.delegatedEntry
+      .filter(e => e.deferReply && data.actorType == model.mobility.entity.state.enumeration.ActorTypeEnum.Car &&
+        !data.mesoOriginAtEnd)
+      .map { entry =>
+        val seconds = model.mobility.support.car.MesoLinkTiming.carTravelSeconds(
+          state.length, state.capacity, state.registered.size.toLong, state.freeSpeed, state.lanes)
+        model.mobility.support.car.MesoLinkTiming.delegatedExitTick(entryTick, seconds, entry, originAtEnd = false)
+      }
+      .filter(_ > entryTick)
+
+    val reply = LinkInfoData(
+      linkLength       = state.length,
+      linkCapacity     = state.capacity,
+      linkNumberOfCars = state.registered.size,
+      linkFreeSpeed    = state.freeSpeed,
+      linkLanes        = state.lanes,
+      requestSeq       = event.seq,
+      delegatedExitTick = delegatedExit.fold(-1L)(_._2),
+      leaveAckRequired = !(leaveWithoutReplyFn() && LinkVehicleFlowHandler.skipsLeaveReply(data.actorType) &&
+        !data.mesoOriginAtEnd),
+      entryTick        = if (ownedExit.isDefined) entryTick else -1L
     )
-    delegatedExit.foreach { case (wake, exit) => scheduleDelegatedFn(wake, exit) }
+    ownedExit match {
+      case Some(exit) => holdReplyUntilExit(PendingEntryReply(exit, event.actorRefId, event.shardRefId, reply, data.accessRequest))
+      case None =>
+        sendMessageFn(event.actorRefId, event.shardRefId, reply, EventTypeEnum.ReceiveEnterLinkInfo.toString)
+        delegatedExit.foreach { case (wake, exit) => scheduleDelegatedFn(wake, exit) }
+    }
+  }
+
+  /** The list stays ordered by exit tick, and by entry order within a tick. The earliest entry is always the one the
+    * Link has scheduled itself for.
+    */
+  private def holdReplyUntilExit(pending: PendingEntryReply): Unit = {
+    // Read the state again: recomputing the MESO dynamics replaces it with a copy.
+    val state = getLinkStateFn()
+    val earliestBefore = state.pendingMesoExits.headOption.map(_.exitTick)
+    val (before, after) = state.pendingMesoExits.span(_.exitTick <= pending.exitTick)
+    state.pendingMesoExits = before ::: pending :: after
+    if (earliestBefore.forall(pending.exitTick < _)) scheduleEventFn(pending.exitTick)
+  }
+
+  /** Answers every vehicle whose exit tick has come and returns the tick of the next pending exit. */
+  def answerDueExits(): Option[Tick] = {
+    val state = getLinkStateFn()
+    val tick = currentTickFn()
+    val (due, rest) = state.pendingMesoExits.span(_.exitTick <= tick)
+    state.pendingMesoExits = rest
+    due.foreach { p =>
+      p.accessRequest match {
+        case Some(access) =>
+          state.accessAwaiting = state.accessAwaiting :+ p
+          sendMessageFn(access.nodeId, access.nodeClassType,
+            access.request.copy(requesterId = p.actorRefId, requesterShard = p.shardRefId, requesterSeq = p.reply.requestSeq),
+            EventTypeEnum.RequestLinkAccess.toString)
+        case None =>
+          sendMessageFn(p.actorRefId, p.shardRefId, p.reply, EventTypeEnum.ReceiveEnterLinkInfo.toString)
+      }
+    }
+    rest.headOption.map(_.exitTick)
+  }
+
+  /** The first answer for a vehicle completes the entry reply it was waiting for; a later one (the capacity-freed
+    * grant for a vehicle the Node buffered) goes to the vehicle as the Node sent it.
+    */
+  def forwardNodeAccess(data: LinkAccessData): Unit = {
+    val state = getLinkStateFn()
+    state.accessAwaiting.find(_.actorRefId == data.requesterId) match {
+      case Some(p) =>
+        state.accessAwaiting = state.accessAwaiting.filterNot(_ eq p)
+        val leaves = leavesAtGrantFn() && data.phase == Green && data.capacityState == LinkCapacityStateEnum.Available
+        if (leaves) leaveVehicleFn(p.actorRefId)
+        sendMessageFn(p.actorRefId, p.shardRefId, p.reply.copy(access = Some(data), leaveDone = leaves),
+          EventTypeEnum.ReceiveEnterLinkInfo.toString)
+      case None =>
+        sendMessageFn(data.requesterId, data.requesterShard, data.copy(requesterId = 0L, requesterShard = ""),
+          EventTypeEnum.ReceiveLinkAccess.toString)
+    }
   }
 
   def handleEnterLinkMicro(event: ActorInteractionEvent, data: EnterLinkData): Unit = {
@@ -318,13 +385,25 @@ class LinkVehicleFlowHandler(
     wasRegistered: Boolean
   ): Unit = {
     val state = getLinkStateFn()
-    state.pendingMicroEntries = state.pendingMicroEntries.filterNot(_.actorId == event.actorRefId)
-    state.registered.removeActor(event.actorRefId)
+    val entryTick = removeVehicleFromLink(event.actorRefId, wasRegistered)
+    if (state.isMicroMode) sendLeaveLinkMicro(event, data, entryTick)
+    else if (data.replyRequired) sendLeaveLinkDataMeso(event)
+  }
+
+  /** The Link takes a vehicle off a plain MESO link itself, as `handleLeaveLink` does for a request without a reply. */
+  def leaveByLink(actorId: Long): Unit =
+    removeVehicleFromLink(actorId, getLinkStateFn().registered.containsActor(actorId))
+
+  /** Returns the tick the vehicle entered the link, or -1. */
+  private def removeVehicleFromLink(actorId: Long, wasRegistered: Boolean): Long = {
+    val state = getLinkStateFn()
+    state.pendingMicroEntries = state.pendingMicroEntries.filterNot(_.actorId == actorId)
+    state.registered.removeActor(actorId)
     recomputeAndPublishMesoDynamics()
 
-    val entryTick = getVehicleEntryTickFn(event.actorRefId).getOrElse(-1L)
-    removeVehicleEntryTickFn(event.actorRefId)
-    removeVehicleWaitingFn(event.actorRefId)
+    val entryTick = getVehicleEntryTickFn(actorId).getOrElse(-1L)
+    removeVehicleEntryTickFn(actorId)
+    removeVehicleWaitingFn(actorId)
 
     if (wasRegistered) {
       val travelTicks = if (entryTick >= 0) (currentTickFn() - entryTick).toDouble else 0.0
@@ -339,9 +418,7 @@ class LinkVehicleFlowHandler(
         EventTypeEnum.LinkCapacityFreed.toString
       )
     }
-
-    if (state.isMicroMode) sendLeaveLinkMicro(event, data, entryTick)
-    else if (data.replyRequired) sendLeaveLinkDataMeso(event)
+    entryTick
   }
 
   private def sendLeaveLinkMicro(

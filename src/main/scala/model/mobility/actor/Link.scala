@@ -4,6 +4,7 @@ package model.mobility.actor
 import core.actor.SimulationBaseActor
 import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.types.Tick
+import model.mobility.entity.event.node.LinkAccessData
 import core.entity.event.SpontaneousEvent
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
@@ -96,7 +97,9 @@ class Link(
       pendingMicroEntries = s.pendingMicroEntries.map(p => p.copy(shardId=core.util.StringPool.intern(p.shardId))),
       mesoCapacityState = s.mesoCapacityState.copy(
         entries=s.mesoCapacityState.entries.map(p => p.copy(shardId=StringPool.intern(p.shardId))),
-        exits=s.mesoCapacityState.exits.map(p => p.copy(shardId=StringPool.intern(p.shardId))))
+        exits=s.mesoCapacityState.exits.map(p => p.copy(shardId=StringPool.intern(p.shardId)))),
+      pendingMesoExits = s.pendingMesoExits.map(p => p.copy(shardRefId = StringPool.intern(p.shardRefId))),
+      accessAwaiting = s.accessAwaiting.map(p => p.copy(shardRefId = StringPool.intern(p.shardRefId)))
     )
 
   /** Tracks when each vehicle entered the link (for travel time calculation).
@@ -248,6 +251,7 @@ class Link(
     sendMessageFn               = (id, shard, d, et) => sendMessageTo(entityId = id, shardId = shard, data = d, eventType = et, actorType = LoadBalancedDistributed),
     scheduleEventFn             = tick => scheduleEvent(tick),
     scheduleDelegatedFn         = (wake, tick) => scheduleDelegated(wake, tick),
+    leaveVehicleFn              = id => leaveForVehicle(id),
     getLinkStateFn              = () => state,
     setLinkStateFn              = s => state = s,
     putVehicleEntryTickFn       = (id, t) => vehicleEntryTick.put(id, t),
@@ -323,6 +327,7 @@ class Link(
     event.data match {
       case d: EnterLinkData        => handleEnterLink(event, d)
       case d: LeaveLinkData        => handleLeaveLink(event, d)
+      case d: LinkAccessData       => vehicleFlowHandler.forwardNodeAccess(d)
       case _: SubscribeMicroBoundaryData => followingHandler.subscribe(event.actorRefId, event.shardRefId)
       case d: MicroBoundaryUpdateData => followingHandler.receive(event.actorRefId, d.snapshot)
       case d: LinkSignalStateData =>
@@ -360,14 +365,17 @@ class Link(
     *   Spontaneous event from time manager
     */
   override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
+    val nextExit = vehicleFlowHandler.answerDueExits()
+    def finishMerged(next: Option[Tick]): Unit =
+      onFinishSpontaneous((next ++ nextExit).minOption)
     // logInfo(s"[LINK] actSpontaneous tick=$currentTick id=$getEntityId =${state.isMicroMode} vehicles=${if (state.isMicroMode) state.totalVehiclesInMicro else 0}")
     if (state.mesoCapacity.nonEmpty) {
-      onFinishSpontaneous(mesoCapacityHandler.onTick())
+      finishMerged(mesoCapacityHandler.onTick())
       return
     }
     if (!state.isMicroMode) {
       microTickScheduled = false
-      onFinishSpontaneous(None)
+      finishMerged(None)
       return
     }
 
@@ -381,11 +389,11 @@ class Link(
     if (!hasVehicles) {
       emptyGraceTick += 1
       if (emptyGraceTick <= MICRO_GRACE_TICKS) {
-        onFinishSpontaneous(Some(currentTick + 1))
+        finishMerged(Some(currentTick + 1))
       } else {
         emptyGraceTick = 0
         microTickScheduled = false
-        onFinishSpontaneous(None)
+        finishMerged(None)
       }
       return
     }
@@ -399,15 +407,15 @@ class Link(
     if (hasVehiclesAfterTick) {
       microTickScheduled = true
       emptyGraceTick = 0
-      onFinishSpontaneous(Some(currentTick + 1))
+      finishMerged(Some(currentTick + 1))
     } else {
       emptyGraceTick += 1
       if (emptyGraceTick <= MICRO_GRACE_TICKS) {
-        onFinishSpontaneous(Some(currentTick + 1))
+        finishMerged(Some(currentTick + 1))
       } else {
         emptyGraceTick = 0
         microTickScheduled = false
-        onFinishSpontaneous(None)
+        finishMerged(None)
       }
     }
   }
@@ -431,6 +439,25 @@ class Link(
       vehicleFlowHandler.handleEnterLinkMeso(event,data)
     }
     followingHandler.observeNextRoad(data.nextLinkId)
+    followingHandler.publish()
+  }
+
+  /** The exit of a vehicle the Link saw granted by the Node: what `handleLeaveLink` does for a plain MESO leave without reply. */
+  private def leaveForVehicle(actorId: Long): Unit = {
+    metricsReporter.ensureSummaryTick(currentTick)
+    val registered = state.registered.iterator.find(_.actorId == actorId)
+    if (registered.isDefined) SchedulingMetrics.linkTraversalsMeso.inc()
+    reportToSpecificReporter(
+      ReportTypeEnum.clickhouse,
+      VehicleLinkFlowData(
+        linkId = getEntityId, eventType = "leave", vehicleId = actorId.toString,
+        actorType = registered.map(_.actorType.toString).getOrElse(""),
+        actorCreationType = registered.map(_.actorCreationType.toString).getOrElse(""),
+        vehicleCountOnLink = math.max(0, state.registered.size - (if (registered.isDefined) 1 else 0))
+      ),
+      "vehicle_link_flow"
+    )
+    vehicleFlowHandler.leaveByLink(actorId)
     followingHandler.publish()
   }
 

@@ -28,5 +28,8 @@ case class LinkAccessData(
   capacityState: LinkCapacityStateEnum = LinkCapacityStateEnum.Available,
   requestSeq: Long = 0L,
   junctionLink: Option[model.mobility.entity.state.model.PrecomputedRouteItem] = None,
-  outgoingLane: Option[Int] = None
+  outgoingLane: Option[Int] = None,
+  /** The vehicle this answers when a Link asked on its behalf, and its shard. */
+  requesterId: Long = 0L,
+  requesterShard: String = ""
 ) extends BaseEventData

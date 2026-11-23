@@ -41,6 +41,30 @@ object VehicleSimulationConfig {
     try com.typesafe.config.ConfigFactory.load().getBoolean("htc.mobility.leave-without-reply")
     catch { case _: Exception => sys.env.get("HTC_MOBILITY_LEAVE_WITHOUT_REPLY").exists(_.equalsIgnoreCase("true")) }
 
+  /** On a plain MESO link the Link owns the vehicle's exit event: it schedules itself for the exit tick and answers the
+    * entry request then, instead of answering at entry and waking the vehicle. Read from `htc.mobility.link-owned-exit`
+    * or `HTC_MOBILITY_LINK_OWNED_EXIT` (default off). Needs the direct conservative runtime.
+    */
+  lazy val linkOwnedExit: Boolean =
+    try com.typesafe.config.ConfigFactory.load().getBoolean("htc.mobility.link-owned-exit")
+    catch { case _: Exception => sys.env.get("HTC_MOBILITY_LINK_OWNED_EXIT").exists(_.equalsIgnoreCase("true")) }
+
+  /** With the Link owning the exit, the Link also asks the Node for the crossing at the exit tick, and answers the vehicle
+    * once with the entry data and the Node's reply together. Read from `htc.mobility.link-requests-access` or
+    * `HTC_MOBILITY_LINK_REQUESTS_ACCESS` (default off); only has effect when `linkOwnedExit` is on.
+    */
+  lazy val linkRequestsAccess: Boolean =
+    try com.typesafe.config.ConfigFactory.load().getBoolean("htc.mobility.link-requests-access")
+    catch { case _: Exception => sys.env.get("HTC_MOBILITY_LINK_REQUESTS_ACCESS").exists(_.equalsIgnoreCase("true")) }
+
+  /** With the Link asking the Node, a green grant with capacity makes the Link perform the vehicle's exit itself, so the
+    * vehicle sends no `LeaveLinkData`. Read from `htc.mobility.link-leaves-at-grant` or
+    * `HTC_MOBILITY_LINK_LEAVES_AT_GRANT` (default off); only has effect when `linkRequestsAccess` is on.
+    */
+  lazy val linkLeavesAtGrant: Boolean =
+    try com.typesafe.config.ConfigFactory.load().getBoolean("htc.mobility.link-leaves-at-grant")
+    catch { case _: Exception => sys.env.get("HTC_MOBILITY_LINK_LEAVES_AT_GRANT").exists(_.equalsIgnoreCase("true")) }
+
   /** Simulation end tick - used only when extendSimulationIfPendingEventsAfterEnd is false. When
     * extension is enabled, vehicles are allowed to finish their trips naturally.
     */

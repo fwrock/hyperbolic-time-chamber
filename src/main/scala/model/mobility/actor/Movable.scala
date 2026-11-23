@@ -258,6 +258,9 @@ abstract class Movable[T <: MovableState](
     */
   protected def delegatedEntry(): Option[model.mobility.entity.event.data.DelegatedEntry] = None
 
+  /** The Node request the Link makes for this vehicle at the exit tick, when the vehicle would make it itself then. */
+  protected def linkAccessRequest(): Option[model.mobility.entity.event.data.LinkAccessRequest] = None
+
   protected def enterLink(): Unit = {
     if (state.movableCurrentPath.isEmpty) {
       state.takePendingJunctionPath().foreach { path =>
@@ -298,14 +301,20 @@ abstract class Movable[T <: MovableState](
                 arrivalPosition = microArrivalPosition,
                 preferredLane = microEntryLane,
                 mesoOriginAtEnd = mesoOriginAtEnd,
-                delegatedEntry = delegation
+                delegatedEntry = delegation,
+                accessRequest = if (delegation.exists(_.deferReply)) linkAccessRequest() else None
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed,
               replyKey = Movable.enterLinkAwaitKey(entityId),
               replyKind = "EnterLinkData"
             )
-            delegation.fold(onFinishSpontaneous(None))(d => finishAwaitingDelegate(d.wake))
+            if (delegation.exists(_.deferReply)) linkAccessRequest().foreach(r =>
+              registerAwaitedReply(s"link-access:${r.request.targetLinkId}", "LinkAccessData"))
+            delegation match {
+              case Some(d) if !d.deferReply => finishAwaitingDelegate(d.wake)
+              case _                        => onFinishSpontaneous(None)
+            }
 
           case None =>
             state.movableStatus = Finished
@@ -353,6 +362,9 @@ abstract class Movable[T <: MovableState](
   /** Whether the Link answers this vehicle's `LeaveLinkData`. Vehicles opt out only where the reply is redundant. */
   protected def leaveAckRequired: Boolean = true
 
+  /** True when the Link already took the vehicle off the link at the Node's grant, so no leave is sent. */
+  protected def leaveHandledByLink: Boolean = false
+
   /** Runs what the vehicle would have done on `ReceiveLeaveLinkInfo`, for a leave sent without a reply. It must end
     * the current callback like that handler does.
     */
@@ -372,7 +384,9 @@ abstract class Movable[T <: MovableState](
             )
             if (!state.movableLinkExitReported) {
               state.movableCurrentPath = None
-              if (awaitsReply) {
+              if (leaveHandledByLink) {
+                completeLeaveWithoutReply(entityId)
+              } else if (awaitsReply) {
                 requestInteraction(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString,
                   Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
                 onFinishSpontaneous(None)
