@@ -356,6 +356,17 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     f.sent.collect { case _: model.mobility.entity.event.data.vehicle.RequestLinkAccessData => 1 } shouldBe empty
   }
 
+  "revokePermit" should "stop spending the quota and return what was left to the Node, then return nothing the next time" in {
+    val f = newFixture("326", newMesoState("326"))
+    f.getState().permits = Map(400L -> 3, 500L -> 7)
+
+    f.handler.revokePermit(2L, "mobility.actor.Node", model.mobility.entity.event.data.link.PermitRevokeData(400L))
+    f.handler.revokePermit(2L, "mobility.actor.Node", model.mobility.entity.event.data.link.PermitRevokeData(400L))
+
+    f.sent.collect { case r: model.mobility.entity.event.data.link.PermitReturnData => r.remaining }.toList shouldBe List(3, 0)
+    f.getState().permits shouldBe Map(500L -> 7)
+  }
+
   "leaveByLink" should "unregister the vehicle and report the freed slot to the from-node" in {
     val f = newFixture("324", newMesoState("324"))
     f.setTick(100L)
