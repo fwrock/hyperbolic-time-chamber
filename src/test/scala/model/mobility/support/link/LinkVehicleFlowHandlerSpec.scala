@@ -53,16 +53,18 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
 
   private case class Fixture(handler: LinkVehicleFlowHandler, getState: () => LinkState, linkId: String,
                             setTick: Tick => Unit, sent: mutable.Buffer[AnyRef],
-                            delegated: mutable.Buffer[(DelegatedWake, Tick)], scheduled: mutable.Buffer[Tick])
+                            delegated: mutable.Buffer[(DelegatedWake, Tick)], scheduled: mutable.Buffer[Tick],
+                            left: mutable.Buffer[Long])
 
   private def newFixture(linkId: String, initialState: LinkState, costPublishInterval: Int = 0,
-                           leaveWithoutReply: Boolean = false): Fixture = {
+                           leaveWithoutReply: Boolean = false, leavesAtGrant: Boolean = false): Fixture = {
     usedLinkIds += linkId
     var state = initialState
     var tick: Tick = 0L
     val sent = mutable.Buffer.empty[AnyRef]
     val delegated = mutable.Buffer.empty[(DelegatedWake, Tick)]
     val scheduled = mutable.Buffer.empty[Tick]
+    val left = mutable.Buffer.empty[Long]
     val vehicleEntryTick = mutable.Map.empty[Long, Tick]
     val vehicleWaiting    = mutable.Map.empty[Long, Double]
 
@@ -99,10 +101,12 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       findLeastOccupiedLaneFn = () => 0,
       logDebugFn = _ => (),
       scheduleDelegatedFn = (wake, at) => { delegated += wake -> at; () },
-      leaveWithoutReplyFn = () => leaveWithoutReply
+      leaveWithoutReplyFn = () => leaveWithoutReply,
+      leavesAtGrantFn = () => leavesAtGrant,
+      leaveVehicleFn = id => { left += id; () }
     )
 
-    Fixture(handler, () => state, linkId, t => tick = t, sent, delegated, scheduled)
+    Fixture(handler, () => state, linkId, t => tick = t, sent, delegated, scheduled, left)
   }
 
   private def event(carId: Long, linkId: String): ActorInteractionEvent =
@@ -297,6 +301,53 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     val later = LinkAccessData(phase = Green, nextTick = 5L, requesterId = 1L, requesterShard = "mobility.actor.Car")
     f.handler.forwardNodeAccess(later)
     f.sent.toList shouldBe List(later.copy(requesterId = 0L, requesterShard = ""))
+  }
+
+  private def askedAndDue(f: Fixture, linkId: String): Unit = {
+    f.setTick(100L)
+    f.handler.handleEnterLinkMeso(event(1L, linkId), asking())
+    f.setTick(f.scheduled.last)
+    f.handler.answerDueExits()
+  }
+
+  "forwardNodeAccess with leaves-at-grant" should "take the vehicle off the link on a green grant with capacity and say so" in {
+    val f = newFixture("321", newMesoState("321"), leavesAtGrant = true)
+    askedAndDue(f, "321")
+    f.sent.clear()
+    f.handler.forwardNodeAccess(LinkAccessData(phase = Green, nextTick = 0L, requesterId = 1L, requesterShard = "mobility.actor.Car"))
+
+    f.left.toList shouldBe List(1L)
+    sentWithEvent(f).head.leaveDone shouldBe true
+  }
+
+  it should "not take the vehicle off the link when the Node buffered it for capacity, or the flag is off" in {
+    val full = newFixture("322", newMesoState("322"), leavesAtGrant = true)
+    askedAndDue(full, "322")
+    full.sent.clear()
+    full.handler.forwardNodeAccess(LinkAccessData(phase = Green, nextTick = 0L,
+      capacityState = model.mobility.entity.state.enumeration.LinkCapacityStateEnum.Full, requesterId = 1L, requesterShard = "mobility.actor.Car"))
+    full.left shouldBe empty
+    sentWithEvent(full).head.leaveDone shouldBe false
+
+    val off = newFixture("323", newMesoState("323"))
+    askedAndDue(off, "323")
+    off.sent.clear()
+    off.handler.forwardNodeAccess(LinkAccessData(phase = Green, nextTick = 0L, requesterId = 1L, requesterShard = "mobility.actor.Car"))
+    off.left shouldBe empty
+    sentWithEvent(off).head.leaveDone shouldBe false
+  }
+
+  "leaveByLink" should "unregister the vehicle and report the freed slot to the from-node" in {
+    val f = newFixture("324", newMesoState("324"))
+    f.setTick(100L)
+    f.handler.handleEnterLinkMeso(event(1L, "324"), enterData(1L))
+    f.getState().registered should have size 1
+    f.sent.clear()
+
+    f.handler.leaveByLink(1L)
+
+    f.getState().registered shouldBe empty
+    f.sent.collect { case c: model.mobility.entity.event.data.link.LinkCapacityFreedData => c.freedCount }.toList shouldBe List(1)
   }
 
   "handleEnterLinkMeso" should "start currentSpeed at freeSpeed and congestionFactor at 1.0 on an empty link" in {
