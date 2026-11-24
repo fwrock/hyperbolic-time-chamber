@@ -15,6 +15,7 @@ import org.interscity.htc.model.mobility.entity.state.enumeration.{ EventTypeEnu
 import org.interscity.htc.model.mobility.entity.state.model.{ LinkRegister, PendingEntryReply, VehicleInLane }
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.node.LinkAccessData
+import org.interscity.htc.model.mobility.entity.event.data.link.{ PermitReturnData, PermitRevokeData }
 import org.interscity.htc.model.mobility.entity.state.enumeration.LinkCapacityStateEnum
 import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Green
 import org.interscity.htc.model.mobility.util.SpeedUtil
@@ -165,22 +166,38 @@ class LinkVehicleFlowHandler(
 
   /** Answers every vehicle whose exit tick has come and returns the tick of the next pending exit. */
   def answerDueExits(): Option[Tick] = {
-    val state = getLinkStateFn()
     val tick = currentTickFn()
-    val (due, rest) = state.pendingMesoExits.span(_.exitTick <= tick)
-    state.pendingMesoExits = rest
+    val (due, rest) = getLinkStateFn().pendingMesoExits.span(_.exitTick <= tick)
+    getLinkStateFn().pendingMesoExits = rest
     due.foreach { p =>
       p.accessRequest match {
         case Some(access) =>
+          // Read the state for each vehicle: answering one from its quota takes it off the link, which replaces the state.
+          val state = getLinkStateFn()
           state.accessAwaiting = state.accessAwaiting :+ p
-          sendMessageFn(access.nodeId, access.nodeClassType,
-            access.request.copy(requesterId = p.actorRefId, requesterShard = p.shardRefId, requesterSeq = p.reply.requestSeq),
-            EventTypeEnum.RequestLinkAccess.toString)
+          val target = access.request.targetLinkId
+          if (state.permits.getOrElse(target, 0) > 0) {
+            // A slot the Node already reserved for this Link: answer as the Node would, without asking.
+            state.permits = state.permits.updated(target, state.permits(target) - 1)
+            forwardNodeAccess(LinkAccessData(phase = Green, nextTick = tick, requestSeq = p.reply.requestSeq,
+              requesterId = p.actorRefId, requesterShard = p.shardRefId))
+          } else
+            sendMessageFn(access.nodeId, access.nodeClassType,
+              access.request.copy(requesterId = p.actorRefId, requesterShard = p.shardRefId, requesterSeq = p.reply.requestSeq),
+              EventTypeEnum.RequestLinkAccess.toString)
         case None =>
           sendMessageFn(p.actorRefId, p.shardRefId, p.reply, EventTypeEnum.ReceiveEnterLinkInfo.toString)
       }
     }
     rest.headOption.map(_.exitTick)
+  }
+
+  /** The Node wants its quota back: stop spending it and return what is left. */
+  def revokePermit(nodeId: Long, nodeClassType: String, data: PermitRevokeData): Unit = {
+    val state = getLinkStateFn()
+    val remaining = state.permits.getOrElse(data.targetLinkId, 0)
+    state.permits = state.permits - data.targetLinkId
+    sendMessageFn(nodeId, nodeClassType, PermitReturnData(data.targetLinkId, remaining), EventTypeEnum.PermitReturn.toString)
   }
 
   /** The first answer for a vehicle completes the entry reply it was waiting for; a later one (the capacity-freed
@@ -191,9 +208,13 @@ class LinkVehicleFlowHandler(
     state.accessAwaiting.find(_.actorRefId == data.requesterId) match {
       case Some(p) =>
         state.accessAwaiting = state.accessAwaiting.filterNot(_ eq p)
+        if (data.permit > 0) p.accessRequest.foreach { access =>
+          val target = access.request.targetLinkId
+          state.permits = state.permits.updated(target, state.permits.getOrElse(target, 0) + data.permit)
+        }
         val leaves = leavesAtGrantFn() && data.phase == Green && data.capacityState == LinkCapacityStateEnum.Available
         if (leaves) leaveVehicleFn(p.actorRefId)
-        sendMessageFn(p.actorRefId, p.shardRefId, p.reply.copy(access = Some(data), leaveDone = leaves),
+        sendMessageFn(p.actorRefId, p.shardRefId, p.reply.copy(access = Some(data.copy(permit = 0)), leaveDone = leaves),
           EventTypeEnum.ReceiveEnterLinkInfo.toString)
       case None =>
         sendMessageFn(data.requesterId, data.requesterShard, data.copy(requesterId = 0L, requesterShard = ""),

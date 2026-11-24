@@ -106,7 +106,10 @@ case class LinkState(
   mesoCapacity: Option[model.MesoCapacityConfig] = None,
   mesoCapacityState: model.MesoCapacityState = model.MesoCapacityState(),
   var pendingMesoExits: List[model.PendingEntryReply] = Nil,
-  var accessAwaiting: List[model.PendingEntryReply] = Nil
+  var accessAwaiting: List[model.PendingEntryReply] = Nil,
+  /** Destination link -> capacity slots the Node reserved for this Link and it has not spent. */
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Integer])
+  var permits: Map[Long, Int] = Map.empty
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,

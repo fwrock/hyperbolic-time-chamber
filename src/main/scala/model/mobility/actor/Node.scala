@@ -17,7 +17,7 @@ import scala.collection.mutable
 import org.interscity.htc.core.enumeration.CreationTypeEnum
 import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
 import org.interscity.htc.model.mobility.entity.event.data.bus.RegisterBusStopData
-import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkCapacityFreedData, MicroBoundaryUpdateData, RegisterLinkCapacityData }
+import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkCapacityFreedData, MicroBoundaryUpdateData, PermitReturnData, RegisterLinkCapacityData }
 import org.interscity.htc.model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.mobility.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
@@ -97,6 +97,7 @@ class Node(
       case d: RequestLinkAccessData     => nodeHandler.handleRequestLinkAccess(event, d)
       case d: RegisterLinkCapacityData  => nodeHandler.handleRegisterLinkCapacity(d)
       case d: LinkCapacityFreedData     => nodeHandler.handleLinkCapacityFreed(d)
+      case d: PermitReturnData          => nodeHandler.handlePermitReturn(event, d)
       case d: CancelLinkAccessRequestData => nodeHandler.handleCancelLinkAccessRequest(event, d)
       case d: MicroBoundaryUpdateData   => nodeHandler.handleBoundaryUpdate(event.actorRefId, d.snapshot)
       case d: TrafficSignalChangeStatusData =>

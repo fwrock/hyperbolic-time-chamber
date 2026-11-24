@@ -5,6 +5,7 @@ import core.actor.SimulationBaseActor
 import core.actor.manager.loadbalance.migration.MigrationSnapshot
 import core.types.Tick
 import model.mobility.entity.event.node.LinkAccessData
+import model.mobility.entity.event.data.link.PermitRevokeData
 import core.entity.event.SpontaneousEvent
 
 import org.interscity.htc.core.entity.event.ActorInteractionEvent
@@ -328,6 +329,7 @@ class Link(
       case d: EnterLinkData        => handleEnterLink(event, d)
       case d: LeaveLinkData        => handleLeaveLink(event, d)
       case d: LinkAccessData       => vehicleFlowHandler.forwardNodeAccess(d)
+      case d: PermitRevokeData     => vehicleFlowHandler.revokePermit(event.actorRefId, event.shardRefId, d)
       case _: SubscribeMicroBoundaryData => followingHandler.subscribe(event.actorRefId, event.shardRefId)
       case d: MicroBoundaryUpdateData => followingHandler.receive(event.actorRefId, d.snapshot)
       case d: LinkSignalStateData =>

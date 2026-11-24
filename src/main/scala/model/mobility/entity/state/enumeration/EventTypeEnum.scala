@@ -35,4 +35,6 @@ enum EventTypeEnum:
     ModeDecisionReply,
     SubscribeMicroBoundary,
     MicroBoundaryUpdate,
-    TrafficDetection
+    TrafficDetection,
+    PermitRevoke,
+    PermitReturn

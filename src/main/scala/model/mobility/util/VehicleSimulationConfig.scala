@@ -65,6 +65,24 @@ object VehicleSimulationConfig {
     try com.typesafe.config.ConfigFactory.load().getBoolean("htc.mobility.link-leaves-at-grant")
     catch { case _: Exception => sys.env.get("HTC_MOBILITY_LINK_LEAVES_AT_GRANT").exists(_.equalsIgnoreCase("true")) }
 
+  /** With the Link asking the Node, the Node may hand an approach Link a quota of the destination's spare capacity that the
+    * Link spends on later exits without asking, while the destination has ample spare slots. Read from
+    * `htc.mobility.link-permits` or `HTC_MOBILITY_LINK_PERMITS` (default off); needs `linkRequestsAccess`.
+    */
+  lazy val linkPermits: Boolean =
+    try com.typesafe.config.ConfigFactory.load().getBoolean("htc.mobility.link-permits")
+    catch { case _: Exception => sys.env.get("HTC_MOBILITY_LINK_PERMITS").exists(_.equalsIgnoreCase("true")) }
+
+  /** Largest quota granted to one approach Link at a time. */
+  lazy val linkPermitMaxBudget: Int =
+    try com.typesafe.config.ConfigFactory.load().getInt("htc.mobility.link-permits-max-budget")
+    catch { case _: Exception => sys.env.get("HTC_MOBILITY_LINK_PERMITS_MAX_BUDGET").flatMap(_.toIntOption).getOrElse(8) }
+
+  /** Fraction of a destination's capacity that is never put in quotas: below it the Node serves every request itself. */
+  lazy val linkPermitReserveFraction: Double =
+    try com.typesafe.config.ConfigFactory.load().getDouble("htc.mobility.link-permits-reserve-fraction")
+    catch { case _: Exception => sys.env.get("HTC_MOBILITY_LINK_PERMITS_RESERVE_FRACTION").flatMap(_.toDoubleOption).getOrElse(0.25) }
+
   /** Simulation end tick - used only when extendSimulationIfPendingEventsAfterEnd is false. When
     * extension is enabled, vehicles are allowed to finish their trips naturally.
     */

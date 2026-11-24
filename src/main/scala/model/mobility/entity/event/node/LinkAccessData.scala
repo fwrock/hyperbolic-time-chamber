@@ -31,5 +31,7 @@ case class LinkAccessData(
   outgoingLane: Option[Int] = None,
   /** The vehicle this answers when a Link asked on its behalf, and its shard. */
   requesterId: Long = 0L,
-  requesterShard: String = ""
+  requesterShard: String = "",
+  /** Capacity slots the Node reserved for the requesting Link to spend on later exits to the same link without asking. */
+  permit: Int = 0
 ) extends BaseEventData

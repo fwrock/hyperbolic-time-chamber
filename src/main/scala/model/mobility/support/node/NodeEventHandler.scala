@@ -4,7 +4,7 @@ package model.mobility.support.node
 import org.interscity.htc.model.mobility.entity.state.NodeState
 import org.interscity.htc.model.mobility.entity.state.model.{ MicroBoundaryHistory, MicroBoundarySnapshot, PendingLinkAccessRequest, SignalState }
 import org.interscity.htc.model.mobility.entity.event.data.bus.RegisterBusStopData
-import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkCapacityFreedData, LinkSignalStateData, RegisterLinkCapacityData, SubscribeMicroBoundaryData }
+import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkCapacityFreedData, LinkSignalStateData, PermitReturnData, PermitRevokeData, RegisterLinkCapacityData, SubscribeMicroBoundaryData }
 import org.interscity.htc.model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
 import org.interscity.htc.model.mobility.entity.event.data.subway.RegisterSubwayStationData
 import org.interscity.htc.model.mobility.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
@@ -27,7 +27,8 @@ class NodeEventHandler(
   getLinkDependencyFn: Long => Option[ShardActorId],
   logWarnFn:           String => Unit,
   logDebugFn:          String => Unit,
-  scheduleFn:          Tick => Unit = _ => ()
+  scheduleFn:          Tick => Unit = _ => (),
+  permitsEnabledFn:    () => Boolean = () => model.mobility.util.VehicleSimulationConfig.linkPermits
 ) {
 
   private def state: NodeState = getStateFn()
@@ -84,6 +85,7 @@ class NodeEventHandler(
   def handleRegisterLinkCapacity(data: RegisterLinkCapacityData): Unit =
     if (state != null) {
       state.availableCapacity(data.linkId) = data.capacity
+      state.linkCapacity(data.linkId) = data.capacity
     } else {
       logWarnFn(
         s"Node ${entityIdFn()}: RegisterLinkCapacityData arrived before initialization for link=${data.linkId}. " +
@@ -211,8 +213,10 @@ class NodeEventHandler(
     val batchedNow = batched(junction.map(_.linkId).getOrElse(data.targetLinkId)) && (junction.nonEmpty || state.batchAllRequests)
     if (hasCapacity && !batchedNow && !conflictBlocked(junction.map(_.linkId), key)) {
       if (capacityKnown) state.availableCapacity(admissionLinkId) -= 1
+      val permit = if (junction.isEmpty && !batchedNow) issuePermit(event, data, admissionLinkId, capacityKnown) else 0
       sendGrant(event.actorRefId, event.shardRefId, seqOf(event, data), data.targetLinkId, junction,movement.flatMap(_.outgoingLane),
-        data.requesterId, data.requesterShard)
+        data.requesterId, data.requesterShard, permit)
+      if (capacityKnown) revokePermitsIfScarce(admissionLinkId)
     } else {
       state.capacityWaitQueue.getOrElseUpdate(admissionLinkId, mutable.Queue.empty)
         .enqueue(PendingLinkAccessRequest(actorRefId = event.actorRefId, shardRefId = event.shardRefId,
@@ -221,6 +225,7 @@ class NodeEventHandler(
           outgoingLane=movement.flatMap(_.outgoingLane),approachLinkId=data.approachLinkId,approachLane=data.approachLane,
           requestedTick=currentTickFn(), requesterId = data.requesterId, requesterShard = data.requesterShard))
       if (batchedNow) requestDecision()
+      revokePermitsIfScarce(admissionLinkId)
       replyToRequester(event, data, LinkAccessData(phase = Green, nextTick = currentTickFn(),
         capacityState = LinkCapacityStateEnum.Full, requestSeq = event.seq))
     }
@@ -228,7 +233,7 @@ class NodeEventHandler(
 
   private def sendGrant(vehicleId: Long, shardId: String, requestSeq: Long, targetLinkId: Long,
                         junction: Option[model.mobility.entity.state.model.PrecomputedRouteItem], outgoingLane: Option[Int] = None,
-                        requesterId: Long = 0L, requesterShard: String = ""): Unit = {
+                        requesterId: Long = 0L, requesterShard: String = "", permit: Int = 0): Unit = {
     junction.foreach { path =>
       if (state.conflicts.nonEmpty) {
         state.occupiedConnectors(path.linkId) = state.occupiedConnectors.getOrElse(path.linkId, 0) + 1
@@ -240,9 +245,59 @@ class NodeEventHandler(
     }
     sendMessageFn(vehicleId, shardId,
       LinkAccessData(phase = Green, nextTick = currentTickFn(), requestSeq = requestSeq, junctionLink = junction,outgoingLane=outgoingLane,
-        requesterId = requesterId, requesterShard = requesterShard),
+        requesterId = requesterId, requesterShard = requesterShard, permit = permit),
       EventTypeEnum.ReceiveLinkAccess.toString)
   }
+
+  private def permitReserve(destination: Long): Int =
+    math.max(2, math.ceil(state.linkCapacity.getOrElse(destination, 0) * model.mobility.util.VehicleSimulationConfig.linkPermitReserveFraction).toInt)
+
+  /** Quota of `destination`'s spare slots for the approach Link that is asking on a vehicle's behalf, taken from the counter
+    * now. Spare is what the counter holds beyond the reserve kept for requests the Node serves itself, shared among the
+    * approach Links seen so far. Zero while ample room is missing, so contended links keep the exact request/reply path.
+    */
+  private def issuePermit(event: ActorInteractionEvent, data: RequestLinkAccessData, destination: Long, capacityKnown: Boolean): Int =
+    if (!permitsEnabledFn() || data.requesterId == 0L || data.signalAlreadyCleared ||
+        !capacityKnown || state.permitRevoking.contains(destination)) 0
+    else {
+      val approaches = state.permitApproaches.getOrElseUpdate(destination, mutable.Set.empty)
+      approaches += event.actorRefId
+      val spare = state.availableCapacity(destination) - permitReserve(destination)
+      val budget = math.min(model.mobility.util.VehicleSimulationConfig.linkPermitMaxBudget, spare / (approaches.size + 1))
+      if (budget < 2) 0
+      else {
+        state.availableCapacity(destination) -= budget
+        val held = state.permitOutstanding.getOrElseUpdate(destination, mutable.Map.empty)
+        held(event.actorRefId) = held.getOrElse(event.actorRefId, 0) + budget
+        budget
+      }
+    }
+
+  /** Once the counter nears the reserve, the quotas stop being safe to leave out: ask every holder to give back what is left. */
+  private def revokePermitsIfScarce(destination: Long): Unit =
+    if (permitsEnabledFn() && !state.permitRevoking.contains(destination) &&
+        state.availableCapacity.getOrElse(destination, Int.MaxValue) <= permitReserve(destination)) {
+      val holders = state.permitOutstanding.get(destination).map(_.filter(_._2 > 0).keys.toList).getOrElse(Nil)
+      if (holders.nonEmpty) {
+        state.permitRevoking += destination
+        holders.foreach(link => sendMessageFn(link, "mobility.actor.Link", PermitRevokeData(destination), EventTypeEnum.PermitRevoke.toString))
+      }
+    }
+
+  /** The unspent part of a quota comes back to the counter, which may let buffered requests through. */
+  def handlePermitReturn(event: ActorInteractionEvent, data: PermitReturnData): Unit =
+    if (state != null) {
+      state.availableCapacity(data.targetLinkId) = state.availableCapacity.getOrElse(data.targetLinkId, 0) + data.remaining
+      state.permitOutstanding.get(data.targetLinkId).foreach { held =>
+        held.remove(event.actorRefId)
+        if (held.values.forall(_ == 0)) {
+          state.permitOutstanding.remove(data.targetLinkId)
+          state.permitRevoking -= data.targetLinkId
+        }
+      }
+      if (state.junction.conflictsOf(data.targetLinkId).nonEmpty) drainConflictGroup(data.targetLinkId)
+      else tryDrainCapacityQueue(data.targetLinkId)
+    }
 
   /** A Link reports exactly how many slots freed (never an estimate) every time a vehicle leaves
     * it. Increments this Node's authoritative counter and attempts to drain any vehicles buffered

@@ -57,7 +57,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
                             left: mutable.Buffer[Long])
 
   private def newFixture(linkId: String, initialState: LinkState, costPublishInterval: Int = 0,
-                           leaveWithoutReply: Boolean = false, leavesAtGrant: Boolean = false): Fixture = {
+                           leaveWithoutReply: Boolean = false, leavesAtGrant: Boolean = false, realLeave: Boolean = false): Fixture = {
     usedLinkIds += linkId
     var state = initialState
     var tick: Tick = 0L
@@ -65,6 +65,7 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     val delegated = mutable.Buffer.empty[(DelegatedWake, Tick)]
     val scheduled = mutable.Buffer.empty[Tick]
     val left = mutable.Buffer.empty[Long]
+    var handlerRef: LinkVehicleFlowHandler = null
     val vehicleEntryTick = mutable.Map.empty[Long, Tick]
     val vehicleWaiting    = mutable.Map.empty[Long, Double]
 
@@ -103,9 +104,10 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
       scheduleDelegatedFn = (wake, at) => { delegated += wake -> at; () },
       leaveWithoutReplyFn = () => leaveWithoutReply,
       leavesAtGrantFn = () => leavesAtGrant,
-      leaveVehicleFn = id => { left += id; () }
+      leaveVehicleFn = id => { left += id; if (realLeave) handlerRef.leaveByLink(id) }
     )
 
+    handlerRef = handler
     Fixture(handler, () => state, linkId, t => tick = t, sent, delegated, scheduled, left)
   }
 
@@ -335,6 +337,23 @@ class LinkVehicleFlowHandlerSpec extends AnyFlatSpec with Matchers with BeforeAn
     off.handler.forwardNodeAccess(LinkAccessData(phase = Green, nextTick = 0L, requesterId = 1L, requesterShard = "mobility.actor.Car"))
     off.left shouldBe empty
     sentWithEvent(off).head.leaveDone shouldBe false
+  }
+
+  "answerDueExits with a quota" should "answer every vehicle due in the same tick even though each exit replaces the Link state" in {
+    val f = newFixture("325", newMesoState("325"), leavesAtGrant = true, realLeave = true)
+    f.setTick(100L)
+    f.handler.handleEnterLinkMeso(event(1L, "325"), asking(1L))
+    f.handler.handleEnterLinkMeso(event(2L, "325"), asking(2L))
+    f.getState().permits = Map(400L -> 2)
+    f.setTick(f.getState().pendingMesoExits.map(_.exitTick).max)
+
+    f.handler.answerDueExits()
+
+    f.sent.collect { case i: LinkInfoData => i.access.isDefined }.toList shouldBe List(true, true)
+    f.left.toSet shouldBe Set(1L, 2L)
+    f.getState().accessAwaiting shouldBe empty
+    f.getState().permits(400L) shouldBe 0
+    f.sent.collect { case _: model.mobility.entity.event.data.vehicle.RequestLinkAccessData => 1 } shouldBe empty
   }
 
   "leaveByLink" should "unregister the vehicle and report the freed slot to the from-node" in {

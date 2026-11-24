@@ -62,7 +62,19 @@ case class NodeState(
   var decisionScheduledFor: Long = -1L,
   batchAllRequests: Boolean = false,
   @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Boolean])
-  publishedPermission: mutable.Map[Long, Boolean] = mutable.Map.empty
+  publishedPermission: mutable.Map[Long, Boolean] = mutable.Map.empty,
+  /** Capacity of each destination link as registered, to size the safety margin kept out of quotas. */
+  @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Integer])
+  linkCapacity: mutable.Map[Long, Int] = mutable.Map.empty,
+  /** Destination link -> approach Link -> slots reserved for it and not yet returned. */
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  permitOutstanding: mutable.Map[Long, mutable.Map[Long, Int]] = mutable.Map.empty,
+  /** Destination link -> approach Links that asked for it, to share its spare capacity between them. */
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  permitApproaches: mutable.Map[Long, mutable.Set[Long]] = mutable.Map.empty,
+  /** Destination links whose quotas were revoked and are not all back yet. */
+  @JsonDeserialize(contentAs = classOf[java.lang.Long])
+  permitRevoking: mutable.Set[Long] = mutable.Set.empty
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,

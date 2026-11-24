@@ -3,7 +3,7 @@ package model.mobility.support.node
 
 import core.entity.actor.ShardActorId
 import core.entity.event.ActorInteractionEvent
-import model.mobility.entity.event.data.link.{ LinkCapacityFreedData, RegisterLinkCapacityData }
+import model.mobility.entity.event.data.link.{ LinkCapacityFreedData, PermitReturnData, PermitRevokeData, RegisterLinkCapacityData }
 import model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
 import model.mobility.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
 import model.mobility.entity.event.node.LinkAccessData
@@ -57,7 +57,8 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
 
   private def newHandler(
     state: NodeState,
-    getLinkDependencyFn: Long => Option[ShardActorId] = _ => None
+    getLinkDependencyFn: Long => Option[ShardActorId] = _ => None,
+    permits: Boolean = false
   ): (NodeEventHandler, mutable.ArrayBuffer[(Long, String, AnyRef, String)]) = {
     val sent = mutable.ArrayBuffer.empty[(Long, String, AnyRef, String)]
     val handler = new NodeEventHandler(
@@ -69,7 +70,8 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
       sendMessageFn = (id, shard, data, evType) => sent += ((id, shard, data, evType)),
       getLinkDependencyFn = getLinkDependencyFn,
       logWarnFn = _ => (),
-      logDebugFn = _ => ()
+      logDebugFn = _ => (),
+      permitsEnabledFn = () => permits
     )
     (handler, sent)
   }
@@ -383,6 +385,83 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
       RequestLinkAccessData(targetLinkId = 100L, requesterId = 2L, requesterShard = "mobility.actor.Car", requesterSeq = 8L))
     handler.handleCancelLinkAccessRequest(requestEvent(2L), CancelLinkAccessRequestData(targetLinkId = 100L))
     capacityWaitQueue.get(100L) shouldBe None
+  }
+
+  private def permitState(capacity: Int) = {
+    val availableCapacity = mutable.Map(100L -> capacity)
+    val state = newState(availableCapacity = availableCapacity)
+    state.linkCapacity(100L) = capacity
+    (state, availableCapacity)
+  }
+
+  private def onBehalf(link: Long, vehicle: Long) =
+    (requestEvent(link), RequestLinkAccessData(targetLinkId = 100L, requesterId = vehicle, requesterShard = "mobility.actor.Car", requesterSeq = vehicle))
+
+  "A permit" should "reserve a quota of spare capacity for the asking Link and keep it out of the counter" in {
+    val (state, available) = permitState(600)
+    val (handler, sent) = newHandler(state, permits = true)
+
+    val (event, data) = onBehalf(9L, 1L)
+    handler.handleRequestLinkAccess(event, data)
+
+    val granted = sent.head._3.asInstanceOf[LinkAccessData]
+    granted.permit should be > 1
+    available(100L) shouldBe 600 - 1 - granted.permit
+    state.permitOutstanding(100L)(9L) shouldBe granted.permit
+  }
+
+  it should "not be granted when the flag is off, the capacity is tight, or no Link asks on a vehicle's behalf" in {
+    val (offState, offAvailable) = permitState(600)
+    val (off, offSent) = newHandler(offState, permits = false)
+    val (e1, d1) = onBehalf(9L, 1L)
+    off.handleRequestLinkAccess(e1, d1)
+    offSent.head._3.asInstanceOf[LinkAccessData].permit shouldBe 0
+    offAvailable(100L) shouldBe 599
+
+    val (tightState, tightAvailable) = permitState(6)
+    val (tight, tightSent) = newHandler(tightState, permits = true)
+    val (e2, d2) = onBehalf(9L, 1L)
+    tight.handleRequestLinkAccess(e2, d2)
+    tightSent.head._3.asInstanceOf[LinkAccessData].permit shouldBe 0
+    tightAvailable(100L) shouldBe 5
+
+    val (directState, directAvailable) = permitState(600)
+    val (direct, directSent) = newHandler(directState, permits = true)
+    direct.handleRequestLinkAccess(requestEvent(1L), RequestLinkAccessData(targetLinkId = 100L))
+    directSent.head._3.asInstanceOf[LinkAccessData].permit shouldBe 0
+    directAvailable(100L) shouldBe 599
+  }
+
+  it should "be revoked from its holders when the counter nears the reserve, and the returned slots drain buffered requests" in {
+    val (state, available) = permitState(20)
+    val (handler, sent) = newHandler(state, permits = true)
+
+    val (e, d) = onBehalf(9L, 1L)
+    handler.handleRequestLinkAccess(e, d)
+    val held = state.permitOutstanding(100L)(9L)
+    held should be > 0
+
+    var vehicle = 2L
+    while (!sent.exists(_._3.isInstanceOf[PermitRevokeData]) && available(100L) > 0) {
+      val (ev, dt) = onBehalf(10L, vehicle)
+      handler.handleRequestLinkAccess(ev, dt)
+      vehicle += 1
+    }
+    val revoke = sent.collect { case (to, _, r: PermitRevokeData, _) => (to, r) }
+    revoke should not be empty
+    val holders = revoke.map(_._1).toSet
+    holders should contain(9L)
+    holders.subsetOf(Set(9L, 10L)) shouldBe true
+    state.permitRevoking should contain(100L)
+
+    val before = available(100L)
+    holders.foreach { link =>
+      state.permitRevoking should contain(100L)
+      handler.handlePermitReturn(requestEvent(link), PermitReturnData(100L, remaining = 2))
+    }
+    available(100L) shouldBe before + 2 * holders.size
+    state.permitRevoking should not contain 100L
+    state.permitOutstanding.get(100L) shouldBe None
   }
 
   "handleCancelLinkAccessRequest" should "remove the matching entry from capacityWaitQueue, and the link entirely once it's the last one" in {
