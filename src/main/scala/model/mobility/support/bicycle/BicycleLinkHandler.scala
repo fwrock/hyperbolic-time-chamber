@@ -30,6 +30,7 @@ class BicycleLinkHandler(
   private def leaveLinkAwaitKey(linkId: Long): String = model.mobility.actor.Movable.leaveLinkAwaitKey(linkId)
 
   def handleEnterLink(linkId: Long, data: LinkInfoData, state: BicycleState): Unit = {
+    val tick = if (data.entryTick >= 0L) data.entryTick else currentTickFn()
     consumeAwaitedReplyFn(enterLinkAwaitKey(linkId))
     state.mesoLinkLength = data.linkLength
     state.leaveAckRequired = data.leaveAckRequired
@@ -40,7 +41,7 @@ class BicycleLinkHandler(
       data.linkLength / (math.max(0.1, data.linkFreeSpeed) / 3.6)
     journeyReporter.updateHaltingState(bicycleSpeed, 0.0)
     if (journeyReporter.sumoDepartTick.isEmpty) {
-      journeyReporter.sumoDepartTick  = Some(currentTickFn())
+      journeyReporter.sumoDepartTick  = Some(tick)
       journeyReporter.sumoDepartSpeed = bicycleSpeed
       journeyReporter.sumoDepartLane  = Some(s"${linkId}_0")
       journeyReporter.sumoDepartPos   = 0.0
@@ -54,13 +55,14 @@ class BicycleLinkHandler(
         "link_length" -> data.linkLength,
         "travel_time" -> time,
         "speed"       -> bicycleSpeed,
-        "tick"        -> currentTickFn()
+        "tick"        -> tick
       ),
       "enter_link"
     )
-    val exitTick = model.mobility.support.car.MesoLinkTiming.exitTick(currentTickFn(), time, originAtEnd = false, carry = model.mobility.util.VehicleSimulationConfig.mesoCarryRounding, state)
+    val exitTick = model.mobility.support.car.MesoLinkTiming.exitTick(tick, time, originAtEnd = false, carry = model.mobility.util.VehicleSimulationConfig.mesoCarryRounding, state)
     setMesoExitTickFn(Some(exitTick))
-    onFinishSpontaneousFn(Some(exitTick))
+    // A reply the Link held until the exit tick: the caller continues the wake in this very callback.
+    if (!(data.entryTick >= 0L && exitTick <= currentTickFn())) onFinishSpontaneousFn(Some(exitTick))
   }
 
   def handleLeaveLink(linkId: Long, data: LinkInfoData, state: BicycleState): Unit = {
@@ -93,6 +95,9 @@ class BicycleLinkHandler(
     journeyReporter.updateHaltingState(0.0, 0.0)
     setMesoExitTickFn(None)
     state.leaveAckRequired = true
+    state.leaveHandledByLink = false
+    val linkOwnedExit = state.linkOwnedExit
+    state.linkOwnedExit = false
     reportFn(
       Map(
         "event_type"     -> "leave_link",
@@ -114,7 +119,7 @@ class BicycleLinkHandler(
       if (!isPersonCentricFn()) selfDestructFn()
     } else {
       // `htc.meso.immediate-node-transfer` (default on) makes the transfer to the next link immediate; off keeps one tick.
-      onFinishSpontaneousFn(Some(if (model.mobility.util.VehicleSimulationConfig.mesoImmediateNodeTransfer) currentTickFn() else currentTickFn() + 1))
+      onFinishSpontaneousFn(Some(if (model.mobility.util.VehicleSimulationConfig.mesoImmediateNodeTransfer && !linkOwnedExit) currentTickFn() else currentTickFn() + 1))
     }
   }
 }

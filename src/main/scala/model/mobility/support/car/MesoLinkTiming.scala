@@ -49,6 +49,15 @@ object MesoLinkTiming {
       exitTick(tick, seconds, originAtEnd = false, carry = true, state)
     } else tick + seconds.toLong
 
+  /** The exit tick a vehicle that counts its time in ticks of one second computes itself (Bicycle and Motorcycle). */
+  def tickDelegatedExitTick(tick: Tick, timeTicks: Double, entry: model.mobility.entity.event.data.DelegatedEntry): Tick = {
+    val state = new MesoTimingState {
+      var mesoRoundingCredit: Double = entry.roundingCredit
+      var mesoLastExitTick: Long = entry.lastExitTick
+    }
+    exitTick(tick, timeTicks, originAtEnd = false, entry.carryRounding, state)
+  }
+
   def exitTick(tick: Tick, timeTicks: Double, originAtEnd: Boolean, carry: Boolean, journey: MesoTimingState): Tick =
     if (!carry || originAtEnd) {
       journey.mesoRoundingCredit = 0.0

@@ -47,7 +47,11 @@ case class BicycleState(
   /** Length of the MESO link the vehicle is on, kept so a leave that the Link does not answer can still be completed. */
   var mesoLinkLength: Double = 0.0,
   /** Whether the current MESO link will answer this vehicle's leave; set from the entry reply, so a lost value only restores the reply. */
-  var leaveAckRequired: Boolean = true
+  var leaveAckRequired: Boolean = true,
+  /** The Link took the vehicle off the link when the Node granted the crossing, so it sends no leave. */
+  var leaveHandledByLink: Boolean = false,
+  /** The Link held the entry reply until the exit tick, so the exit chain ran inline. */
+  var linkOwnedExit: Boolean = false
 ) extends MovableState(
       startTick = startTick,
       origin = origin,

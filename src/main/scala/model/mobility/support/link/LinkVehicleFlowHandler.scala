@@ -127,6 +127,12 @@ class LinkVehicleFlowHandler(
             Some(MesoLinkTiming.delegatedExitTick(entryTick, travel(MesoLinkTiming.carTravelSeconds), entry, originAtEnd = false))
           case ActorTypeEnum.Bus =>
             Some(MesoLinkTiming.busDelegatedExitTick(entryTick, travel(MesoLinkTiming.busTravelSeconds), entry))
+          case ActorTypeEnum.Bicycle =>
+            Some(MesoLinkTiming.tickDelegatedExitTick(entryTick, state.length / model.mobility.util.MesoTrafficConfig.bicycleSpeedMps, entry))
+          case ActorTypeEnum.Motorcycle =>
+            val speed = SpeedUtil.linkEntryDensitySpeed(length = state.length, capacity = state.capacity,
+              numberOfCars = state.registered.size.toLong, freeSpeed = state.freeSpeed, lanes = state.lanes) * 1.2
+            Some(MesoLinkTiming.tickDelegatedExitTick(entryTick, state.length / (speed / 3.6), entry))
           case _ => None
         }
       }
