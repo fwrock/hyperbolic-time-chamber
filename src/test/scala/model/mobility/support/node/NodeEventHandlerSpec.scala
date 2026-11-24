@@ -464,6 +464,22 @@ class NodeEventHandlerSpec extends AnyFlatSpec with Matchers {
     state.permitOutstanding.get(100L) shouldBe None
   }
 
+  it should "never be granted for a movement a signal controls, even while that signal is green" in {
+    val connections = mutable.Map(100L -> Identify(id = 500L))
+    val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 10L, nextTick = 110L))
+    val availableCapacity = mutable.Map(100L -> 600)
+    val state = newState(connections = connections, signals = signals, availableCapacity = availableCapacity)
+    state.linkCapacity(100L) = 600
+    val (handler, sent) = newHandler(state, permits = true)
+
+    val (event, data) = onBehalf(9L, 1L)
+    handler.handleRequestLinkAccess(event, data)
+
+    sent.head._3.asInstanceOf[LinkAccessData].permit shouldBe 0
+    availableCapacity(100L) shouldBe 599
+    state.permitOutstanding.get(100L) shouldBe None
+  }
+
   "handleCancelLinkAccessRequest" should "remove the matching entry from capacityWaitQueue, and the link entirely once it's the last one" in {
     val connections = mutable.Map(100L -> Identify(id = 500L))
     val signals = mutable.Map(500L -> SignalState(state = Green, remainingTime = 0L, nextTick = 100L))

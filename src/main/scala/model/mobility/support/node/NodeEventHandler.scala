@@ -123,7 +123,7 @@ class NodeEventHandler(
         case Some(sig) if sig.state == Red || sig.state == TrafficSignalPhaseStateEnum.Yellow =>
           replyToRequester(event, data, LinkAccessData(Red,math.max(currentTickFn()+1,sig.nextTick),requestSeq=event.seq))
         case Some(_) if state.junction.bindingsFor(data.approachLinkId,data.targetLinkId).nonEmpty =>
-          replyGreenOrBufferForCapacity(event,data)
+          replyGreenOrBufferForCapacity(event, data, signalControlled = true)
         case _ => state.connections.get(data.targetLinkId) match {
         case Some(identify) =>
           state.signals.get(identify.id) match {
@@ -151,7 +151,7 @@ class NodeEventHandler(
                 LinkAccessData(phase = sig.state, nextTick = sig.nextTick, queuePosition = queuePos, requestSeq = event.seq))
             case Some(_) =>
               state.signalWaitingCounts.remove(data.targetLinkId)
-              replyGreenOrBufferForCapacity(event, data)
+              replyGreenOrBufferForCapacity(event, data, signalControlled = true)
             case None =>
               logDebugFn(
                 s"Node ${entityIdFn()}: no signal entry for id=${identify.id} (link=${data.targetLinkId}); assuming Green"
@@ -190,7 +190,8 @@ class NodeEventHandler(
     * `availableCapacity`'s doc on `NodeState`), decrementing Node's own counter; otherwise
     * buffers the requester FIFO and replies with `capacityState = Full`.
     */
-  private def replyGreenOrBufferForCapacity(event: ActorInteractionEvent, data: RequestLinkAccessData): Unit = {
+  private def replyGreenOrBufferForCapacity(event: ActorInteractionEvent, data: RequestLinkAccessData,
+                                              signalControlled: Boolean = false): Unit = {
     val candidates = state.junction.movementsFor(data.approachLinkId,data.targetLinkId).filter(m =>
         (m.incomingLane.isEmpty || data.approachLane.isEmpty || m.incomingLane == data.approachLane))
     val movement = if (!state.routeAwareJunctionLanes)
@@ -213,7 +214,7 @@ class NodeEventHandler(
     val batchedNow = batched(junction.map(_.linkId).getOrElse(data.targetLinkId)) && (junction.nonEmpty || state.batchAllRequests)
     if (hasCapacity && !batchedNow && !conflictBlocked(junction.map(_.linkId), key)) {
       if (capacityKnown) state.availableCapacity(admissionLinkId) -= 1
-      val permit = if (junction.isEmpty && !batchedNow) issuePermit(event, data, admissionLinkId, capacityKnown) else 0
+      val permit = if (junction.isEmpty && !batchedNow && !signalControlled) issuePermit(event, data, admissionLinkId, capacityKnown) else 0
       sendGrant(event.actorRefId, event.shardRefId, seqOf(event, data), data.targetLinkId, junction,movement.flatMap(_.outgoingLane),
         data.requesterId, data.requesterShard, permit)
       if (capacityKnown) revokePermitsIfScarce(admissionLinkId)
