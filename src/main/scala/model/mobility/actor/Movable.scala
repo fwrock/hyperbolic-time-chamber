@@ -1,0 +1,492 @@
+package org.interscity.htc
+package model.mobility.actor
+
+import core.types.Tick
+
+import core.actor.SimulationBaseActor
+import model.mobility.entity.state.MovableState
+
+import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+import model.mobility.entity.state.enumeration.EventTypeEnum.{ ReceiveEnterLinkInfo, ReceiveLeaveLinkInfo }
+import model.mobility.entity.state.enumeration.MovableStatusEnum.{ Finished, Ready, RouteWaiting, Start, Waiting }
+import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import model.mobility.entity.event.data.link.LinkInfoData
+import model.mobility.entity.event.data.{ EnterLinkData, LeaveLinkData }
+import model.mobility.entity.event.data.routing.{ RouteQueryData, RouteReplyData }
+import model.mobility.entity.state.enumeration.EventTypeEnum
+import model.mobility.util.{ AccountedRoutingConfig, CityMapUtil, GPSUtil }
+import core.metrics.model.hybrid.GPSMetrics
+
+abstract class Movable[T <: MovableState](
+  private val properties: Properties
+)(implicit m: Manifest[T])
+    extends SimulationBaseActor[T](
+      properties = properties
+    ) {
+
+  private var waitingTicksCounter: Int = 0
+  private val MaxWaitingTicks: Int = 100
+
+  protected def requestRoute(): Unit = {
+    logDebug(s"Requesting route from ${state.origin} to ${state.destination}")
+    if (requestAccountedRoute(state.origin, state.destination, 500_000)) return
+    try
+      GPSUtil
+        .calcRouteCompact(
+          originId = state.origin,
+          destinationId = state.destination,
+          maxExpansions = 500_000
+        )
+        match {
+        case result @ Some(_) => handleCalculatedRouteResult(result)
+        case None             => handleCalculatedRouteResult(None)
+      }
+    catch {
+      case e: Exception =>
+        logError(s"Exception during route request for ${getEntityId}: ${e.getMessage}", e)
+        state.movableStatus = Finished
+        onFinish(state.origin)
+    }
+  }
+
+  protected def handleCalculatedRouteResult(
+    result: Option[(Double, scala.collection.mutable.Queue[(Long, Long)])]
+  ): Unit = result match {
+        case Some((cost, pathQueue)) =>
+          GPSMetrics.routeSource.labels("gps_calculated").inc()
+          logDebug(s"Route calculated successfully: cost=$cost, pathLength=${pathQueue.size}")
+          state.movableBestRoute = Some(pathQueue)
+          state.movableStatus = Ready
+          state.movableCurrentPath = None
+          if (pathQueue.nonEmpty) {
+            enterLink()
+          } else {
+            state.movableStatus = Finished
+            logWarn("No path available between origin and destination, finishing.")
+            onFinish(state.origin)
+          }
+        case None =>
+          logError(
+            s"Failed to calculate route from ${state.origin} to ${state.destination} for ${getEntityId}."
+          )
+          state.movableStatus = Finished
+          onFinish(state.origin)
+      }
+
+  protected final def requestAccountedRoute(
+    originNodeId: Long,
+    destinationNodeId: Long,
+    maxExpansions: Int
+  ): Boolean = {
+    if (!AccountedRoutingConfig.enabled) return false
+    val workerId = AccountedRoutingConfig.workerFor(getEntityId.toLong)
+    state.movablePendingRouteQuery = Some(
+      model.mobility.entity.state.PendingRouteQuery(workerId, originNodeId, destinationNodeId)
+    )
+    requestInteraction(
+      entityId = workerId,
+      shardId = AccountedRoutingConfig.ActorClassType,
+      data = RouteQueryData(originNodeId, destinationNodeId, maxExpansions),
+      eventType = EventTypeEnum.RouteQuery.toString,
+      actorType = LoadBalancedDistributed,
+      replyKey = Movable.routeAwaitKey(workerId),
+      replyKind = "RouteQuery"
+    )
+    onFinishSpontaneous(None)
+    true
+  }
+
+  override def actSpontaneous(event: SpontaneousEvent): Unit =
+    state.movableStatus match {
+      // RouteWaiting is the default movableStatus when state is deserialized without an explicit
+      // status value. Treat it like Start for standalone Movables that request their own routes.
+      case Start | RouteWaiting =>
+        logDebug(s"Starting route request from ${state.origin} to ${state.destination}")
+        requestRoute()
+
+      case Ready =>
+        enterLink()
+
+      case Waiting =>
+        waitingTicksCounter += 1
+        if (waitingTicksCounter > MaxWaitingTicks) {
+          logWarn(
+            s"[MOVABLE] STUCK in Waiting for $waitingTicksCounter ticks at tick $currentTick | " +
+            s"id=$getEntityId path=${state.movableCurrentPath} route=${state.movableBestRoute.map(_.size)} — RECOVERING by skipping to next segment"
+          )
+          waitingTicksCounter = 0
+          state.movableCurrentPath = None
+          state.movableStatus = Ready
+          onFinishSpontaneous(Some(currentTick + 1))
+        } else {
+          onFinishSpontaneous(Some(currentTick + 1))
+        }
+
+      case Finished =>
+        onFinishSpontaneous(None)
+        selfDestruct()
+
+      case _ =>
+        logWarn(s"Movable status not explicitly handled in base class: ${state.movableStatus}")
+        onFinishSpontaneous(Some(currentTick + 1))
+    }
+
+  /** See `SimulationBaseActor.isKnownSupersededReply`'s doc for the full rationale and the live
+    * evidence that motivated it (docs/KNOWN_GAPS.md, Cause 3). A `LinkInfoData` reply
+    * (`ReceiveEnterLinkInfo`/`ReceiveLeaveLinkInfo`) is provably superseded exactly when
+    * `isAwaitingReply` says so for the matching await key/kind — the identical identity check
+    * `CarLinkHandler.handleLeaveLink`'s own staleness gate already uses, just consulted before the
+    * generic straggler-rollback trigger instead of after it. `event.actorRefId` is the link this
+    * reply came from, matching how `enterLinkAwaitKey`/`leaveLinkAwaitKey` were registered in
+    * `enterLink`/`leavingLink` below (keyed by the link's id, not this movable's own).
+    */
+  override protected def isKnownSupersededReply(event: ActorInteractionEvent): Boolean =
+    event.data match {
+      case d: LinkInfoData =>
+        EventTypeEnum.valueOf(event.eventType) match {
+          case ReceiveEnterLinkInfo =>
+            !isAwaitingReply(Movable.enterLinkAwaitKey(event.actorRefId), "EnterLinkData", d.requestSeq)
+          case ReceiveLeaveLinkInfo =>
+            !isAwaitingReply(Movable.leaveLinkAwaitKey(event.actorRefId), "LeaveLinkData", d.requestSeq)
+          case _ => false
+        }
+      case d: RouteReplyData =>
+        !isAwaitingReply(Movable.routeAwaitKey(event.actorRefId), "RouteQuery", d.requestSeq)
+      case _ => false
+    }
+
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    if (state == null) {
+      logWarn(
+        s"${getEntityId} received interaction event while state is null, ignoring: ${event.eventType}"
+      )
+      return
+    }
+    event.data match {
+      case d: LinkInfoData => handleLinkInfo(event, d)
+      case d: RouteReplyData => handleRouteReply(event, d)
+      case _               => logWarn(s"Movable Event not handled: $event")
+    }
+  }
+
+  private def handleRouteReply(event: ActorInteractionEvent, data: RouteReplyData): Unit = {
+    val pending = state.movablePendingRouteQuery
+    val key = Movable.routeAwaitKey(event.actorRefId)
+    if (pending.exists(_.workerId == event.actorRefId) &&
+        matchesAwaitedReply(key, "RouteQuery", data.requestSeq)) {
+      consumeAwaitedReply(key)
+      state.movablePendingRouteQuery = None
+      val result = data.result.map(r => (r.cost,
+        scala.collection.mutable.Queue.from(r.path.iterator.map(p => (p.linkId, p.nodeId)))))
+      handleCalculatedRouteResult(result)
+    } else logDebug(s"Ignoring superseded route reply from ${event.actorRefId}")
+  }
+
+  private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
+    waitingTicksCounter = 0
+    EventTypeEnum.valueOf(event.eventType) match {
+      case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event, data)
+      case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event, data)
+      case _                    => logWarn(s"Event not handled: $event with data: $data")
+    }
+  }
+
+  protected def actHandleReceiveEnterLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = {}
+  protected def actHandleReceiveLeaveLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = {}
+
+  protected def onFinish(nodeId: Long): Unit = {
+    if (state.destination == nodeId) {
+      state.movableReachedDestination = true
+      state.movableStatus = Finished
+    } else {
+      state.movableStatus = Finished
+    }
+    // destruct=true: TM removes actor from registeredActors and sends DestructEvent through the
+    // mailbox, so any in-flight messages are processed before context.stop(self). The onDestruct()
+    // hook fires first, allowing subclasses to release heavy state before the actor stops.
+    onFinishSpontaneous(None, destruct = true)
+  }
+
+  /** Release the route queue and current path. Called by [[PrivateVehicle]] when parking between
+    * trips so the queue is GCed immediately — the route is recalculated on the next StartTrip.
+    */
+  protected def clearRouteOnPark(): Unit =
+    if (state != null) {
+      state.movableBestRoute = None
+      state.movableCurrentPath = None
+      state.movablePendingJunctionPath = None
+      state.movableCurrentPathIsJunction = false
+    }
+
+  /** Resolves a link ID to `(entityId, shardId)` for message routing.
+   *
+   * The default implementation looks up the road network via
+   * [[CityMapUtil.edgeLabelsById]]. Subclasses that operate on a different
+   * infrastructure (e.g. [[Subway]] on rail links) override this to bypass
+   * the city-map lookup and return the actor reference directly.
+   */
+  protected def resolveLink(linkId: Long): Option[(Long, String)] =
+    CityMapUtil.edgeLabelsById.get(linkId).map(e => (e.id, e.classType))
+
+  protected def microEntryVelocity: Double = 0.0
+  protected def microEntryRemainderSeconds: Double = 0.0
+  protected def microAcceleration: Option[Double] = None
+  protected def microDeceleration: Option[Double] = None
+  protected def microMinGap: Option[Double] = None
+  protected def microReactionTime: Option[Double] = None
+  protected def microMaxSpeed: Option[Double] = None
+  protected def microSpeedFactor: Double = 1.0
+  protected def microDesiredMaxSpeed: Option[Double] = None
+  protected def microSigma: Double = 0.0
+  protected def microRandomSeed: Long = 0L
+  protected def microLc2013: model.mobility.entity.state.model.Lc2013Parameters = model.mobility.entity.state.model.Lc2013Parameters()
+  protected def microEntryPosition: Double = 0.0
+  protected def microArrivalPosition: Option[Double] = None
+  protected def microEntryLane: Option[Int] = None
+  protected def mesoOriginAtEnd: Boolean = false
+
+  /** Lets the Link schedule this vehicle's wake once it admits it. Only vehicles whose MESO timing the Link can
+    * reproduce override this.
+    */
+  protected def delegatedEntry(): Option[model.mobility.entity.event.data.DelegatedEntry] = None
+
+  /** The Node request the Link makes for this vehicle at the exit tick, when the vehicle would make it itself then. */
+  protected def linkAccessRequest(): Option[model.mobility.entity.event.data.LinkAccessRequest] = None
+
+  protected final def delegateMicroScheduling: Boolean =
+    model.mobility.util.VehicleSimulationConfig.microDelegatedScheduling && supportsDelegatedScheduling &&
+      model.mobility.support.link.LinkMicroSchedulingHandler.supports(state.actorType)
+
+  protected def enterLink(): Unit = {
+    if (state.movableCurrentPath.isEmpty) {
+      state.takePendingJunctionPath().foreach { path =>
+        state.movableCurrentPath = Some(path)
+        state.movableCurrentPathIsJunction = true
+      }
+    }
+    state.movableCurrentPath match {
+      case Some((linkEdgeGraphId, _)) =>
+        resolveLink(linkEdgeGraphId) match {
+          case Some((entityId, shardId)) =>
+            state.movableStatus = Waiting
+            state.movableLinkExitReported = false
+            state.movableMicroSchedulingDelegated = false
+            state.movableMicroLeaveHandledByLink = false
+            waitingTicksCounter = 0
+
+            val delegation = delegatedEntry()
+            val mesoAccess = delegation.exists(_.deferReply) && model.mobility.util.VehicleSimulationConfig.linkRequestsAccess
+            val microDelegation = delegateMicroScheduling
+            val access = if (mesoAccess || microDelegation) linkAccessRequest() else None
+            requestInteraction(
+              entityId = entityId,
+              shardId = shardId,
+              data = EnterLinkData(
+                actorType = state.actorType,
+                actorSize = state.size,
+                actorCreationType = LoadBalancedDistributed,
+                initialVelocity = microEntryVelocity,
+                nextLinkId = getNextLink,
+                initialRemainderSeconds = microEntryRemainderSeconds,
+                maxAcceleration = microAcceleration,
+                maxDeceleration = microDeceleration,
+                minGap = microMinGap,
+                reactionTime = microReactionTime,
+                maxSpeed = microMaxSpeed,
+                speedFactor = microSpeedFactor,
+                desiredMaxSpeed = microDesiredMaxSpeed,
+                sigma = microSigma,
+                randomSeed = microRandomSeed,
+                lc2013 = microLc2013,
+                initialPosition = microEntryPosition,
+                arrivalPosition = microArrivalPosition,
+                preferredLane = microEntryLane,
+                mesoOriginAtEnd = mesoOriginAtEnd,
+                delegatedEntry = delegation,
+                accessRequest = if (mesoAccess) access else None,
+                delegateMicroScheduling = microDelegation,
+                microAccessRequest = if (microDelegation) access else None
+              ),
+              EventTypeEnum.EnterLink.toString,
+              actorType = LoadBalancedDistributed,
+              replyKey = Movable.enterLinkAwaitKey(entityId),
+              replyKind = "EnterLinkData"
+            )
+            access.foreach(r =>
+              registerAwaitedReply(s"link-access:${r.request.targetLinkId}", "LinkAccessData"))
+            delegation match {
+              case Some(d) if !d.deferReply => finishAwaitingDelegate(d.wake)
+              case _                        => onFinishSpontaneous(None)
+            }
+
+          case None =>
+            state.movableStatus = Finished
+            logWarn("No edge label found for link, finishing.")
+            val currentNode = Option(getCurrentNode).getOrElse(state.origin)
+            onFinish(currentNode)
+            onFinishSpontaneous(None)
+        }
+      case None if state.movableBestRoute.forall(_.isEmpty) =>
+        state.movableStatus = Finished
+        logWarn("No current path and no best route available, finishing.")
+        onFinish(state.destination)
+        onFinishSpontaneous(None)
+      case None =>
+        getNextPath match {
+          case Some(nextPath) =>
+            state.movableCurrentPath = Some(nextPath)
+            state.movableCurrentPathIsJunction = false
+            enterLink()
+          case None =>
+            state.movableStatus = Finished
+            onFinish(state.destination)
+            onFinishSpontaneous(None)
+        }
+    }
+  }
+
+  /** A verified admission needs no second wake-up at the same physical tick. Other policies
+    * retain their existing scheduling path, including red-phase re-verification.
+    */
+  protected final def scheduleSignalWake(tick: Tick, needsReverification: Boolean): Unit =
+    if (usesNodeLocalScheduling && tick == currentTick && !needsReverification) leavingLink()
+    else scheduleEvent(tick)
+
+  /** Continue a confirmed zero-delay boundary within tracked callback scope for node-local wakes. */
+  protected final def finishOrContinueSpontaneous(next: Option[Tick]): Unit =
+    if (usesNodeLocalScheduling && next.contains(currentTick)) enterLink()
+    else onFinishSpontaneous(next)
+
+  /** True while the previous Link must keep this vehicle's physical footprint until the next Link
+    * has actually admitted it (the Node's capacity grant is not physical acceptance).
+    */
+  protected def holdPreviousLinkUntilNextAdmitted: Boolean = false
+
+  /** Whether the Link answers this vehicle's `LeaveLinkData`. Vehicles opt out only where the reply is redundant. */
+  protected def leaveAckRequired: Boolean = true
+
+  /** True when the Link already took the vehicle off the link at the Node's grant, so no leave is sent. */
+  protected def leaveHandledByLink: Boolean = false
+
+  /** Runs what the vehicle would have done on `ReceiveLeaveLinkInfo`, for a leave sent without a reply. It must end
+    * the current callback like that handler does.
+    */
+  protected def completeLeaveWithoutReply(linkEntityId: Long): Unit = ()
+
+  protected def leavingLink(): Unit =
+    state.movableCurrentPath match {
+      case Some((linkEdgeGraphId, nextNodeId)) =>
+        resolveLink(linkEdgeGraphId) match {
+          case Some((entityId, shardId)) =>
+            val awaitsReply = leaveAckRequired
+            val leave = LeaveLinkData(
+              actorType = state.actorType,
+              actorSize = state.size,
+              actorCreationType = LoadBalancedDistributed,
+              replyRequired = awaitsReply
+            )
+            if (!state.movableLinkExitReported) {
+              state.movableCurrentPath = None
+              if (leaveHandledByLink) {
+                completeLeaveWithoutReply(entityId)
+              } else if (awaitsReply) {
+                requestInteraction(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString,
+                  Movable.leaveLinkAwaitKey(entityId), "LeaveLinkData")
+                onFinishSpontaneous(None)
+              } else {
+                sendMessageTo(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString)
+                completeLeaveWithoutReply(entityId)
+              }
+              return
+            }
+            val routeContinues = !state.movableBestRoute.forall(_.isEmpty)
+            if (!state.movableMicroLeaveHandledByLink && !(routeContinues && holdPreviousLinkUntilNextAdmitted))
+              sendMessageTo(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString)
+            if (state.movableBestRoute.forall(_.isEmpty)) {
+              state.movableCurrentPath = None
+              onFinish(nextNodeId)
+              onFinishSpontaneous(None)
+              return
+            }
+            state.movableCurrentPath = None
+            // MICRO already confirmed arrival; a point node adds no modeled dwell time.
+            finishOrContinueSpontaneous(Some(currentTick))
+          case _ =>
+            logWarn(s"${getEntityId} no edge label found for link $linkEdgeGraphId, scheduling tick+1")
+            onFinishSpontaneous(Some(currentTick + 1))
+        }
+      case None if state.movablePendingJunctionPath.nonEmpty =>
+        state.movableStatus = Ready
+        enterLink()
+      case None =>
+        if (state.movableBestRoute.forall(_.isEmpty)) {
+          state.movableStatus = Finished
+          onFinish(state.destination)
+          onFinishSpontaneous(None)
+        } else {
+          getNextPath match {
+            case Some(nextPath) =>
+              state.movableCurrentPath = Some(nextPath)
+              state.movableCurrentPathIsJunction = false
+              state.movableStatus = Ready
+              enterLink()
+            case None =>
+              state.movableStatus = Finished
+              onFinish(state.destination)
+              onFinishSpontaneous(None)
+          }
+        }
+    }
+
+  protected def getNextPath: Option[(Long, Long)] =
+    if (state == null) None
+    else {
+      state.movableBestRoute match {
+        case Some(path) if path.nonEmpty => Some(path.dequeue())
+        case Some(_)                     => None
+        case None                        => None
+      }
+    }
+
+  protected def viewNextPath: Option[(Long, Long)] =
+    if (state == null) None
+    else {
+      state.movableBestRoute match {
+        case Some(path) if path.nonEmpty => Some(path.head)
+        case Some(_)                     => None
+        case None                        => None
+      }
+    }
+
+  protected def getCurrentNode: Long =
+    if (state == null) 0L
+    else state.movableCurrentPath.map(_._2).getOrElse(0L)
+
+  protected def getNextLink: Long =
+    if (state == null) 0L
+    else viewNextPath.map(_._1).getOrElse(0L)
+}
+
+object Movable {
+
+  /** Correlation key for the one outstanding `EnterLinkData` -> `ReceiveEnterLinkInfo` exchange
+    * for a given link (identified by its resolved entity id, matching `event.actorRefId` on the
+    * reply). Shared by every concrete vehicle type since [[Movable.enterLink]] is the single call
+    * site that sends `EnterLinkData` -- keyed on `entityId` (not e.g. this actor's own id, which
+    * is constant per vehicle) so entering a *different* link never supersedes/consumes this one.
+    */
+  def enterLinkAwaitKey(entityId: Long): String = s"enter-link:$entityId"
+
+  /** Same as [[enterLinkAwaitKey]], for the `LeaveLinkData` -> `ReceiveLeaveLinkInfo` exchange. */
+  def leaveLinkAwaitKey(entityId: Long): String = s"leave-link:$entityId"
+
+  def routeAwaitKey(entityId: Long): String = s"route:$entityId"
+}

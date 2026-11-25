@@ -1,0 +1,30 @@
+package org.interscity.htc
+package model.mobility.entity.event.data.person
+
+import core.entity.event.data.BaseEventData
+import core.types.Tick
+import model.mobility.entity.state.DriverAttributes
+
+/** Message from Person to Vehicle to start a trip.
+  *
+  * This activates a passive vehicle asset and configures it with the person's driving attributes.
+  *
+  * @param personId
+  *   ID of the person starting the trip
+  * @param origin
+  *   Starting node ID
+  * @param destination
+  *   Destination node ID
+  * @param driverAttributes
+  *   Person's driving characteristics
+  * @param startTick
+  *   Tick when trip starts
+  */
+case class StartTripData(
+  personId: Long,
+  origin: Long,
+  destination: Long,
+  driverAttributes: DriverAttributes,
+  startTick: Tick,
+  precomputedRoute: Option[List[(Long, Long)]] = None  // route pre-computed by ModeChoiceStrategy; avoids double A*
+) extends BaseEventData

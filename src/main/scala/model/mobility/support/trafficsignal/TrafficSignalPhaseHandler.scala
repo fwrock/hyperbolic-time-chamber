@@ -1,0 +1,120 @@
+package org.interscity.htc
+package model.mobility.support.trafficsignal
+
+import org.interscity.htc.model.mobility.entity.state.TrafficSignalState
+import org.interscity.htc.model.mobility.entity.state.model.{ Phase, SignalState }
+import org.interscity.htc.model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
+import org.interscity.htc.model.mobility.entity.state.enumeration.{ EventTypeEnum, TrafficSignalPhaseStateEnum }
+import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum.TrafficSignalChangeStatus
+import org.interscity.htc.core.metrics.model.hybrid.TrafficSignalMetrics
+import org.interscity.htc.core.entity.actor.ShardActorId
+import org.interscity.htc.core.types.Tick
+
+class TrafficSignalPhaseHandler(
+  getStateFn:     () => TrafficSignalState,
+  entityIdFn:     () => String,
+  currentTickFn:  () => Tick,
+  simulationEnd:  Tick,
+  reportFn:       (Map[String, Any], String) => Unit,
+  sendMessageFn: (Long, String, AnyRef, String) => Unit,
+  getDependencyFn: Long => ShardActorId,
+  scheduleNextFn:  Tick => Unit,
+  finishFn:        () => Unit,
+  logDebugFn:      String => Unit
+) {
+
+  private def state: TrafficSignalState = getStateFn()
+
+  def handlePhaseTransition(currentTick: Tick): Unit = {
+    val currentCycleTick = (currentTick - state.startTick + state.offset) % state.cycleDuration
+
+    val transitionPoints = state.phases.flatMap(p => Seq(p.greenStart, p.greenStart + p.greenDuration))
+    val nextTickTime = currentTick + transitionPoints.map {
+      point =>
+        val delta = point - currentCycleTick
+        if (delta > 0) delta else delta + state.cycleDuration
+    }.min
+
+    logDebugFn(
+      s"TrafficSignal tick=$currentTick, currentCycleTick=$currentCycleTick, nextTick=$nextTickTime"
+    )
+
+    state.phases.foreach { phase =>
+      val newState = calcNewState(currentCycleTick, phase)
+      val phaseNextTick = currentTick + Seq(phase.greenStart, phase.greenStart + phase.greenDuration).map { point =>
+        val delta = point - currentCycleTick
+        if (delta > 0) delta else delta + state.cycleDuration
+      }.min
+
+      state.signalStates.get(phase.origin).foreach { signalState =>
+        val changed = signalState.state != newState
+        val unpublished = signalState.nextTick <= currentTick
+        signalState.remainingTime = phaseNextTick - currentTick
+        signalState.nextTick      = phaseNextTick
+        if (changed) {
+          TrafficSignalMetrics.phaseChanges.labels(newState.toString).inc()
+        }
+        // A cached red deadline must name this phase's next change, not another
+        // approach's earlier transition. Publish initial red states as well.
+        if (changed || unpublished) {
+          notifyNodes(
+            SignalState(
+              state         = newState,
+              remainingTime = signalState.remainingTime,
+              nextTick      = phaseNextTick
+            ),
+            state.nodes,
+            phase.origin,
+            phaseNextTick
+          )
+        }
+        signalState.state = newState
+      }
+    }
+
+    if (nextTickTime <= simulationEnd) scheduleNextFn(nextTickTime)
+    else finishFn()
+  }
+
+  private def notifyNodes(
+    signalState: SignalState,
+    nodes:       List[Long],
+    phaseOrigin: Long,
+    nextTick:    Tick
+  ): Unit = {
+    reportFn(
+      Map(
+        "event_type"    -> "signal_phase_change",
+        "signal_id"     -> entityIdFn(),
+        "phase_origin"  -> phaseOrigin,
+        "phase_state"   -> signalState.state.toString,
+        "remaining_time"-> signalState.remainingTime,
+        "next_tick"     -> nextTick,
+        "affected_nodes"-> nodes.size,
+        "tick"          -> currentTickFn()
+      ),
+      "signal_phase_change"
+    )
+
+    nodes.foreach { node =>
+      val dependency = getDependencyFn(node)
+      sendMessageFn(
+        dependency.entityId,
+        dependency.classType,
+        TrafficSignalChangeStatusData(
+          signalState = signalState,
+          phaseOrigin = phaseOrigin,
+          nextTick    = nextTick
+        ),
+        TrafficSignalChangeStatus.toString
+      )
+    }
+  }
+
+  private def calcNewState(currentCycleTick: Tick, phase: Phase): TrafficSignalPhaseStateEnum =
+    if (currentCycleTick >= phase.greenStart && currentCycleTick < phase.greenStart + phase.greenDuration)
+      Green
+    else
+      Red
+}

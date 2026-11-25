@@ -24,6 +24,16 @@ final case class ConservativeTransfer(
 ) extends ConservativeCommand
 final case class ConservativeTransferAccepted(epoch: String, token: Long)
     extends ConservativeCommand
+
+/** One wake that a delegate sets for a logical process owned by another time manager. */
+final case class DelegatedWakeRequest(target: LogicalProcessId, order: EventOrder, revision: Long)
+
+/** Wakes for processes owned by the receiver. The sender keeps its batch open until the matching
+  * [[DelegatedSchedulesAccepted]], which the receiver sends only after every wake is stored.
+  */
+final case class DelegatedSchedules(epoch: String, token: Long, wakes: Vector[DelegatedWakeRequest])
+    extends ConservativeCommand
+final case class DelegatedSchedulesAccepted(epoch: String, token: Long) extends ConservativeCommand
 final case class FenceConservativeRegistration(epoch: String, coordinator: ActorRef)
     extends ConservativeCommand
 final case class ConservativeDelivery(epoch: String, token: Long, event: AnyRef)

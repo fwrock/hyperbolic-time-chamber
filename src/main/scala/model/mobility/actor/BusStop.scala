@@ -1,0 +1,193 @@
+package org.interscity.htc
+package model.mobility.actor
+
+import core.actor.SimulationBaseActor
+
+import org.interscity.htc.model.mobility.entity.state.*
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.event.ActorInteractionEvent
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+import org.interscity.htc.core.util.IdUtil
+import org.interscity.htc.model.mobility.entity.event.data.bus.{ BusLoadPassengerData, BusRequestPassengerData, RegisterBusStopData, RegisterPassengerData, LineNotOperationalData, PTLineNotOperationalData }
+import org.interscity.htc.model.mobility.entity.state.BusStopState
+import org.interscity.htc.core.metrics.model.hybrid.BusStopMetrics
+import core.util.StringPool
+
+import scala.collection.mutable
+
+class BusStop(
+  private val properties: Properties
+) extends SimulationBaseActor[BusStopState](
+      properties = properties
+    ) {
+
+  override protected def internStateStrings(s: BusStopState): BusStopState =
+    s.copy(
+      nodeId = s.nodeId,
+      label  = StringPool.intern(s.label)
+    )
+
+  override def onInitialize(event: InitializeEvent): Unit =
+    super.onInitialize(event)
+
+  override def requiresPostLoadRegistration: Boolean = true
+
+  override def handlePostLoadRegistration(): Unit = {
+    val dependencyOpt =
+      getDependencyOption(IdUtil.format(state.nodeId)).orElse(
+        relationships
+          .get(IdUtil.format(state.nodeId))
+          .orElse(
+            relationships.values.find(_.classType == "mobility.actor.Node")
+          )
+      )
+
+    dependencyOpt match {
+      case Some(dependency) =>
+        sendMessageTo(
+          dependency.id,
+          dependency.classType,
+          RegisterBusStopData(
+            label = state.label
+          )
+        )
+        logDebug(s"BusStop ${getEntityId} registered with node ${dependency.id}")
+      case None if state.nodeId != 0L =>
+        logWarn(
+          s"BusStop ${getEntityId}: relationships map empty (available keys: [${relationships.keys
+              .mkString(", ")}]). " +
+            s"Registering with node ${state.nodeId} via direct routing."
+        )
+        sendMessageTo(
+          state.nodeId,
+          "mobility.actor.Node",
+          RegisterBusStopData(
+            label = state.label
+          )
+        )
+      case None =>
+        logWarn(
+          s"BusStop ${getEntityId}: could not find node dependency and nodeId is null. Registration skipped."
+        )
+    }
+  }
+
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: RegisterPassengerData   => handleRegisterPassenger(event, d)
+      case d: BusRequestPassengerData => handleBusRequestPassenger(event, d)
+      case d: LineNotOperationalData  => handleLineNotOperational(d)
+      case _ =>
+        logWarn("Event not handled")
+    }
+
+  private def handleBusRequestPassenger(
+    event: ActorInteractionEvent,
+    data: BusRequestPassengerData
+  ): Unit =
+    state.people.get(data.label) match {
+      case Some(people) =>
+        val peopleToLoad = people.take(data.availableSpace)
+        state.people.put(data.label, people.drop(data.availableSpace))
+
+        BusStopMetrics.passengersLoaded.labels(data.label).inc(peopleToLoad.size)
+        BusStopMetrics.passengersWaiting.dec(peopleToLoad.size)
+
+        report(
+          data = Map(
+            "event_type" -> "passengers_loaded",
+            "bus_stop_id" -> getEntityId,
+            "bus_id" -> event.actorRefId,
+            "route_label" -> data.label,
+            "passengers_loaded" -> peopleToLoad.size,
+            "available_space" -> data.availableSpace,
+            "passengers_waiting" -> state.people.get(data.label).map(_.size).getOrElse(0),
+            "tick" -> currentTick
+          ),
+          label = "bus_stop_passengers_loaded"
+        )
+
+        sendLoadPeopleToBus(peopleToLoad, event)
+      case None =>
+        report(
+          data = Map(
+            "event_type" -> "passengers_loaded",
+            "bus_stop_id" -> getEntityId,
+            "bus_id" -> event.actorRefId,
+            "route_label" -> data.label,
+            "passengers_loaded" -> 0,
+            "available_space" -> data.availableSpace,
+            "passengers_waiting" -> 0,
+            "tick" -> currentTick
+          ),
+          label = "bus_stop_passengers_loaded"
+        )
+        sendLoadPeopleToBus(mutable.Seq(), event)
+    }
+
+  private def sendLoadPeopleToBus(
+    peopleToLoad: mutable.Seq[Identify],
+    event: ActorInteractionEvent
+  ): Unit =
+    sendMessageTo(
+      event.actorRefId,
+      event.actorClassType,
+      data = BusLoadPassengerData(
+        people = peopleToLoad
+      )
+    )
+
+  private def handleLineNotOperational(data: LineNotOperationalData): Unit = {
+    state.deadLines.add(data.label)
+    state.people.get(data.label).foreach { waiting =>
+      waiting.foreach { person =>
+        sendMessageTo(
+          entityId  = person.id,
+          shardId   = "mobility.actor.Person",
+          data      = PTLineNotOperationalData(line = data.label),
+          eventType = "PTLineNotOperational"
+        )
+      }
+      BusStopMetrics.passengersWaiting.dec(waiting.size)
+      state.people.remove(data.label)
+    }
+    logWarn(s"BusStop ${getEntityId}: line ${data.label} not operational — notified waiting passengers")
+  }
+
+  private def handleRegisterPassenger(
+    event: ActorInteractionEvent,
+    data: RegisterPassengerData
+  ): Unit = {
+    if (state.deadLines.contains(data.label)) {
+      sendMessageTo(
+        entityId  = event.actorRefId,
+        shardId   = event.actorClassType,
+        data      = PTLineNotOperationalData(line = data.label),
+        eventType = "PTLineNotOperational"
+      )
+      return
+    }
+
+    val person = event.toIdentity
+    state.people.get(data.label) match {
+      case Some(people) =>
+        state.people.put(data.label, people :+ person)
+      case None =>
+        state.people.put(data.label, mutable.Seq(person))
+    }
+    BusStopMetrics.passengersArrived.labels(data.label).inc()
+    BusStopMetrics.passengersWaiting.inc()
+    report(
+      data = Map(
+        "event_type" -> "passenger_arrived_at_stop",
+        "bus_stop_id" -> getEntityId,
+        "person_id" -> person.id,
+        "route_label" -> data.label,
+        "passengers_waiting" -> state.people.get(data.label).map(_.size).getOrElse(0),
+        "tick" -> currentTick
+      ),
+      label = "bus_stop_passenger_arrived"
+    )
+  }
+}

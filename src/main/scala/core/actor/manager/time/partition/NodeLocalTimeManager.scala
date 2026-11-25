@@ -28,10 +28,12 @@ class NodeLocalTimeManager(
   private val handles = mutable.Map.empty[LogicalProcessId, Long]
   private val owners = mutable.Map.empty[LogicalProcessId, ActorRef]
   private val cohorts = mutable.Map.empty[ActorRef, Vector[ActorRef]]
+  private val earlyCohorts = mutable.Map.empty[ActorRef, PartitionCohort]
   private val pendingRoots = mutable.Map.empty[DirectWorkId, ActorRef]
   private val drains = mutable.LongMap.empty[ActorRef]
   private val granted = mutable.Set.empty[ActorRef]
   private val forwarded = mutable.Queue.empty[(ActorRef, DirectWorkCompletion)]
+  private val delegatedAcks = mutable.Queue.empty[(ActorRef, Long)]
   private var partitions = Vector.empty[ActorRef]
   private var activeTick: Option[Long] = None
   private var bootstrap = false
@@ -115,10 +117,20 @@ class NodeLocalTimeManager(
     flushCompletions()
   }
 
+  /** A delegated wake is only confirmed once every wake admitted so far has a storage receipt. */
+  override protected def acknowledgeDelegated(to: ActorRef, token: Long): Unit = {
+    delegatedAcks.enqueue(to -> token)
+    flushCompletions()
+  }
+
   private def flushCompletions(): Unit = if (!assignments.hasPendingAcceptance) {
     while (forwarded.nonEmpty) {
       val (owner, completion) = forwarded.dequeue()
       owner ! DirectAccounted(conservativeEpoch, completion)
+    }
+    while (delegatedAcks.nonEmpty) {
+      val (to, token) = delegatedAcks.dequeue()
+      to ! DelegatedSchedulesAccepted(conservativeEpoch, token)
     }
   }
 
@@ -214,6 +226,9 @@ class NodeLocalTimeManager(
           inherited(event)
           partitions.foreach(_ ! ConfigurePartition(event.epoch, event.managers))
           event.managers.foreach(_ ! PartitionCohort(event.epoch, partitions))
+          val pending = earlyCohorts.toVector
+          earlyCohorts.clear()
+          pending.foreach { case (from, cohort) => acceptCohort(from, cohort) }
         }
       case event: PartitionOwners =>
         guarded {
@@ -227,17 +242,11 @@ class NodeLocalTimeManager(
         }
       case event: PartitionCohort =>
         guarded {
-          check(event.epoch)
-          require(
-            conservativeMembers.contains(sender()) && event.workers.nonEmpty &&
-              event.workers.distinct.size == event.workers.size && event.workers.forall(
-                _.path.parent == sender().path
-              ),
-            "invalid partition cohort"
-          )
-          require(cohorts.get(sender()).forall(_ == event.workers), "partition cohort changed")
-          cohorts(sender()) = event.workers
-          progressConservative()
+          // Membership comes from the coordinator, cohorts from peers: sender FIFO cannot order them.
+          if (conservativeEpoch.isEmpty) {
+            require(earlyCohorts.get(sender()).forall(_ == event), "partition cohort changed before membership")
+            earlyCohorts(sender()) = event
+          } else acceptCohort(sender(), event)
         }
       case event: ExecuteConservativeBatch =>
         guarded {
@@ -307,6 +316,18 @@ class NodeLocalTimeManager(
         }
     }
     partition.orElse(inherited)
+  }
+
+  private def acceptCohort(from: ActorRef, event: PartitionCohort): Unit = {
+    check(event.epoch)
+    require(
+      conservativeMembers.contains(from) && event.workers.nonEmpty &&
+        event.workers.distinct.size == event.workers.size && event.workers.forall(_.path.parent == from.path),
+      "invalid partition cohort"
+    )
+    require(cohorts.get(from).forall(_ == event.workers), "partition cohort changed")
+    cohorts(from) = event.workers
+    progressConservative()
   }
 
   private def check(run: String): Unit =

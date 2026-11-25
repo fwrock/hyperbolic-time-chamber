@@ -1,0 +1,108 @@
+package org.interscity.htc
+package model.mobility.actor
+
+import core.actor.SimulationBaseActor
+import core.util.StringPool
+import org.interscity.htc.model.mobility.entity.state.*
+
+import core.entity.event.{ ActorInteractionEvent, SpontaneousEvent }
+import org.interscity.htc.model.mobility.entity.state.NodeState
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
+
+import org.htc.protobuf.core.entity.actor.Identify
+import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.core.entity.event.control.load.InitializeEvent
+
+import scala.collection.mutable
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.enumeration.CreationTypeEnum.LoadBalancedDistributed
+import org.interscity.htc.model.mobility.entity.event.data.bus.RegisterBusStopData
+import org.interscity.htc.model.mobility.entity.event.data.link.{ LinkCapacityFreedData, MicroBoundaryUpdateData, PermitReturnData, RegisterLinkCapacityData }
+import org.interscity.htc.model.mobility.entity.event.data.signal.TrafficSignalChangeStatusData
+import org.interscity.htc.model.mobility.entity.event.data.subway.RegisterSubwayStationData
+import org.interscity.htc.model.mobility.entity.event.data.vehicle.{ CancelLinkAccessRequestData, RequestLinkAccessData }
+import org.interscity.htc.model.mobility.entity.event.node.LinkAccessData
+import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.{ Green, Red }
+import org.interscity.htc.model.mobility.support.node.NodeEventHandler
+import org.interscity.htc.model.mobility.util.CityMapUtil
+import org.interscity.htc.core.entity.actor.ShardActorId
+
+class Node(
+  private val properties: Properties
+) extends SimulationBaseActor[NodeState](
+      properties = properties
+    ) {
+
+  override protected def internStateStrings(s: NodeState): NodeState = {
+    val internedConnections = mutable.Map.from(
+      s.connections.map { case (k, v) => k -> v }
+    )
+    val internedApproachConnections = mutable.Map.from(
+      s.approachConnections.map { case (k, v) => k -> v }
+    )
+    val internedSignals = mutable.Map.from(
+      s.signals.map { case (k, v) => k -> v }
+    )
+    s.copy(
+      links                = s.links,
+      connections          = internedConnections,
+      approachConnections  = internedApproachConnections,
+      signals              = internedSignals
+    )
+  }
+
+  private val pendingSignals
+    : mutable.Map[Long, _root_.org.interscity.htc.model.mobility.entity.state.model.SignalState] =
+    mutable.Map.empty
+
+  private lazy val nodeHandler = new NodeEventHandler(
+    getStateFn          = () => state,
+    entityIdFn          = () => getEntityId,
+    currentTickFn       = () => currentTick,
+    pendingSignals      = pendingSignals,
+    reportFn            = (data, label) => report(data, label),
+    sendMessageFn       = (eid, shardId, data, eventType) =>
+      sendMessageTo(eid, shardId, data, eventType, LoadBalancedDistributed),
+    getLinkDependencyFn = linkId =>
+      CityMapUtil.edgeLabelsById.get(linkId)
+        .map(e => ShardActorId(entityId = e.id.toLong, classType = e.classType, shardBucket = e.resourceId)),
+    logWarnFn           = logWarn,
+    logDebugFn          = logDebug,
+    scheduleFn          = tick => scheduleEvent(tick)
+  )
+
+  override def onInitialize(event: InitializeEvent): Unit = {
+    super.onInitialize(event)
+
+    if (state != null) {
+      if (pendingSignals.nonEmpty) {
+        pendingSignals.foreach {
+          case (phaseOrigin, signalState) =>
+            state.signals.put(phaseOrigin, signalState)
+        }
+        pendingSignals.clear()
+      }
+    }
+  }
+
+  override protected def actSpontaneous(event: SpontaneousEvent): Unit = {
+    nodeHandler.onDecisionTick()
+    onFinishSpontaneous(None)
+  }
+
+  override def actInteractWith(event: ActorInteractionEvent): Unit =
+    event.data match {
+      case d: RegisterBusStopData       => nodeHandler.handleRegisterBusStop(event, d)
+      case d: RegisterSubwayStationData => nodeHandler.handleRegisterSubwayStation(event, d)
+      case d: RequestLinkAccessData     => nodeHandler.handleRequestLinkAccess(event, d)
+      case d: RegisterLinkCapacityData  => nodeHandler.handleRegisterLinkCapacity(d)
+      case d: LinkCapacityFreedData     => nodeHandler.handleLinkCapacityFreed(d)
+      case d: PermitReturnData          => nodeHandler.handlePermitReturn(event, d)
+      case d: CancelLinkAccessRequestData => nodeHandler.handleCancelLinkAccessRequest(event, d)
+      case d: MicroBoundaryUpdateData   => nodeHandler.handleBoundaryUpdate(event.actorRefId, d.snapshot)
+      case d: TrafficSignalChangeStatusData =>
+        nodeHandler.handleReceiveSignalChangeStatus(event, d)
+      case _ =>
+        logWarn("Event not handled")
+    }
+}

@@ -173,6 +173,16 @@ and updates vehicle positions and velocities. The handler sends the final
 The active default uses `NoLaneChangeStrategy`; integrated MOBIL lane changing is
 not established by the presence of the model interfaces.
 
+The experimental `mobility` namespace also supports
+`HTC_MOBILITY_MICRO_DELEGATED_SCHEDULING=true` (default `false`, direct conservative
+runtime only). The Link requests downstream capacity at the physical exit and
+combines the Node's answer with `MicroLeaveLinkData`. An immediate grant lets the
+Link perform cleanup itself; a full-capacity answer keeps the existing vehicle
+wait and later-grant protocol. Spillback footprints remain until the next Link
+admits the vehicle. Car, Bus, Bicycle and Motorcycle opt into this handshake;
+delegated vehicles do not schedule redundant MICRO polling wakes. Physics,
+kinematic updates, emissions and bus-stop handling keep their existing paths.
+
 Opt-in 0.1-second runtime ticks, boundary remainder transfer, finite junction
 connectors and downstream leader observations provide the validated single-lane
 Car configuration. All four predeclared v2 cases and five fresh demand seeds pass

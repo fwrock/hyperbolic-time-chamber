@@ -140,7 +140,7 @@ class SqliteLoadData(private val properties: Properties)
     val actors = scala.util.Try(PartialFilter.filter(core.actor.manager.load.ActorLoadFilter(ScenarioModifications(read)))) match {
       case scala.util.Success(records) => records
       case scala.util.Failure(error) =>
-        managerRef ! ScenarioPreflightValidationFailedEvent(model.hybrid.decision.ScenarioLoadError(
+        managerRef ! ScenarioPreflightValidationFailedEvent(core.entity.event.control.load.ScenarioLoadError(
           s"Load filter ($sourceId): ${error.getMessage}"))
         selfDestruct()
         return

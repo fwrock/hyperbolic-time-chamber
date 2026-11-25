@@ -1,0 +1,620 @@
+package org.interscity.htc.model.mobility.util
+
+import org.interscity.htc.core.entity.event.control.rollback.EventReadJournal
+import org.interscity.htc.core.metrics.model.hybrid.GPSMetrics
+import org.interscity.htc.core.metrics.core.{ExecutionTimingMetrics, TimedOperation}
+import org.interscity.htc.model.mobility.entity.state.model.{EdgeGraph, NodeGraph}
+
+import scala.collection.mutable
+import scala.concurrent.blocking
+
+/** GPS Utility for route calculation with dynamic weight support.
+  *
+  * Calculates optimal routes using A* algorithm with real-time traffic data. Weights are
+  * dynamically retrieved from cache, reflecting current congestion, incidents, and other traffic
+  * conditions.
+  */
+object GPSUtil {
+
+  /** Route cache: static topology doesn't change between ticks.
+    * Stores List (not Queue) so each caller gets a fresh Queue copy.
+    * Thread-safe ConcurrentHashMap; None value means "no route exists".
+    */
+  private val routeCache: java.util.concurrent.ConcurrentHashMap[(Long, Long, Boolean), Option[(Double, List[(Long, Long)])]] =
+    new java.util.concurrent.ConcurrentHashMap()
+
+  /** Negative cache: pairs (origin, dest, isWalking) for which no route was ever found.
+    * Prevents repeated expensive searches on disconnected node pairs.
+    * Thread-safe; bounded to 100K entries to avoid unbounded memory growth.
+    */
+  private val noRouteCache: java.util.concurrent.ConcurrentHashMap.KeySetView[(Long, Long, Boolean), java.lang.Boolean] =
+    java.util.concurrent.ConcurrentHashMap.newKeySet[(Long, Long, Boolean)]()
+  private val NO_ROUTE_CACHE_MAX = 100_000
+
+  private def noRouteCacheKey(originId: Long, destinationId: Long): (Long, Long, Boolean) =
+    (originId, destinationId, false)
+
+  private def isNoRouteKnown(originId: Long, destinationId: Long): Boolean =
+    noRouteCache.contains(noRouteCacheKey(originId, destinationId))
+
+  private def markNoRoute(originId: Long, destinationId: Long): Unit =
+    if (noRouteCache.size() < NO_ROUTE_CACHE_MAX)
+      noRouteCache.add(noRouteCacheKey(originId, destinationId))
+
+  /** Calcula a rota entre dois nós usando A* com pesos dinâmicos. Retorna o custo e uma fila de
+    * pares (ID da aresta (EdgeGraph), ID do nó de destino).
+    *
+    * @param originId
+    *   ID do nó de origem.
+    * @param destinationId
+    *   ID do nó de destino.
+    * @param useDynamicWeights
+    *   Se true, usa pesos dinâmicos do cache; se false, usa pesos estáticos (padrão: true).
+    * @return
+    *   Option contendo (custo, fila de rota) ou None se a rota não for encontrada.
+    */
+  def calcRoute(
+    originId: Long,
+    destinationId: Long,
+    useDynamicWeights: Boolean = true
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
+
+    if (originId == destinationId) {
+      return Some((0.0, mutable.Queue.empty))
+    }
+
+    // Check route cache first (static topology: route doesn't change between ticks)
+    // CACHE DISABLED
+    // val cacheKey = s"$originId|$destinationId"
+    // val cached = routeCache.get(cacheKey)
+    // if (cached != null) {
+    //   GPSMetrics.routeSource.labels("cached").inc()
+    //   return cached.map { case (cost, list) => (cost, mutable.Queue(list: _*)) }
+    // }
+
+    val originNodeOpt      = CityMapUtil.nodesById.get(originId)
+    val destinationNodeOpt = CityMapUtil.nodesById.get(destinationId)
+
+    val t0 = System.nanoTime()
+    (originNodeOpt, destinationNodeOpt) match {
+      case (Some(originNode), Some(destinationNode)) =>
+        val pathResult =
+          CityMapUtil.cityMap.dijkstraEdgeTargetsOptimized(originNode, destinationNode)
+
+        pathResult match {
+          case Some((hopCount, path)) =>
+            val dynamicCost = if (useDynamicWeights) {
+              path.foldLeft(0.0) {
+                case (acc, (edgeObject, _)) =>
+                  acc + DynamicWeightCache.getWeight(edgeObject.label.id, edgeObject.weight)
+              }
+            } else {
+              hopCount.toDouble
+            }
+
+            val routeList = path.map { case (edgeObject, targetNode) => (edgeObject.label.id, targetNode.id) }
+            // routeCache.put(cacheKey, Some((dynamicCost, routeList))) // CACHE DISABLED
+
+            val elapsed = (System.nanoTime() - t0) / 1e9
+            if (elapsed > 1.0)
+              System.err.println(
+                s"[GPSUtil][SLOW] dijkstra de $originId para $destinationId levou ${elapsed}s (${routeList.size} hops)"
+              )
+            GPSMetrics.routeCalcDuration.labels("dijkstra").observe(elapsed)
+            GPSMetrics.routeHops.labels("dijkstra").observe(routeList.size.toDouble)
+            GPSMetrics.routeSource.labels("gps_calculated").inc()
+            Some((dynamicCost, mutable.Queue(routeList: _*)))
+          case None =>
+            val elapsed = (System.nanoTime() - t0) / 1e9
+            System.err.println(
+              s"[GPSUtil] Nenhuma rota (dijkstra) de $originId para $destinationId (${elapsed}s)."
+            )
+            // routeCache.put(cacheKey, None) // CACHE DISABLED
+            None
+        }
+      case (None, _) =>
+        System.err.println(s"[GPSUtil] Nó de origem $originId não encontrado no mapa.")
+        GPSMetrics.gpsNodeNotFound.labels("origin").inc()
+        None
+      case (_, None) =>
+        GPSMetrics.gpsNodeNotFound.labels("destination").inc()
+        System.err.println(s"[GPSUtil] Nó de destino $destinationId não encontrado no mapa.")
+        None
+    }
+  }
+
+  /** Calcula a rota entre dois nós usando ALT (A* + Landmarks + Triangle inequality).
+    *
+    * Usa [[CityMapUtil.altIndex]] para guiar o A* com uma heurística baseada em distâncias
+    * pré-computadas a/de k landmarks. Em grafos de tráfego reais, ALT tipicamente expande
+    * significativamente menos nós que A* euclidiano puro, com qualidade de rota idêntica (ótima).
+    *
+    * O índice ALT é construído uma única vez no primeiro acesso (lazy). O número de landmarks
+    * é configurável via `htc.mobility.landmark-count` (padrão: 16).
+    *
+    * @param originId
+    *   ID do nó de origem.
+    * @param destinationId
+    *   ID do nó de destino.
+    * @param useDynamicWeights
+    *   Se true, recalcula o custo com pesos dinâmicos do cache (padrão: true).
+    * @return
+    *   Option contendo (custo, fila de rota) ou None se a rota não for encontrada.
+    */
+  /** Maximum A* node expansions per route search.
+    * Keeps disconnected-node failures bounded (~100ms instead of 48s on a 488K-node graph).
+    * Any route requiring more expansions is treated as unreachable.
+    */
+  private val MAX_ROUTE_EXPANSIONS = 150_000
+
+  def calcRouteALT(
+    originId: Long,
+    destinationId: Long,
+    useDynamicWeights: Boolean = true
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
+
+    if (originId == destinationId) {
+      return Some((0.0, mutable.Queue.empty))
+    }
+
+    // NEGATIVE CACHE DISABLED
+    // if (isNoRouteKnown(originId, destinationId)) {
+    //   return None
+    // }
+
+    val originNodeOpt      = CityMapUtil.nodesById.get(originId)
+    val destinationNodeOpt = CityMapUtil.nodesById.get(destinationId)
+
+    val t0 = System.nanoTime()
+    (originNodeOpt, destinationNodeOpt) match {
+      case (Some(originNode), Some(destinationNode)) =>
+        val altHeuristic: (NodeGraph, NodeGraph) => Double =
+          (v, target) => CityMapUtil.altIndex.heuristic(v, target)
+
+        CityMapUtil.cityMap.aStarEdgeTargetsOptimized(
+          originNode,
+          destinationNode,
+          altHeuristic,
+          maxExpansions = MAX_ROUTE_EXPANSIONS
+        ) match {
+          case Some((staticCost, path)) =>
+            val routeQueue = mutable.Queue[(Long, Long)]()
+            path.foreach {
+              case (edgeObject, targetNodeOfEdgeInPath) =>
+                routeQueue.enqueue((edgeObject.label.id, targetNodeOfEdgeInPath.id))
+            }
+            val finalCost = if (useDynamicWeights) {
+              path.foldLeft(0.0) {
+                case (acc, (edgeObject, _)) =>
+                  acc + DynamicWeightCache.getWeight(edgeObject.label.id, edgeObject.weight)
+              }
+            } else {
+              staticCost
+            }
+            val elapsed = (System.nanoTime() - t0) / 1e9
+            GPSMetrics.routeCalcDuration.labels("alt").observe(elapsed)
+            GPSMetrics.routeHops.labels("alt").observe(routeQueue.size.toDouble)
+            Some((finalCost, routeQueue))
+          case None =>
+            System.err.println(
+              s"GPSUtil (ALT): Nenhuma rota encontrada de $originId para $destinationId."
+            )
+            // markNoRoute(originId, destinationId) // CACHE DISABLED
+            None
+        }
+      case (None, _) =>
+        System.err.println(s"GPSUtil (ALT): Nó de origem $originId não encontrado no mapa.")
+        GPSMetrics.gpsNodeNotFound.labels("origin").inc()
+        None
+      case (_, None) =>
+        System.err.println(s"GPSUtil (ALT): Nó de destino $destinationId não encontrado no mapa.")
+        GPSMetrics.gpsNodeNotFound.labels("destination").inc()
+        None
+    }
+  }
+
+  /** Calcula a rota entre dois nós usando A* puro com heurística euclidiana.
+    *
+    * Usa [[Graph.aStarEdgeTargetsOptimized]] diretamente no grafo da cidade, sem pré-processamento
+    * CH. Mais lento que [[calcRouteCHAStar]] em grafos grandes, mas respeita pesos dinâmicos do
+    * cache ao calcular o custo real da rota retornada.
+    *
+    * @param originId
+    *   ID do nó de origem.
+    * @param destinationId
+    *   ID do nó de destino.
+    * @param useDynamicWeights
+    *   Se true, recalcula o custo com pesos dinâmicos do cache (padrão: true).
+    * @return
+    *   Option contendo (custo, fila de rota) ou None se a rota não for encontrada.
+    */
+  def calcRouteAStar(
+    originId: Long,
+    destinationId: Long,
+    useDynamicWeights: Boolean = true
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
+
+    if (originId == destinationId) {
+      return Some((0.0, mutable.Queue.empty))
+    }
+
+    val originNodeOpt      = CityMapUtil.nodesById.get(originId)
+    val destinationNodeOpt = CityMapUtil.nodesById.get(destinationId)
+
+    val t0 = System.nanoTime()
+    (originNodeOpt, destinationNodeOpt) match {
+      case (Some(originNode), Some(destinationNode)) =>
+        CityMapUtil.cityMap.aStarEdgeTargetsOptimized(originNode, destinationNode, heuristicFunc) match {
+          case Some((staticCost, path)) =>
+            val routeQueue = mutable.Queue[(Long, Long)]()
+            path.foreach {
+              case (edgeObject, targetNodeOfEdgeInPath) =>
+                routeQueue.enqueue((edgeObject.label.id, targetNodeOfEdgeInPath.id))
+            }
+            val finalCost = if (useDynamicWeights) {
+              path.foldLeft(0.0) {
+                case (acc, (edgeObject, _)) =>
+                  acc + DynamicWeightCache.getWeight(edgeObject.label.id, edgeObject.weight)
+              }
+            } else {
+              staticCost
+            }
+            val elapsed = (System.nanoTime() - t0) / 1e9
+            GPSMetrics.routeCalcDuration.labels("astar_pure").observe(elapsed)
+            GPSMetrics.routeHops.labels("astar_pure").observe(routeQueue.size.toDouble)
+            Some((finalCost, routeQueue))
+          case None =>
+            System.err.println(
+              s"GPSUtil (A*): Nenhuma rota encontrada de $originId para $destinationId."
+            )
+            None
+        }
+      case (None, _) =>
+        System.err.println(s"GPSUtil (A*): Nó de origem $originId não encontrado no mapa.")
+        GPSMetrics.gpsNodeNotFound.labels("origin").inc()
+        None
+      case (_, None) =>
+        System.err.println(s"GPSUtil (A*): Nó de destino $destinationId não encontrado no mapa.")
+        GPSMetrics.gpsNodeNotFound.labels("destination").inc()
+        None
+    }
+  }
+
+  /** Calcula a rota usando Contraction Hierarchies com A* (CH+A*).
+    *
+    * Combina a poda hierárquica do CH com a heurística do A* (distância euclidiana), resultando na
+    * busca mais rápida entre os algoritmos disponíveis para grafos estáticos.
+    *
+    * Mesmas restrições do [[calcRouteCH]]: usa pesos estáticos do grafo no momento do
+    * pré-processamento. Para tráfego em tempo real use [[calcRoute]].
+    *
+    * @param originId
+    *   ID do nó de origem.
+    * @param destinationId
+    *   ID do nó de destino.
+    * @return
+    *   Option contendo (custo estático, fila de rota) ou None se a rota não for encontrada.
+    */
+  def calcRouteCHAStar(
+    originId: Long,
+    destinationId: Long
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
+
+    if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
+
+    val originNodeOpt = CityMapUtil.nodesById.get(originId)
+    val destinationNodeOpt = CityMapUtil.nodesById.get(destinationId)
+
+    val t0 = System.nanoTime()
+    (originNodeOpt, destinationNodeOpt) match {
+      case (Some(originNode), Some(destinationNode)) =>
+        CityMapUtil.chIndex.queryAStar(originNode, destinationNode, heuristicFunc) match {
+          case Some((cost, path)) =>
+            val routeQueue = mutable.Queue[(Long, Long)]()
+            path.foreach {
+              case (edgeLabel, targetNode) =>
+                routeQueue.enqueue((edgeLabel.id, targetNode.id))
+            }
+            val elapsed = (System.nanoTime() - t0) / 1e9
+            GPSMetrics.routeCalcDuration.labels("ch_astar_static").observe(elapsed)
+            GPSMetrics.routeHops.labels("ch_astar_static").observe(routeQueue.size.toDouble)
+            Some((cost, routeQueue))
+          case None =>
+            System.err.println(
+              s"GPSUtil (CH+A*): Nenhuma rota encontrada de $originId para $destinationId."
+            )
+            None
+        }
+      case (None, _) =>
+        System.err.println(s"GPSUtil (CH+A*): Nó de origem $originId não encontrado no mapa.")
+        None
+      case (_, None) =>
+        System.err.println(s"GPSUtil (CH+A*): Nó de destino $destinationId não encontrado no mapa.")
+        None
+    }
+  }
+
+  private val heuristicFunc: (NodeGraph, NodeGraph) => Double = (a, b) => a.euclideanDistance(b)
+
+  /** Calcula a rota usando CH+A* com índice reconstruído de forma adaptativa.
+    *
+    * O índice CH é reconstruído automaticamente quando qualquer uma das condições da
+    * [[CHRebuildPolicy]] for satisfeita:
+    *   - `currentTick` está na lista de ticks agendados (início, pico manhã, meio-dia, pico tarde)
+    *   - Algum link tem peso dinâmico > `pesoEstático × blockThresholdFactor` (via bloqueado)
+    *
+    * Fora dessas condições, reutiliza o índice em cache — queries são tão rápidas quanto
+    * [[calcRouteCHAStar]]. Pesos dinâmicos do Kafka só influenciam ''quando'' reconstruir, não os
+    * pesos internos do CH após a reconstrução.
+    *
+    * Para tráfego contínuo em tempo real use [[calcRoute]] com `useDynamicWeights = true`.
+    *
+    * @param originId
+    *   ID do nó de origem.
+    * @param destinationId
+    *   ID do nó de destino.
+    * @param currentTick
+    *   Tick global atual da simulação.
+    * @param policy
+    *   Política de reconstrução — padrão [[CHRebuildPolicy.fromConfig]].
+    * @return
+    *   Option contendo (custo, fila de rota) ou None se a rota não for encontrada.
+    */
+  def calcRouteCHAStarAdaptive(
+    originId: Long,
+    destinationId: Long,
+    currentTick: Int,
+    policy: CHRebuildPolicy = CHRebuildPolicy.fromConfig
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
+
+    if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
+
+    val originNodeOpt = CityMapUtil.nodesById.get(originId)
+    val destinationNodeOpt = CityMapUtil.nodesById.get(destinationId)
+
+    val t0 = System.nanoTime()
+    (originNodeOpt, destinationNodeOpt) match {
+      case (Some(originNode), Some(destinationNode)) =>
+        CityMapUtil
+          .getOrRebuildCHIndex(currentTick, policy)
+          .queryAStar(originNode, destinationNode, heuristicFunc) match {
+          case Some((cost, path)) =>
+            val routeQueue = mutable.Queue[(Long, Long)]()
+            path.foreach {
+              case (edgeLabel, targetNode) =>
+                routeQueue.enqueue((edgeLabel.id, targetNode.id))
+            }
+            val elapsed = (System.nanoTime() - t0) / 1e9
+            GPSMetrics.routeCalcDuration.labels("ch_astar_adaptive").observe(elapsed)
+            GPSMetrics.routeHops.labels("ch_astar_adaptive").observe(routeQueue.size.toDouble)
+            Some((cost, routeQueue))
+          case None =>
+            System.err.println(
+              s"GPSUtil (CH+A* adaptive): Nenhuma rota encontrada de $originId para $destinationId."
+            )
+            None
+        }
+      case (None, _) =>
+        System.err.println(
+          s"GPSUtil (CH+A* adaptive): Nó de origem $originId não encontrado no mapa."
+        )
+        None
+      case (_, None) =>
+        System.err.println(
+          s"GPSUtil (CH+A* adaptive): Nó de destino $destinationId não encontrado no mapa."
+        )
+        None
+    }
+  }
+
+  /** Calcula a rota usando o [[org.interscity.htc.model.mobility.collections.CompactGraph]] (CSR).
+    *
+    * Alternativa de alto desempenho ao A* baseado em HashMap:
+    *   - Grafo armazenado em arrays primitivos contíguos (cache-friendly)
+    *   - Buffers de busca reutilizados via ThreadLocal — zero alocação por chamada após warmup
+    *   - BitSet para `visited` (61 KB para 488K nós vs ~800 KB de HashSet)
+    *   - Heap binário sem boxing sobre pares (Double, Int)
+    *
+    * O custo final é sempre recomputado com pesos dinâmicos do [[DynamicWeightCache]] (quando
+    * `useDynamicWeights = true`), garantindo que o roteamento reflita congestionamentos em tempo
+    * real.
+    *
+    * O resultado tem o mesmo formato de [[calcRouteALT]] — pode substituí-lo diretamente.
+    *
+    * @param originId         ID do nó de origem.
+    * @param destinationId    ID do nó de destino.
+    * @param useDynamicWeights Se true, aplica pesos dinâmicos do cache durante a busca.
+    * @param maxExpansions    Limite de expansões (default: 150 000 — mesmo que o ALT).
+    * @return Option contendo (custo, Queue[(linkId, nodeId)]) ou None se não houver rota.
+    */
+  def calcRouteCompact(
+    originId: Long,
+    destinationId: Long,
+    useDynamicWeights: Boolean = true,
+    maxExpansions: Int = 150_000
+  ): Option[(Double, mutable.Queue[(Long, Long)])] =
+    observeRoute(s"hybrid.routing.compact:$originId:$destinationId:$useDynamicWeights:$maxExpansions") {
+      ExecutionTimingMetrics.timers.measure(TimedOperation.RouteVehicle) {
+        calcRouteCompactLive(originId, destinationId, useDynamicWeights, maxExpansions)
+      }
+    }
+
+  private[util] def observeRoute(key: String)(live: => Option[(Double, mutable.Queue[(Long, Long)])])
+    : Option[(Double, mutable.Queue[(Long, Long)])] = {
+    if (!EventReadJournal.isActive) return live
+    val frozen = EventReadJournal.read(key) {
+      live.map { case (cost, path) => (cost, path.toVector) }
+    }
+    frozen.map { case (cost, path) => (cost, mutable.Queue.from(path)) }
+  }
+
+  private def calcRouteCompactLive(
+    originId: Long,
+    destinationId: Long,
+    useDynamicWeights: Boolean,
+    maxExpansions: Int
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
+
+    if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
+
+    val cacheKey = (originId, destinationId, false)
+
+    val cacheable = !useDynamicWeights
+
+    // Only immutable-topology routes may be cached. Dynamic paths depend on checkpointed costs.
+    if (cacheable && isNoRouteKnown(originId, destinationId)) {
+      GPSMetrics.routeSource.labels("negative_cached").inc()
+      return None
+    }
+
+    // Positive cache: return a fresh Queue copy so callers can drain it independently.
+    val cached = if (cacheable) routeCache.get(cacheKey) else null
+    if (cached != null) {
+      GPSMetrics.routeSource.labels("cached").inc()
+      return cached.map { case (cost, pathList) => (cost, mutable.Queue(pathList: _*)) }
+    }
+
+    val t0  = System.nanoTime()
+    val cg  = CityMapUtil.compactGraph
+    val cli = CityMapUtil.compactAltIndex
+
+    // O(1) reachability pre-check: skip A* entirely for provably unreachable pairs.
+    val srcIdx = cg.nodeIndex.getOrDefault(originId, -1)
+    val dstIdx = cg.nodeIndex.getOrDefault(destinationId, -1)
+    if (srcIdx != -1 && dstIdx != -1 && !CityMapUtil.sccIndex.canReach(srcIdx, dstIdx)) {
+      GPSMetrics.sccUnreachable.labels("vehicle").inc()
+      markNoRoute(originId, destinationId)
+      return None
+    }
+
+    val result = blocking {
+      cg.aStarALT(
+        originId,
+        destinationId,
+        (u, t) => cli.heuristic(u, t),
+        useDynamicWeights,
+        maxExpansions,
+        // Deterministic replacement for the old wall-clock (System.nanoTime()) deadline — see
+        // CompactGraph.runAStar's doc on maxEdgeRelaxations. Same insurance-cap intent (bound total
+        // work regardless of maxExpansions alone), but a pure function of graph topology instead of
+        // machine load, so replaying this exact search under Time Warp always returns the same
+        // route. Not independently measured yet (docs/TIME_WARP_DESIGN.md's placeholder-config
+        // posture): 32x maxExpansions assumes a road-network out-degree well under that factor.
+        maxEdgeRelaxations = maxExpansions.toLong * 32
+      )
+    }
+    val elapsed = (System.nanoTime() - t0) / 1e9
+
+    result match {
+      case Some((cost, path)) =>
+        GPSMetrics.routeCalcDuration.labels("compact_alt").observe(elapsed)
+        GPSMetrics.routeHops.labels("compact_alt").observe(path.size.toDouble)
+        GPSMetrics.routeSource.labels("gps_calculated").inc()
+        if (elapsed > 1.0)
+          System.err.println(
+            s"[GPSUtil][SLOW] compact A* de $originId para $destinationId levou ${elapsed}s (${path.size} hops)"
+          )
+        // Store path as immutable List; first writer wins (putIfAbsent is atomic).
+        if (cacheable) routeCache.putIfAbsent(cacheKey, Some((cost, path.toList)))
+        Some((cost, path))
+      case None =>
+        System.err.println(
+          s"[GPSUtil] compact A*: nenhuma rota de $originId para $destinationId (${elapsed}s)."
+        )
+        GPSMetrics.gpsNodeNotFound.labels("compact_no_route").inc()
+        None
+    }
+  }
+
+  /** A* on the undirected pedestrian graph (Euclidean heuristic, no dynamic weights).
+    *
+    * Pedestrians ignore one-way restrictions — every directed road edge is traversable in both
+    * directions. The directed ALT [[CompactLandmarkIndex]] is NOT used here: landmark distances
+    * computed on a directed graph can overestimate shortest paths on the undirected graph,
+    * making the heuristic inadmissible. The flat-Earth Euclidean heuristic is always admissible
+    * (distance in metres ≤ true path length) regardless of graph direction.
+    *
+    * Dynamic weights are not applied for walking (link congestion affects vehicle speed, not
+    * pedestrian walking speed).
+    */
+  def calcRouteCompactWalking(
+    originId: Long,
+    destinationId: Long,
+    maxExpansions: Int = 200_000
+  ): Option[(Double, mutable.Queue[(Long, Long)])] =
+    observeRoute(s"hybrid.routing.walking:$originId:$destinationId:$maxExpansions") {
+      ExecutionTimingMetrics.timers.measure(TimedOperation.RouteWalking) {
+        calcRouteCompactWalkingLive(originId, destinationId, maxExpansions)
+      }
+    }
+
+  private def calcRouteCompactWalkingLive(
+    originId: Long,
+    destinationId: Long,
+    maxExpansions: Int
+  ): Option[(Double, mutable.Queue[(Long, Long)])] = {
+
+    if (originId == destinationId) return Some((0.0, mutable.Queue.empty))
+
+    val cacheKey = (originId, destinationId, true)
+
+    // Negative cache
+    if (noRouteCache.contains(cacheKey)) {
+      GPSMetrics.routeSource.labels("negative_cached").inc()
+      return None
+    }
+
+    // Positive cache (walking routes are static: no dynamic weights)
+    val cached = routeCache.get(cacheKey)
+    if (cached != null) {
+      GPSMetrics.routeSource.labels("cached").inc()
+      return cached.map { case (cost, pathList) => (cost, mutable.Queue(pathList: _*)) }
+    }
+
+    val t0 = System.nanoTime()
+    val cg = CityMapUtil.compactGraphPedestrian
+
+    // O(1) reachability pre-check on the undirected pedestrian graph.
+    val srcIdx = cg.nodeIndex.getOrDefault(originId, -1)
+    val dstIdx = cg.nodeIndex.getOrDefault(destinationId, -1)
+    if (srcIdx != -1 && dstIdx != -1 && !CityMapUtil.sccIndexPedestrian.canReach(srcIdx, dstIdx)) {
+      GPSMetrics.sccUnreachable.labels("walking").inc()
+      if (noRouteCache.size() < NO_ROUTE_CACHE_MAX) noRouteCache.add(cacheKey)
+      return None
+    }
+
+    val result = blocking {
+      cg.aStarALT(
+        originId,
+        destinationId,
+        altH              = CityMapUtil.compactAltIndexPedestrian.heuristic,
+        useDynamicWeights = false,
+        maxExpansions     = maxExpansions,
+        // See calcRouteCompact's identical maxEdgeRelaxations comment: deterministic replacement
+        // for the old wall-clock deadline, required for Time Warp replay-safety.
+        maxEdgeRelaxations = maxExpansions.toLong * 32
+      )
+    }
+    val elapsed = (System.nanoTime() - t0) / 1e9
+
+    result match {
+      case Some((cost, path)) =>
+        GPSMetrics.routeCalcDuration.labels("compact_walking").observe(elapsed)
+        GPSMetrics.routeHops.labels("compact_walking").observe(path.size.toDouble)
+        GPSMetrics.routeSource.labels("gps_calculated").inc()
+        if (elapsed > 1.0)
+          System.err.println(
+            s"[GPSUtil][SLOW] walking A* de $originId para $destinationId levou ${elapsed}s (${path.size} hops)"
+          )
+        routeCache.putIfAbsent(cacheKey, Some((cost, path.toList)))
+        Some((cost, path))
+      case None =>
+        System.err.println(
+          s"[GPSUtil] walking A*: nenhuma rota de $originId para $destinationId (${elapsed}s)."
+        )
+        GPSMetrics.gpsNodeNotFound.labels("walking_no_route").inc()
+        if (noRouteCache.size() < NO_ROUTE_CACHE_MAX) noRouteCache.add(cacheKey)
+        None
+    }
+  }
+}

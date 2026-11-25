@@ -2,6 +2,8 @@ package org.interscity.htc
 package core.actor.manager.time
 
 import core.entity.event.{FinishEvent, SpontaneousEvent}
+import core.entity.event.control.execution.ReplaceScheduleEvent
+import core.metrics.core.SchedulingMetrics
 import core.runtime.EventOrder
 import core.runtime.accounting.*
 import core.runtime.conservative.*
@@ -60,6 +62,10 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   private val directRoots = mutable.Queue.empty[(Process, DirectExecute)]
   private val directRootSlots = mutable.Set.empty[DirectWorkId]
   private val directProcessed = mutable.Map.empty[DirectWorkId, DirectProcessed]
+  /** Receipt ids by tick. A hash map keeps its bucket table at the size of its busiest moment, so scanning it for old
+    * receipts on every tick costs the startup burst each time; dropping through this index costs only what expired.
+    */
+  private val directProcessedByTick = mutable.TreeMap.empty[Long, mutable.ArrayBuffer[DirectWorkId]]
   private val directBirths = mutable.Map.empty[LogicalProcessId, DirectExecute]
   private var directTick: Option[Long] = None
   private var directClosedTick: Option[Long] = None
@@ -117,6 +123,40 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
 
   private def nextToken(): Long = { token = Math.addExact(token, 1L); token }
   private def owner(id: LogicalProcessId): ActorRef = selectRuntimeOwner(id, members)
+
+  private case class DelegatedBatch(token: Long, wakes: mutable.ArrayBuffer[DelegatedWakeRequest])
+  private case object FlushDelegated
+  private val delegatedOut = mutable.LinkedHashMap.empty[ActorRef, DelegatedBatch]
+  private var delegatedFlushQueued = false
+  /** Upper bound of a batch; the flush itself never waits, so this only caps one message's size. */
+  protected def delegatedBatchLimit: Int = 256
+  /** Receivers confirm after storage; a manager whose storage is asynchronous defers this. */
+  protected def acknowledgeDelegated(to: ActorRef, token: Long): Unit =
+    to ! DelegatedSchedulesAccepted(epoch, token)
+
+  /** The fence is taken here, not at flush time, so no batch can close between enqueue and send. */
+  private def delegateToOwner(destination: ActorRef, request: DelegatedWakeRequest): Unit = {
+    val batch = delegatedOut.getOrElseUpdate(destination, {
+      val id = nextToken()
+      outgoing(id) = destination
+      DelegatedBatch(id, mutable.ArrayBuffer.empty)
+    })
+    batch.wakes += request
+    if (batch.wakes.size >= delegatedBatchLimit) flushDelegated(destination)
+    else if (!delegatedFlushQueued) {
+      delegatedFlushQueued = true
+      self ! FlushDelegated
+    }
+  }
+  private def flushDelegated(destination: ActorRef): Unit = delegatedOut.remove(destination).foreach { batch =>
+    SchedulingMetrics.delegatedBatch.inc()
+    crossOwnerTransfers += 1L
+    destination ! DelegatedSchedules(epoch, batch.token, batch.wakes.toVector)
+  }
+  private def flushAllDelegated(): Unit = {
+    delegatedFlushQueued = false
+    delegatedOut.keysIterator.toVector.foreach(flushDelegated)
+  }
   private def checkEpoch(value: String): Unit = require(value == epoch && epoch.nonEmpty, "wrong conservative epoch")
   private def updateInput(process: Process, next: Option[EventOrder]): Unit = {
     process.next = next
@@ -229,6 +269,7 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
             if (event.blocked > 0) blockedProcesses.add(process.ref) else blockedProcesses.remove(process.ref)
             if (event.terminal) terminalProcesses.add(process.ref) else terminalProcesses.remove(process.ref)
             directProcessed(event.completion.work.id) = event
+            directProcessedByTick.getOrElseUpdate(event.completion.work.tick, mutable.ArrayBuffer.empty) += event.completion.work.id
             directCallbacks += 1L
             directChildren += event.completion.children.size
         }
@@ -330,6 +371,22 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
       receipts += 1L
       completeBatch()
     }
+    case FlushDelegated => protect(flushAllDelegated())
+    case event: DelegatedSchedules => protect {
+      checkEpoch(event.epoch)
+      require(members.contains(sender()), "delegated schedule from a non-member")
+      event.wakes.foreach { wake =>
+        require(owner(wake.target) == self, s"delegated schedule for ${wake.target} sent to a non-owner")
+        applyDelegatedWake(wake.target, wake.order, wake.revision)
+      }
+      acknowledgeDelegated(sender(), event.token)
+    }
+    case DelegatedSchedulesAccepted(run, id) => protect {
+      checkEpoch(run)
+      require(outgoing.remove(id).contains(sender()), "wrong delegated schedule acknowledgement")
+      receipts += 1L
+      completeBatch()
+    }
     case RouteControl(run, target, control, _) => protect {
       checkEpoch(run)
       require(target == self, "schedule control sent to wrong owner")
@@ -349,7 +406,9 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
         if (!directTick.contains(event.tick)) {
           require(directRoots.isEmpty && directRootSlots.isEmpty, "direct dispatch still in flight")
           directLedger.begin(event.tick)
-          directProcessed.filterInPlace((_, receipt) => receipt.completion.work.tick >= event.tick)
+          directProcessedByTick.rangeUntil(event.tick).keysIterator.toVector.foreach { tick =>
+            directProcessedByTick.remove(tick).foreach(_.foreach(directProcessed.remove))
+          }
           directTick = Some(event.tick)
         }
       }
@@ -503,14 +562,38 @@ class ChannelAwareLocalTimeManager(duration: Tick, manager: ActorRef, coordinato
   }
 
 
+  /** Through scheduleEvent, like the owner's own schedule: a node-local manager keeps additive wakes of its
+    * own and ignores the revisioned schedule that replaceSchedule writes.
+    */
+  private def applyDelegatedWake(id: LogicalProcessId, order: EventOrder, revision: Long): Unit = {
+    val target = processes.getOrElse(id, throw new IllegalArgumentException(
+      s"delegated schedule for ${id.model}/${id.id}: target is not registered on its owner"))
+    scheduleEvent(ScheduleEvent(tick = order.tick,
+      identify = Some(target.identity.copy(id = target.handle, classType = target.id.model)),
+      revision = revision,
+      order = Some(org.htc.protobuf.core.entity.event.communication.LogicalEventOrder(order.tick, order.microstep, order.key))))
+  }
+
   private def applyScheduleControl(source: Process, control: AnyRef): Unit = {
     def identity(value: Identify): Identify = {
       require(value.id == source.id.id, "schedule identity mismatch")
       value.copy(id = source.handle, classType = source.id.model)
     }
     control match {
-      case e: FinishEvent => finishEvent(e.copy(identify = identity(e.identify)))
-      case e: ScheduleEvent => scheduleEvent(e.copy(identify = Some(identity(e.identify.get))))
+      case e: ReplaceScheduleEvent =>
+        SchedulingMetrics.delegated.inc()
+        require(e.completedGeneration < 0L && !e.awaitingReply && e.next.nonEmpty,
+          "a delegated schedule only sets a wake, it never completes the owner's dispatch")
+        val target = LogicalProcessId(e.identify.classType, e.identify.id)
+        val destination = owner(target)
+        if (destination == self) applyDelegatedWake(target, e.next.get, e.revision)
+        else delegateToOwner(destination, DelegatedWakeRequest(target, e.next.get, e.revision))
+      case e: FinishEvent =>
+        SchedulingMetrics.finish.inc()
+        finishEvent(e.copy(identify = identity(e.identify)))
+      case e: ScheduleEvent =>
+        SchedulingMetrics.schedule.inc()
+        scheduleEvent(e.copy(identify = Some(identity(e.identify.get))))
       case _ => throw new IllegalArgumentException("unsupported conservative schedule control")
     }
   }

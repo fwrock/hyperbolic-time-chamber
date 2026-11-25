@@ -1,0 +1,44 @@
+package org.interscity.htc
+package model.mobility.entity.state
+
+import core.types.Tick
+
+// Arrival speed is reused by the next link's physics, so journey data must follow state rollback.
+case class CarJourneyState(
+  var journeyFinishedReported: Boolean = false,
+  var sumoDepartTick: Option[Tick] = None,
+  var sumoDepartSpeed: Double = 0.0,
+  var sumoArrivalSpeed: Double = 0.0,
+  var sumoDepartLane: Option[String] = None,
+  var sumoDepartPos: Double = 0.0,
+  var sumoArrivalLane: Option[String] = None,
+  var sumoArrivalPos: Double = 0.0,
+  var sumoWaitingTimeSeconds: Double = 0.0,
+  var sumoWaitingCount: Int = 0,
+  var sumoStopTimeSeconds: Double = 0.0,
+  var sumoIdealTravelTimeSeconds: Double = 0.0,
+  var sumoCurrentMicroTimeStepSeconds: Double = 1.0,
+  var sumoIsHalting: Boolean = false,
+  var sumoRerouteNo: Int = 0,
+  var sumoTripInfoReported: Boolean = false,
+  var secondsPerTick: Double = 1.0,
+  var boundaryRemainderSeconds: Double = 0.0,
+  var boundaryExitTick: Option[Tick] = None,
+  var retainedMicroExitLinkId: Option[Long] = None,
+  /** MESO tick-rounding credit (ticks): how much the last link exit was rounded up. Carried into the next link so rounding does not accumulate. */
+  var mesoRoundingCredit: Double = 0.0,
+  var mesoLastExitTick: Long = -1L,
+  var capacityWaitSinceTick: Option[Tick] = None,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
+  var lastMicroLane: Option[Int] = None,
+  @com.fasterxml.jackson.databind.annotation.JsonDeserialize(contentAs = classOf[java.lang.Integer])
+  var pendingRoadLane: Option[Int] = None,
+  var mesoOriginActive: Boolean = false,
+  /** Whether the current MESO link will answer this Car's leave; set from the entry reply, so a lost value only restores the reply. */
+  var leaveAckRequired: Boolean = true,
+  /** The Link took the Car off the link when the Node granted the crossing, so the Car sends no leave. */
+  var leaveHandledByLink: Boolean = false
+) extends org.interscity.htc.model.mobility.support.car.MesoTimingState {
+  def entryRemainderAt(tick: Tick): Double =
+    if (boundaryExitTick.contains(tick) && sumoArrivalSpeed > 0.0) boundaryRemainderSeconds else 0.0
+}

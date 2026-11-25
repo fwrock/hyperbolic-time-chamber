@@ -36,6 +36,23 @@ class SimulationClockSpec extends AnyFlatSpec with Matchers {
     SimulationClock(1).at(start, 10000000000L) shouldBe start.plusSeconds(10000000000L)
   }
 
+  it should "validate fractional-clock actor capabilities through the selected model binding" in {
+    val fine = scenario.copy(tickDuration = Some(0.1))
+    for (namespace <- Seq("hybrid", "mobility")) {
+      val binding = core.modelbinding.ModelBindings.forNamespace(namespace)
+      val allowed = List("Car", "Link", "Node", "TrafficSignal")
+      for (prefix <- Seq(s"$namespace.actor.", s"org.interscity.htc.model.$namespace.actor.")) {
+        val sources = allowed.map(name => ActorDataSource(name, prefix + name, null, null))
+        SimulationClock.validateScenario(fine.copy(actorsDataSources = sources), binding).secondsPerTick shouldBe 0.1
+        intercept[IllegalArgumentException](SimulationClock.validateScenario(fine.copy(
+          actorsDataSources = List(ActorDataSource("person", prefix + "Person", null, null))), binding))
+      }
+      val other = if (namespace == "hybrid") "mobility" else "hybrid"
+      intercept[IllegalArgumentException](SimulationClock.validateScenario(fine.copy(
+        actorsDataSources = List(ActorDataSource("car", s"$other.actor.Car", null, null))), binding))
+    }
+  }
+
   it should "accept integer and decimal tick durations after a browser JSON round trip" in {
     val template = JsonUtil.toJson(scenario)
     for ((literal, expected) <- Seq("1" -> 1.0, "1.0" -> 1.0, "0.1" -> 0.1)) {

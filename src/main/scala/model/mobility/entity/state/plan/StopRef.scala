@@ -1,0 +1,13 @@
+package org.interscity.htc
+package model.mobility.entity.state.plan
+
+/** Reference to a transit stop actor a [[TransitLeg]] boards at or alights from.
+  *
+  * Holds only entity/shard-style identifiers (id, class type, node id) — never an `ActorRef` —
+  * consistent with the project rule that simulation state must not carry live actor references.
+  */
+final case class StopRef(
+  actorId: Long,
+  actorClassType: String,
+  nodeId: Long
+)

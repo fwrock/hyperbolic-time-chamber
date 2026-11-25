@@ -19,17 +19,6 @@ import scala.jdk.CollectionConverters._
 
 object JsonUtil {
 
-  class SubRoutePairKeyDeserializer extends KeyDeserializer {
-    override def deserializeKey(key: String, ctxt: DeserializationContext): Object = {
-      val parts = key.split(":")
-      if (parts.length == 2) {
-        org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair(parts(0).toLong, parts(1).toLong)
-      } else {
-        throw new IllegalArgumentException(s"Invalid SubRoutePair key format: $key")
-      }
-    }
-  }
-
   private val mapper = new ObjectMapper()
   mapper.registerModule(DefaultScalaModule)
   mapper.registerModule(new JavaTimeModule())
@@ -37,10 +26,7 @@ object JsonUtil {
   mapper.configure(DeserializationFeature.USE_LONG_FOR_INTS, true)
 
   private val subRoutePairModule = new SimpleModule()
-  subRoutePairModule.addKeyDeserializer(
-    classOf[org.interscity.htc.model.hybrid.entity.state.model.SubRoutePair],
-    new SubRoutePairKeyDeserializer
-  )
+  core.modelbinding.ModelBindings.active.registerJsonKeys(subRoutePairModule)
 
   mapper.registerModule(subRoutePairModule)
 

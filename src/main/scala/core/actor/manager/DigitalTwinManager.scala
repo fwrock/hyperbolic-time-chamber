@@ -112,16 +112,19 @@ class DigitalTwinManager(timeManager: ActorRef)
     }
   }
 
+  private def modelActorClass(simpleName: String): String =
+    s"org.interscity.htc.model.${core.modelbinding.ModelBindings.active.namespace}.actor.$simpleName"
+
   private def entityTypeClassName(entityType: EntityType): Option[String] =
     entityType match {
-      case EntityType.TRAFFIC_SIGNAL => Some("org.interscity.htc.model.hybrid.actor.TrafficSignal")
-      case EntityType.LINK           => Some("org.interscity.htc.model.hybrid.actor.Link")
-      case EntityType.CAR            => Some("org.interscity.htc.model.hybrid.actor.Car")
-      case EntityType.BIKE           => Some("org.interscity.htc.model.hybrid.actor.Car")
-      case EntityType.BUS            => Some("org.interscity.htc.model.hybrid.actor.Bus")
-      case EntityType.SUBWAY         => Some("org.interscity.htc.model.hybrid.actor.Subway")
-      case EntityType.PERSON         => Some("org.interscity.htc.model.hybrid.actor.Person")
-      case EntityType.NODE           => Some("org.interscity.htc.model.hybrid.actor.Node")
+      case EntityType.TRAFFIC_SIGNAL => Some(modelActorClass("TrafficSignal"))
+      case EntityType.LINK           => Some(modelActorClass("Link"))
+      case EntityType.CAR            => Some(modelActorClass("Car"))
+      case EntityType.BIKE           => Some(modelActorClass("Car"))
+      case EntityType.BUS            => Some(modelActorClass("Bus"))
+      case EntityType.SUBWAY         => Some(modelActorClass("Subway"))
+      case EntityType.PERSON         => Some(modelActorClass("Person"))
+      case EntityType.NODE           => Some(modelActorClass("Node"))
     }
 
   private def deriveEventType(event: HtcReadyEvent): String =

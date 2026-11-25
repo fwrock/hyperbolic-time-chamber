@@ -1,0 +1,652 @@
+package org.interscity.htc
+package model.mobility.actor
+
+import core.entity.event.{ActorInteractionEvent, SpontaneousEvent}
+import core.types.Tick
+import core.actor.manager.loadbalance.migration.MigrationSnapshot
+
+import org.interscity.htc.core.entity.actor.properties.Properties
+import org.interscity.htc.model.mobility.entity.event.data.link.LinkInfoData
+import org.interscity.htc.model.mobility.entity.event.node.LinkAccessData
+import org.interscity.htc.model.mobility.entity.state.enumeration.EventTypeEnum
+import org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum.*
+import org.interscity.htc.model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Red
+import org.interscity.htc.model.mobility.util.{CityMapUtil, GPSUtil}
+import org.interscity.htc.model.mobility.support.bicycle.{
+  BicycleJourneyReporter, BicycleLinkHandler, BicycleMicroHandler, BicycleSignalHandler
+}
+import org.interscity.htc.model.mobility.entity.state.{BicycleState, DriverAttributes, MicroBicycleState}
+import org.interscity.htc.model.mobility.entity.event.data.*
+import org.interscity.htc.core.enumeration.CreationTypeEnum
+import org.interscity.htc.core.metrics.model.hybrid.{ GPSMetrics, MovableMetrics }
+import org.htc.protobuf.core.entity.event.control.execution.DestructEvent
+import core.util.StringPool
+
+/** Bicycle actor - NEW vehicle type for hybrid simulator.
+  *
+  * NOW A PRIVATE VEHICLE ASSET (Person-Centric Model):
+  *   - Passive (Parked) by default
+  *   - Activated by Person via StartTrip message
+  *   - Configured with person's DriverAttributes
+  *   - Reports back with TripCompleted
+  *   - Low speeds (typically 15-25 km/h)
+  *   - Prefer bike lanes when available
+  *   - Can share lanes with cars if necessary
+  *   - Lower acceleration and deceleration
+  *   - Smaller vehicle size (2m)
+  *
+  * MESO mode:
+  *   - Aggregate bicycle flow
+  *   - Simplified speed calculations
+  *
+  * MICRO mode:
+  *   - Detailed positioning with bicycle-specific parameters
+  *   - Bike lane preference
+  *   - Safety gap considerations (vulnerable user)
+  *   - Interactions with cars and other vehicles
+  *
+  * @param properties
+  *   Actor properties
+  */
+class Bicycle(
+  private val properties: Properties
+) extends Movable[BicycleState](
+      properties = properties
+    )
+    with PrivateVehicle[BicycleState] {
+
+  override protected def internStateStrings(s: BicycleState): BicycleState = {
+    val copied = s.copy(
+      origin      = s.origin,
+      destination = s.destination
+    )
+    // copy() only replicates BicycleState constructor params; restore MovableState vars
+    // that are not in the constructor (otherwise they reset to their defaults).
+    copied.movableStatus             = s.movableStatus
+    copied.movableBestRoute          = s.movableBestRoute
+    copied.movableCurrentPath        = s.movableCurrentPath
+    copied.movableCurrentNode        = s.movableCurrentNode
+    copied.movableBestCost           = s.movableBestCost
+    copied.movableReachedDestination = s.movableReachedDestination
+    copied.movableLinkExitReported   = s.movableLinkExitReported
+    copied.movableMicroSchedulingDelegated = s.movableMicroSchedulingDelegated
+    copied.movableMicroLeaveHandledByLink = s.movableMicroLeaveHandledByLink
+    copied.movablePendingRouteQuery  = s.movablePendingRouteQuery
+    copied.movablePendingJunctionPath = s.movablePendingJunctionPath
+    copied.movableCurrentPathIsJunction = s.movableCurrentPathIsJunction
+    copied
+  }
+
+  /** Wires PrivateVehicle's reply-linkage fields (ownerPersonRef, tripOrigin, etc. — see
+    * docs/KNOWN_GAPS.md "Shard Migration Silently Drops Actor-Local Reply State") into the
+    * migration snapshot. Must live here, not in the trait: the trait's self-type doesn't let it
+    * call `super.buildMigrationSnapshot()` (see PrivateVehicle.captureMigrationFields).
+    */
+  /** Adds this class's own link/signal-wait bookkeeping on top of `PrivateVehicle`'s
+    * `captureMigrationFields`. Same fix as `Car.scala`'s `captureCarMigrationFields`/
+    * `restoreCarMigrationFields` (see that doc for the full rationale) — `docs/
+    * TIME_WARP_DESIGN.md`'s checkpoint-completeness audit (2026-08-07) found `currentLinkId`/
+    * `linkEntryTick`/`mesoExitTick`/`signalWaitUntilTick`/`signalWaitNeedsReverify` uncaptured here
+    * too. Reuses `MigrationSnapshot`'s `vehicle*` fields (named generically, not `Car`-specific, for
+    * exactly this reuse) — `currentLinkLength` doesn't apply here (Bicycle doesn't track it), so
+    * that one field is simply left at its default (`0.0`) on capture and ignored on restore.
+    */
+  private def captureBicycleMigrationFields(base: MigrationSnapshot): MigrationSnapshot =
+    base.copy(
+      vehicleCurrentLinkId = currentLinkId.getOrElse(0L),
+      vehicleLinkEntryTick = linkEntryTick.getOrElse(Long.MinValue),
+      vehicleMesoExitTick = mesoExitTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitUntilTick = signalWaitUntilTick.getOrElse(Long.MinValue),
+      vehicleSignalWaitNeedsReverify = signalWaitNeedsReverify
+    )
+
+  /** Restores what [[captureBicycleMigrationFields]] captured. */
+  private def restoreBicycleMigrationFields(snapshot: MigrationSnapshot): Unit = {
+    currentLinkId = if (snapshot.vehicleCurrentLinkId != 0L) Some(snapshot.vehicleCurrentLinkId) else None
+    linkEntryTick = if (snapshot.vehicleLinkEntryTick != Long.MinValue) Some(snapshot.vehicleLinkEntryTick) else None
+    mesoExitTick = if (snapshot.vehicleMesoExitTick != Long.MinValue) Some(snapshot.vehicleMesoExitTick) else None
+    signalWaitUntilTick =
+      if (snapshot.vehicleSignalWaitUntilTick != Long.MinValue) Some(snapshot.vehicleSignalWaitUntilTick) else None
+    signalWaitNeedsReverify = snapshot.vehicleSignalWaitNeedsReverify
+  }
+
+  override protected def buildMigrationSnapshot(): MigrationSnapshot =
+    captureBicycleMigrationFields(captureMigrationFields(super.buildMigrationSnapshot()))
+
+  override protected def applyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = {
+    super.applyMigrationSnapshot(snapshot)
+    restoreMigrationFields(snapshot)
+    restoreBicycleMigrationFields(snapshot)
+  }
+
+  // See CarJourneyReporter.clearCompletionGuards' doc: journeyFinishedReported is actor-local, not
+  // `state`, so a Time Warp rollback restoring `state` never resets it -- without this, a trip
+  // whose completion already fired once before the rollback's target can never report its
+  // (corrected, replayed) completion again for the rest of the simulation.
+  override protected def onRollbackDiscardPending(targetTick: Tick): Unit = {
+    super.onRollbackDiscardPending(targetTick)
+    journeyReporter.clearCompletionGuards()
+  }
+
+  /** Current link being traversed.
+    */
+  // protected, not private: lets BicycleLinkWaitMigrationSnapshotSpec drive these directly,
+  // same rationale as Car.scala's identical fields.
+  protected var currentLinkId: Option[Long] = None
+
+  /** Link entry tick.
+    */
+  protected var linkEntryTick: Option[Tick] = None
+
+  /** MESO exit tick — the tick at which link traversal completes. Used to prevent stale
+    * Waiting-poll ticks from triggering premature requestSignalState.
+    */
+  protected var mesoExitTick: Option[Tick] = None
+
+  /** Maximum simulation end tick - vehicles must finish by this tick. */
+  private lazy val simulationEndTick: Tick =
+    model.mobility.util.VehicleSimulationConfig.simulationEndTick
+
+  protected var signalWaitUntilTick: Option[Tick] = None
+  // See Car.scala's signalWaitNeedsReverify for what this flags and why.
+  protected var signalWaitNeedsReverify: Boolean = false
+
+  /** How many MICRO sub-tick updates to skip between live position reports (mirrored to the
+    * `kafka` reporter for htc-play). 0 disables live per-sub-tick position reporting entirely —
+    * publishing every sub-tick unconditionally would be an order of magnitude more volume than
+    * the MESO/walking enter/leave events. See project memory on htc-replay live mode.
+    */
+  private lazy val microUpdateReportEvery: Int =
+    scala.util.Try(config.getInt("htc.report-manager.kafka.micro-update-report-every")).toOption
+      .filter(_ >= 0)
+      .getOrElse(0)
+
+  private lazy val journeyReporter = new BicycleJourneyReporter(
+    reportFn        = (data, label) => report(data = data, label = label),
+    entityIdFn      = () => getEntityId,
+    currentTickFn   = () => currentTick,
+    tripOriginFn    = () => getTripOrigin,
+    tripDestFn      = () => getTripDestination,
+    tripStartTickFn = () => getTripStartTick,
+    driverAttrsFn   = () => getDriverAttributes
+  )
+
+  private lazy val microHandler = new BicycleMicroHandler(
+    reportFn                 = (data, label) => reportMirrored(data = data, label = label),
+    entityIdFn               = () => getEntityId,
+    currentTickFn            = () => currentTick,
+    journeyReporter          = journeyReporter,
+    requestSignalStateFn     = () => requestSignalState(),
+    onFinishSpontaneousFn    = tick => onFinishSpontaneous(tick),
+    onFinishPrivateVehicleFn = node => onFinishPrivateVehicle(node),
+    selfDestructFn           = () => selfDestruct(),
+    isPersonCentricFn        = () => isPersonCentric,
+    finishJourneyFn          = (reason, node) => journeyReporter.finishJourney(reason, node, state),
+    logDebugFn               = msg => logDebug(msg),
+    setCurrentLinkIdFn       = id => currentLinkId = id,
+    setLinkEntryTickFn       = t => linkEntryTick = t,
+    getLinkEntryTickFn       = () => linkEntryTick,
+    getCurrentLinkIdFn       = () => currentLinkId,
+    microUpdateReportEvery   = microUpdateReportEvery,
+    onDelegatedAccessFn = access => {
+      state.status = model.mobility.entity.state.enumeration.MovableStatusEnum.WaitingSignalState
+      signalHandler.handleLinkAccess(access, state)
+    }
+  )
+
+  private lazy val linkHandler = new BicycleLinkHandler(
+    reportFn                 = (data, label) => reportMirrored(data = data, label = label),
+    entityIdFn               = () => getEntityId,
+    currentTickFn            = () => currentTick,
+    journeyReporter          = journeyReporter,
+    onFinishSpontaneousFn    = tick => onFinishSpontaneous(tick),
+    onFinishPrivateVehicleFn = node => onFinishPrivateVehicle(node),
+    selfDestructFn           = () => selfDestruct(),
+    isPersonCentricFn        = () => isPersonCentric,
+    finishJourneyFn          = (reason, node) => journeyReporter.finishJourney(reason, node, state),
+    setMesoExitTickFn        = t => mesoExitTick = t,
+    getTripDestinationFn     = () => getTripDestination,
+    logDebugFn               = msg => logDebug(msg),
+    isTimeWarpFn             = () => requiresReplyCorrelation,
+    isAwaitingReplyFn        = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn    = key => consumeAwaitedReply(key)
+  )
+
+  private lazy val signalHandler = new BicycleSignalHandler(
+    reportFn                     = (data, label) => report(data = data, label = label),
+    entityIdFn                   = () => getEntityId,
+    currentTickFn                = () => currentTick,
+    journeyReporter              = journeyReporter,
+    onFinishSpontaneousFn        = tick => onFinishSpontaneous(tick),
+    scheduleEventFn              = tick => scheduleSignalWake(tick, signalWaitNeedsReverify),
+    leavingLinkFn                = () => leavingLink(),
+    selfDestructFn               = () => selfDestruct(),
+    isPersonCentricFn            = () => isPersonCentric,
+    logDebugFn                   = msg => logDebug(msg),
+    sendMessageFn                = (id, shard, d, et) => sendMessageTo(entityId = id, shardId = shard, data = d, eventType = et),
+    getCurrentNodeFn             = () => getCurrentNode,
+    getNextLinkFn                = () => getNextLink,
+    getTripDestinationFn         = () => getTripDestination,
+    finishJourneyFn              = (reason, node) => journeyReporter.finishJourney(reason, node, state),
+    onFinishPrivateVehicleFn     = node => onFinishPrivateVehicle(node),
+    setSignalWaitUntilTickFn     = t => signalWaitUntilTick = t,
+    setSignalWaitNeedsReverifyFn = v => signalWaitNeedsReverify = v,
+    isTimeWarpFn                 = () => requiresReplyCorrelation,
+    registerAwaitedReplyFn       = (key, kind) => registerAwaitedReply(key, kind),
+    requestMessageFn = Some((eid, shard, data, event, key, kind) =>
+      requestInteraction(eid, shard, data, event, key, kind)),
+    isAwaitingReplyFn            = (key, kind, seq) => isAwaitingReply(key, kind, seq),
+    consumeAwaitedReplyFn        = key => consumeAwaitedReply(key)
+  )
+
+  override protected def getVehicleStatus
+    : org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum = state.status
+  override protected def setVehicleStatus(
+    status: org.interscity.htc.model.mobility.entity.state.enumeration.MovableStatusEnum
+  ): Unit =
+    state.status = status
+  override protected def getActorCurrentTick: Tick = currentTick
+  override protected def getActorShardId: String = getShardId
+  override protected def getActorEntityId: String = getEntityId
+  override protected def scheduleNextTick(nextTick: Option[Tick]): Unit = onFinishSpontaneous(
+    nextTick
+  )
+  override protected def selfDestructVehicle(): Unit                     = selfDestruct()
+  override protected def isVehicleStateNull: Boolean                     = state == null
+  override protected def getCurrentDistance: Double = state.distance
+  override protected def sendVehicleMessage(
+    entityId: Long,
+    shardId: String,
+    data: AnyRef,
+    eventType: String,
+    actorType: CreationTypeEnum
+  ): Unit =
+    sendMessageTo(
+      entityId = entityId,
+      shardId = shardId,
+      data = data,
+      eventType = eventType,
+      actorType = actorType
+    )
+  override protected def logVehicleInfo(message: String): Unit = logInfo(message)
+  override protected def logVehicleWarn(message: String): Unit = logWarn(message)
+  override protected def logVehicleDebug(message: String): Unit = logDebug(message)
+  override protected def registerOnTimeManager(tick: Tick): Unit = scheduleEvent(tick)
+
+  /** Reset all per-trip tracking variables so metrics start fresh for each new trip. Called by
+    * PrivateVehicle.handleStartTrip before each activation.
+    */
+  /** Pre-load route pre-computed by ModeChoiceStrategy so requestRoute() skips a second A*.
+    */
+  override protected def applyPrecomputedRoute(route: List[(Long, Long)]): Unit =
+    state.bestRoute = Some(scala.collection.mutable.Queue(route: _*))
+
+  override protected def resetTripState(): Unit = {
+    if (state == null) return
+    state.movablePendingJunctionPath = None
+    state.movableCurrentPathIsJunction = false
+    currentLinkId = None
+    linkEntryTick = None
+    mesoExitTick = None
+    signalWaitUntilTick = None
+    signalWaitNeedsReverify = false
+    journeyReporter.reset()
+    state.bestRoute = None
+    state.deactivateMicroMode()
+  }
+
+  // ===== End Accessor Methods =====
+
+  override protected def onHorizonFinalization(horizon: Tick): Unit =
+    if (state.status != Finished && state.status != model.mobility.entity.state.enumeration.MovableStatusEnum.Parked &&
+      journeyReporter.sumoDepartTick.nonEmpty)
+      model.mobility.support.JourneyHorizonReporter.report("bicycle", getEntityId,
+        getTripOrigin.getOrElse(state.origin), getTripDestination.getOrElse(state.destination),
+        journeyReporter.sumoDepartTick.get, horizon, state.distance - getTripStartDistance,
+        state.currentPath.map(_._1), (data, label) => report(data, label))
+
+  override def actSpontaneous(event: SpontaneousEvent): Unit = {
+    if (state == null) {
+      logWarn(
+        "Bicycle state is null, cannot process spontaneous event — sending FinishEvent to unblock TimeManager"
+      )
+      onFinishSpontaneous(None)
+      return
+    }
+
+    if (state.status == Parked) {
+      onFinishSpontaneous(None)
+      return
+    }
+
+    if (
+      !usesAccountedRuntime && !model.mobility.util.VehicleSimulationConfig.extendSimulationIfPendingEventsAfterEnd
+      && currentTick >= simulationEndTick && state.status != Finished
+    ) {
+      logDebug(
+        s"Bicycle ${getEntityId} exceeded simulation end time ($simulationEndTick) at tick $currentTick, force-finishing."
+      )
+      val finalNode = Option(getCurrentNode).getOrElse(state.destination)
+      finishJourney("simulation_time_exceeded", finalNode)
+      onFinishPrivateVehicle(finalNode)
+      onFinishSpontaneous(None)
+      selfDestruct()
+      return
+    }
+
+    logDebug(s"[BICYCLE] actSpontaneous tick=$currentTick id=$getEntityId status=${state.status} isMicro=${state.isMicroMode}")
+    state.status match {
+      case Start =>
+        requestRoute()
+
+      case Ready =>
+        // If movableStatus is already Waiting, enterLink() was already called and we're
+        // waiting on the Link's LinkInfoData reply to flip state.status away from Ready —
+        // re-calling enterLink() here would resend a duplicate EnterLinkData for a link
+        // this bicycle is already registered on. Just poll again next tick instead.
+        if (state.movableStatus == Waiting) {
+          onFinishSpontaneous(Some(currentTick + 1))
+        } else {
+          enterLink()
+        }
+
+      case WaitingSignal =>
+        signalWaitUntilTick match {
+          case Some(waitTick) if currentTick < waitTick =>
+            onFinishSpontaneous(Some(waitTick))
+          case _ =>
+            signalWaitUntilTick = None
+            if (signalWaitNeedsReverify) {
+              signalWaitNeedsReverify = false
+              requestSignalState()
+            } else {
+              leavingLink()
+            }
+        }
+
+      case Moving =>
+        if (state.isMicroMode) {
+          onFinishSpontaneous(None)
+        } else {
+          mesoExitTick match {
+            case Some(exitTick) if currentTick < exitTick =>
+              onFinishSpontaneous(Some(exitTick))
+            case _ =>
+              mesoExitTick = None
+              requestSignalState()
+          }
+        }
+
+      case WaitingSignalState =>
+        logWarn(s"Bicycle ${getEntityId}: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
+
+      case WaitingCapacity =>
+        logWarn(s"Bicycle ${getEntityId}: unexpected actSpontaneous while WaitingCapacity at tick=$currentTick")
+        onFinishSpontaneous(Some(currentTick + 1))
+
+      case Finished =>
+        onFinishSpontaneous()
+
+      case _ =>
+        super.actSpontaneous(event)
+    }
+  }
+
+  override def actInteractWith(event: ActorInteractionEvent): Unit = {
+    if (handlePrivateVehicleEvent(event)) {
+      return
+    }
+
+    if (state == null) {
+      event.data match {
+        case _: MicroLeaveLinkData | _: MicroUpdateData =>
+          logDebug(
+            s"${getEntityId} received stale MICRO event with null state, discarding: ${event.eventType}"
+          )
+        case _: LinkInfoData =>
+          logDebug(
+            s"${getEntityId} received stale MESO link event with null state, discarding: ${event.eventType}"
+          )
+        case _ =>
+          logWarn(
+            s"${getEntityId} received interaction event with null state, discarding: ${event.eventType}"
+          )
+      }
+      return
+    }
+
+    event.data match {
+      case d: LinkAccessData     => handleLinkAccess(event, d)
+      case d: MicroEnterLinkData => handleMicroEnterLink(event, d)
+      case d: MicroUpdateData    => handleMicroUpdate(event, d)
+      case d: MicroLeaveLinkData => handleMicroLeaveLink(event, d)
+      case _                     => super.actInteractWith(event)
+    }
+  }
+
+  private def requestSignalState(): Unit = signalHandler.requestSignalState(state)
+
+  private def handleLinkAccess(event: ActorInteractionEvent, data: LinkAccessData): Unit =
+    signalHandler.handleLinkAccess(data, state)
+
+  override protected def microEntryVelocity: Double = journeyReporter.sumoArrivalSpeed
+
+  override protected def leaveAckRequired: Boolean = state.leaveAckRequired || !isDirectConservativeRuntime
+
+  override protected def completeLeaveWithoutReply(linkEntityId: Long): Unit =
+    linkHandler.leaveWithoutReply(linkEntityId, state)
+
+  override def leavingLink(): Unit = {
+    mesoExitTick = None
+    signalWaitUntilTick = None
+    signalWaitNeedsReverify = false
+    state.status = Ready
+    super.leavingLink()
+  }
+
+  override def requestRoute(): Unit = {
+    if (state.status == Finished) {
+      return
+    }
+    // Skip GPS if route was pre-loaded by TravelTimeModeChoiceStrategy (avoids double A*)
+    if (state.bestRoute.exists(_.nonEmpty)) {
+      val preRoute    = state.bestRoute.get
+      val origin      = getTripOrigin.getOrElse(state.origin)
+      val destination = getTripDestination.getOrElse(state.destination)
+      state.bestCost = preRoute.size.toDouble
+      state.status = Ready
+      state.updateCurrentPath(None)
+      MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
+      report(
+        data = Map(
+          "event_type"   -> "journey_started",
+          "vehicle_id"   -> getEntityId,
+          "bicycle_id"   -> getEntityId,
+          "origin"       -> origin,
+          "destination"  -> destination,
+          "route_length" -> preRoute.size,
+          "tick"         -> currentTick
+        ),
+        label = "journey_started"
+      )
+      if (preRoute.nonEmpty) enterLink()
+      else {
+        finishJourney("already_at_destination", origin)
+        onFinishPrivateVehicle(origin)
+        onFinishSpontaneous(None)
+        if (!isPersonCentric) selfDestruct()
+      }
+      return
+    }
+    val origin = getTripOrigin.getOrElse(state.origin)
+    val destination = getTripDestination.getOrElse(state.destination)
+    if (journeyReporter.sumoDepartTick.nonEmpty) {
+      journeyReporter.sumoRerouteNo += 1
+    }
+    if (requestAccountedRoute(origin, destination, Int.MaxValue)) return
+    try
+      handleCalculatedRouteResult(
+        GPSUtil.calcRouteCompact(originId = origin, destinationId = destination, maxExpansions = Int.MaxValue)
+      )
+    catch {
+      case e: Exception =>
+        logError(s"Exception during bicycle route request: ${e.getMessage}", e)
+        finishJourney("exception", origin)
+        onFinishPrivateVehicle(origin)
+        onFinishSpontaneous(None)
+        if (!isPersonCentric) selfDestruct()
+    }
+  }
+
+  override protected def handleCalculatedRouteResult(
+    result: Option[(Double, scala.collection.mutable.Queue[(Long, Long)])]
+  ): Unit = {
+    val origin = getTripOrigin.getOrElse(state.origin)
+    val destination = getTripDestination.getOrElse(state.destination)
+    result match {
+        case Some((cost, pathQueue)) =>
+          state.bestRoute = Some(pathQueue)
+          state.bestCost = cost
+          state.status = Ready
+          state.updateCurrentPath(None)
+
+          MovableMetrics.journeysStarted.labels(getClass.getSimpleName).inc()
+          report(
+            data = Map(
+              "event_type" -> "journey_started",
+              "vehicle_id" -> getEntityId,
+              "bicycle_id" -> getEntityId,
+              "origin" -> origin,
+              "destination" -> destination,
+              "route_length" -> pathQueue.size,
+              "tick" -> currentTick
+            ),
+            label = "journey_started"
+          )
+
+          if (pathQueue.nonEmpty) {
+            enterLink()
+          } else {
+            finishJourney("already_at_destination", origin)
+            onFinishPrivateVehicle(origin)
+            onFinishSpontaneous(None)
+            if (!isPersonCentric) selfDestruct()
+          }
+
+        case None =>
+          GPSMetrics.gpsCannotFindRoute.labels("bicycle").inc()
+          logError(s"Failed to calculate route for bicycle ${getEntityId}")
+          finishJourney("teleported", destination)
+          onFinishPrivateVehicle(destination, wasTeleported = true)
+          onFinishSpontaneous(None)
+          if (!isPersonCentric) selfDestruct()
+      }
+  }
+
+  private def handleMicroEnterLink(event: ActorInteractionEvent, data: MicroEnterLinkData): Unit = {
+    consumeAwaitedReply(Movable.enterLinkAwaitKey(event.actorRefId))
+    microHandler.handleMicroEnterLink(data, state)
+  }
+
+  private def handleMicroUpdate(event: ActorInteractionEvent, data: MicroUpdateData): Unit =
+    microHandler.handleMicroUpdate(data, state)
+
+  private def handleMicroLeaveLink(event: ActorInteractionEvent, data: MicroLeaveLinkData): Unit =
+    microHandler.handleMicroLeaveLink(data, state)
+
+  override def actHandleReceiveEnterLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = {
+    linkHandler.handleEnterLink(event.actorRefId, data, state)
+    // The Link held this reply until the exit tick, so the vehicle's wake is this very callback.
+    if (data.entryTick >= 0L && state.status == Moving && !state.isMicroMode && mesoExitTick.forall(_ <= currentTick)) {
+      state.linkOwnedExit = true
+      mesoExitTick = None
+      data.access match {
+        case Some(access) =>
+          state.leaveHandledByLink = data.leaveDone
+          state.status = WaitingSignalState
+          signalHandler.handleLinkAccess(access, state)
+        case None => requestSignalState()
+      }
+    }
+  }
+
+  override protected def linkAccessRequest(): Option[model.mobility.entity.event.data.LinkAccessRequest] =
+    if (state.bestRoute.forall(_.isEmpty) ||
+      state.currentPath.isEmpty) None
+    else {
+      val nodeId = getCurrentNode
+      val linkId = getNextLink
+      if (nodeId == 0L || linkId == 0L) None
+      else model.mobility.util.CityMapUtil.nodesById.get(nodeId).map { node =>
+        model.mobility.entity.event.data.LinkAccessRequest(node.id, node.classType,
+          model.mobility.entity.event.data.vehicle.RequestLinkAccessData(
+            targetLinkId = linkId,
+            signalAlreadyCleared = state.movableLinkExitReported,
+            approachLinkId = state.currentPath.map(_._1).getOrElse(0L)))
+      }
+    }
+
+  override protected def delegatedEntry(): Option[model.mobility.entity.event.data.DelegatedEntry] =
+    if (model.mobility.util.VehicleSimulationConfig.linkOwnedExit && supportsDelegatedScheduling)
+      Some(model.mobility.entity.event.data.DelegatedEntry(
+        wake = core.runtime.DelegatedWake(getClass.getName, getEntityId.toLong, 0L),
+        secondsPerTick = 1.0,
+        carryRounding = model.mobility.util.VehicleSimulationConfig.mesoCarryRounding,
+        roundingCredit = state.mesoRoundingCredit,
+        lastExitTick = state.mesoLastExitTick,
+        deferReply = true))
+    else None
+
+  override protected def leaveHandledByLink: Boolean = state.leaveHandledByLink
+
+  override def actHandleReceiveLeaveLinkInfo(
+    event: ActorInteractionEvent,
+    data: LinkInfoData
+  ): Unit = linkHandler.handleLeaveLink(event.actorRefId, data, state)
+
+  private def finishJourney(reason: String, finalNode: Long): Unit =
+    journeyReporter.finishJourney(reason, finalNode, state)
+
+  override protected def applyDriverAttributes(attrs: DriverAttributes): Unit = {
+    super.applyDriverAttributes(attrs)
+    state.microState.foreach { micro =>
+      state.updateMicroState(micro.copy(
+        desiredVelocity = micro.desiredVelocity * attrs.maxSpeedFactor,
+        reactionTime    = attrs.reactionTime,
+        minGap          = micro.minGap * attrs.minGapFactor
+      ))
+    }
+  }
+
+  override protected def onFinish(nodeId: Long): Unit = {
+    finishJourney("onFinish_called", nodeId)
+    onFinishPrivateVehicle(nodeId)
+  }
+
+  override def onDestruct(event: DestructEvent): Unit = {
+    if (state != null) signalHandler.cancelPendingCapacityRequest(state)
+    if (state != null && state.status != Finished) {
+      val fallbackNode = Option(getCurrentNode)
+        .orElse(state.currentPath.map(_._2))
+        .getOrElse(0L)
+      journeyReporter.finishJourney("actor_destructed_before_completion", fallbackNode, state)
+      onFinishPrivateVehicle(fallbackNode)
+    }
+    if (state != null) {
+      state.movableBestRoute = None
+      state.movableCurrentPath = None
+      state.microState = None
+    }
+  }
+}
+
+/** Bicycle companion object.
+  */
+object Bicycle {
+  def apply(properties: Properties): Bicycle =
+    new Bicycle(properties)
+}

@@ -15,7 +15,8 @@ import core.runtime.accounting.*
 import core.runtime.conservative.*
 import com.typesafe.config.ConfigFactory
 import io.prometheus.client.CollectorRegistry
-import org.apache.pekko.actor.{ ActorRef, ActorSystem, Props }
+import org.apache.pekko.actor.{ Actor, ActorIdentity, ActorRef, ActorSystem, Identify as ActorIdentify, Props }
+import core.runtime.conservative.partition.PartitionCohort
 import org.apache.pekko.testkit.TestProbe
 import org.htc.protobuf.core.entity.event.control.execution.{ StartSimulationTimeEvent, StopSimulationEvent }
 import org.htc.protobuf.core.entity.event.control.load.InitializeEntityAckEvent
@@ -31,6 +32,7 @@ private object NodeLocalFixtures {
   case class Wake(id: Long, tick: Long)
   case class Receipt(id: Long, tick: Long, owner: String)
   case class Held(source: ActorRef, target: Long, delivery: DirectExecute)
+  case class PublishCohort(target: ActorRef, epoch: String)
 }
 
 class NodeLocalTimeManagerSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
@@ -42,6 +44,46 @@ class NodeLocalTimeManagerSpec extends AnyFlatSpec with Matchers with BeforeAndA
       .withFallback(ConfigFactory.load())
   )
   override def afterAll(): Unit = { system.terminate(); () }
+
+  private class CohortPeer(observer: ActorRef) extends Actor {
+    private val worker = context.actorOf(Props(new Actor { def receive: Receive = Actor.emptyBehavior }), "partition-0")
+    def receive: Receive = {
+      case PublishCohort(target, epoch) =>
+        target ! PartitionCohort(epoch, Vector(worker))
+        target ! ActorIdentify("cohort-delivered")
+      case ActorIdentity("cohort-delivered", Some(_)) => observer ! "cohort-delivered"
+      case _: PartitionCohort => ()
+    }
+  }
+
+  "Node-local cohort bootstrap" should "accept a peer cohort delivered before its own membership" in {
+    val coordinator = TestProbe(); val manager = TestProbe(); val observer = TestProbe()
+    val peer = system.actorOf(Props(new CohortPeer(observer.ref)))
+    val node = system.actorOf(NodeLocalTimeManager.props(100L, manager.ref, coordinator.ref, 1))
+    coordinator.expectMsg(JoinRuntimeManager(node))
+    coordinator.expectMsgType[core.entity.event.control.execution.TimeManagerRegisterEvent]
+    peer ! PublishCohort(node, "early-cohort")
+    observer.expectMsg("cohort-delivered")
+    coordinator.expectNoMessage(100.millis)
+    coordinator.send(node, ConservativeMembership("early-cohort", Vector(node, peer)))
+    coordinator.send(node, CollectConservativeReady(1L))
+    coordinator.expectMsg(ConservativeReady(1L, None, 0, None))
+    system.stop(node); system.stop(peer)
+  }
+
+  it should "still reject an early cohort whose epoch differs from the announced membership" in {
+    val coordinator = TestProbe(); val manager = TestProbe(); val observer = TestProbe()
+    val peer = system.actorOf(Props(new CohortPeer(observer.ref)))
+    val node = system.actorOf(NodeLocalTimeManager.props(100L, manager.ref, coordinator.ref, 1))
+    coordinator.expectMsg(JoinRuntimeManager(node))
+    coordinator.expectMsgType[core.entity.event.control.execution.TimeManagerRegisterEvent]
+    peer ! PublishCohort(node, "obsolete-cohort")
+    observer.expectMsg("cohort-delivered")
+    coordinator.expectNoMessage(100.millis)
+    coordinator.send(node, ConservativeMembership("current-cohort", Vector(node, peer)))
+    coordinator.expectMsgType[RuntimeFailure].reason should include("wrong node-local epoch")
+    system.stop(node); system.stop(peer)
+  }
 
   private class Global(manager: ActorRef, reporter: ActorRef)
       extends ChannelClosedGlobalTimeManager(100L, false, manager) {

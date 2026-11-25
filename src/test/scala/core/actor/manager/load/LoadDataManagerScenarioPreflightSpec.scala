@@ -111,7 +111,7 @@ class LoadDataManagerScenarioPreflightSpec
     val simulationManager = TestProbe()
     val loadDataManager = newLoadDataManager(simulationManager)
     val failure = ScenarioPreflightValidationFailedEvent(
-      model.hybrid.decision.ScenarioLoadError("Load filter: retained dependency was excluded"))
+      core.entity.event.control.load.ScenarioLoadError("Load filter: retained dependency was excluded"))
     loadDataManager ! failure
     simulationManager.expectMsg(failure)
     simulationManager.expectNoMessage(100.millis)
