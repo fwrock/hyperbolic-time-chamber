@@ -28,7 +28,9 @@ class MotorcycleMicroHandler(
   setLinkEntryTickFn:      Option[Tick] => Unit,
   getLinkEntryTickFn:      () => Option[Tick],
   getCurrentLinkIdFn:      () => Option[Long],
-  microUpdateReportEvery:  Int = 0
+  microUpdateReportEvery:  Int = 0,
+  onDelegatedAccessFn: model.mobility.entity.event.node.LinkAccessData => Unit =
+    _ => throw new IllegalStateException("delegated MICRO access handler is not wired")
 ) {
 
   private var microUpdateReportCount: Long = 0L
@@ -62,6 +64,7 @@ class MotorcycleMicroHandler(
     )
 
     state.activateMicroMode(initialMicroState)
+    state.movableMicroSchedulingDelegated = data.delegatedScheduling
     state.status = Moving
     journeyReporter.sumoCurrentMicroTimeStepSeconds =
       math.max(0.001, data.microTimeStep)
@@ -91,7 +94,7 @@ class MotorcycleMicroHandler(
       "enter_micro_link"
     )
 
-    onFinishSpontaneousFn(Some(currentTickFn() + 1))
+    onFinishSpontaneousFn(if (data.delegatedScheduling) None else Some(currentTickFn() + 1))
   }
 
   def handleMicroUpdate(data: MicroUpdateData, state: MotorcycleState): Unit =
@@ -160,10 +163,14 @@ class MotorcycleMicroHandler(
       "leave_micro_link"
     )
 
+    state.movableMicroLeaveHandledByLink = data.leaveDone
     state.deactivateMicroMode()
     setCurrentLinkIdFn(None)
     setLinkEntryTickFn(None)
-    requestSignalStateFn()
+    data.access match {
+      case Some(access) => onDelegatedAccessFn(access)
+      case None => requestSignalStateFn()
+    }
   }
 
   private def shouldAttemptLaneFiltering(micro: MicroMotorcycleState): Boolean = {

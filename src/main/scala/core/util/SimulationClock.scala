@@ -4,6 +4,7 @@ package core.util
 import core.api.SimulatorSettingsRegistry
 import core.entity.configuration.Simulation
 import core.types.Tick
+import core.modelbinding.ModelBindings
 
 final case class SimulationClock(secondsPerTick: Double = 1.0) {
   require(secondsPerTick.isFinite && secondsPerTick > 0.0 && secondsPerTick <= 1.0,
@@ -29,10 +30,10 @@ object SimulationClock {
   def current: SimulationClock = SimulationClock(
     SimulatorSettingsRegistry.get(Setting).map(_.toDouble).getOrElse(1.0))
 
-  def validateScenario(s: Simulation): SimulationClock = {
+  def validateScenario(s: Simulation, bindings: ModelBindings = ModelBindings.active): SimulationClock = {
     val clock = SimulationClock(s.tickDuration.getOrElse(1.0))
     if (clock.secondsPerTick != 1.0) {
-      val supported = Set("hybrid.actor.Car", "hybrid.actor.Link", "hybrid.actor.Node", "hybrid.actor.TrafficSignal")
+      val supported = bindings.fractionalClockActorClassTypes
       require(s.timeUnit.equalsIgnoreCase("seconds") && s.timeStep == 1L,
         "fractional clocks require timeUnit=seconds and timeStep=1 runtime tick")
       require(s.actorsDataSources.forall(a => supported(StringUtil.getModelClassNameWithoutPackage(a.classType))),

@@ -121,10 +121,14 @@ class BusMigrationSnapshotSpec extends AnyFlatSpec with Matchers with BeforeAndA
     val bus = newTestBus("bus-exit")
     val restored = freshState()
     restored.movableLinkExitReported = true
+    restored.movableMicroSchedulingDelegated = true
+    restored.movableMicroLeaveHandledByLink = true
     restored.movablePendingJunctionPath = Some(model.mobility.entity.state.model.PrecomputedRouteItem(700, 2))
     restored.movableCurrentPathIsJunction = true
     val interned = bus.testIntern(restored)
     interned.movableLinkExitReported shouldBe true
+    interned.movableMicroSchedulingDelegated shouldBe true
+    interned.movableMicroLeaveHandledByLink shouldBe true
     interned.movablePendingJunctionPath shouldBe restored.movablePendingJunctionPath
     interned.movableCurrentPathIsJunction shouldBe true
   }

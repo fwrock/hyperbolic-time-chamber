@@ -100,7 +100,9 @@ class Link(
         entries=s.mesoCapacityState.entries.map(p => p.copy(shardId=StringPool.intern(p.shardId))),
         exits=s.mesoCapacityState.exits.map(p => p.copy(shardId=StringPool.intern(p.shardId)))),
       pendingMesoExits = s.pendingMesoExits.map(p => p.copy(shardRefId = StringPool.intern(p.shardRefId))),
-      accessAwaiting = s.accessAwaiting.map(p => p.copy(shardRefId = StringPool.intern(p.shardRefId)))
+      accessAwaiting = s.accessAwaiting.map(p => p.copy(shardRefId = StringPool.intern(p.shardRefId))),
+      microDelegations = s.microDelegations.map { case (id, p) => id -> p.internStrings },
+      microAccessAwaiting = s.microAccessAwaiting.map { case (id, p) => id -> p.internStrings }
     )
 
   /** Tracks when each vehicle entered the link (for travel time calculation).
@@ -243,7 +245,16 @@ class Link(
     logDebugFn                    = msg => logDebug(msg),
     downstreamLeadersFn           = tick => followingHandler.leaders(tick),
     downstreamLaneLeaderFn        = tick => (road, lane, self) => followingHandler.laneLeader(tick, road, lane, self),
-    reportFn = (data,label) => report(data,label)
+    reportFn = (data,label) => report(data,label),
+    deliverExitFn = Some((id, shard, data) => microSchedulingHandler.exit(id, shard, data))
+  )
+
+  private lazy val microSchedulingHandler = new model.mobility.support.link.LinkMicroSchedulingHandler(
+    stateFn = () => state,
+    enabledFn = () => model.mobility.util.VehicleSimulationConfig.microDelegatedScheduling && supportsDelegatedScheduling,
+    sendFn = (id, shard, data, event) => sendMessageTo(entityId = id, shardId = shard, data = data,
+      eventType = event, actorType = LoadBalancedDistributed),
+    leaveFn = id => leaveForVehicle(id)
   )
 
   private lazy val vehicleFlowHandler = new LinkVehicleFlowHandler(
@@ -267,7 +278,8 @@ class Link(
     findVehicleLaneFn           = id => microSimHandler.findVehicleLane(id),
     findLeastOccupiedLaneFn     = () => microSimHandler.findLeastOccupiedLane(),
     logDebugFn                  = msg => logDebug(msg),
-    reportFn                    = (data,label) => report(data,label)
+    reportFn                    = (data,label) => report(data,label),
+    onMicroAdmittedFn            = (id, data, seq) => microSchedulingHandler.admit(id, data, seq)
   )
 
   private lazy val mesoCapacityHandler = new model.mobility.support.link.LinkMesoCapacityHandler(
@@ -328,7 +340,8 @@ class Link(
     event.data match {
       case d: EnterLinkData        => handleEnterLink(event, d)
       case d: LeaveLinkData        => handleLeaveLink(event, d)
-      case d: LinkAccessData       => vehicleFlowHandler.forwardNodeAccess(d)
+      case d: LinkAccessData       =>
+        if (!microSchedulingHandler.forwardNodeAccess(d)) vehicleFlowHandler.forwardNodeAccess(d)
       case d: PermitRevokeData     => vehicleFlowHandler.revokePermit(event.actorRefId, event.shardRefId, d)
       case _: SubscribeMicroBoundaryData => followingHandler.subscribe(event.actorRefId, event.shardRefId)
       case d: MicroBoundaryUpdateData => followingHandler.receive(event.actorRefId, d.snapshot)
@@ -444,11 +457,14 @@ class Link(
     followingHandler.publish()
   }
 
-  /** The exit of a vehicle the Link saw granted by the Node: what `handleLeaveLink` does for a plain MESO leave without reply. */
+  /** Reuse normal occupancy accounting when a delegated exit needs no vehicle cleanup message. */
   private def leaveForVehicle(actorId: Long): Unit = {
     metricsReporter.ensureSummaryTick(currentTick)
     val registered = state.registered.iterator.find(_.actorId == actorId)
-    if (registered.isDefined) SchedulingMetrics.linkTraversalsMeso.inc()
+    if (registered.isDefined) {
+      if (state.isMicroMode) SchedulingMetrics.linkTraversalsMicro.inc()
+      else SchedulingMetrics.linkTraversalsMeso.inc()
+    }
     reportToSpecificReporter(
       ReportTypeEnum.clickhouse,
       VehicleLinkFlowData(

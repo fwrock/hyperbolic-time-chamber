@@ -36,7 +36,8 @@ class LinkMicroSimulationHandler(
   downstreamLeadersFn: Tick => Map[Long, model.mobility.entity.state.model.VehicleInLane] = _ => Map.empty,
   reportFn: (Map[String,Any],String) => Unit = (_,_) => (),
   downstreamLaneLeaderFn: Tick => (Long,Int,Long) => Option[model.mobility.entity.state.model.VehicleInLane] =
-    _ => (_,_,_) => None
+    _ => (_,_,_) => None,
+  deliverExitFn: Option[(Long, String, MicroLeaveLinkData) => Unit] = None
 ) {
 
   private val microSimulationStrategy: MicroSimulationStrategy = DefaultMicroSimulationStrategy()
@@ -148,10 +149,7 @@ class LinkMicroSimulationHandler(
         distanceTraveled / (elapsedTicks * secondsPerGlobalTick)
       else update.velocity
 
-    sendMessageFn(
-      update.vehicleId,
-      update.shardId,
-      MicroLeaveLinkData(
+    val reply = MicroLeaveLinkData(
         linkId             = entityIdFn().toLong,
         finalPosition      = update.position,
         finalVelocity      = update.velocity,
@@ -163,9 +161,11 @@ class LinkMicroSimulationHandler(
         remainingStepSeconds = if (state.carryMicroRemainder) update.remainingStepSeconds else 0.0,
         retainedInLane = state.downstreamSpillback,
         finalLane = Some(update.currentLane)
-      ),
-      "MicroLeaveLink"
-    )
+      )
+    deliverExitFn match {
+      case Some(deliver) => deliver(update.vehicleId, update.shardId, reply)
+      case None => sendMessageFn(update.vehicleId, update.shardId, reply, "MicroLeaveLink")
+    }
 
     if (getLinkStateFn().totalVehiclesInMicro == 0 && isMicroScheduledFn())
       setMicroScheduledFn(false)

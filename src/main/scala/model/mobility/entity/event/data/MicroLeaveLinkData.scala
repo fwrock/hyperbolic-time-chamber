@@ -33,5 +33,7 @@ case class MicroLeaveLinkData(
   junctionPosition: Option[model.mobility.entity.state.model.MetricPoint] = None,
   remainingStepSeconds: Double = 0.0,
   retainedInLane: Boolean = false,
-  finalLane: Option[Int] = None
+  finalLane: Option[Int] = None,
+  access: Option[model.mobility.entity.event.node.LinkAccessData] = None,
+  leaveDone: Boolean = false
 ) extends BaseEventData

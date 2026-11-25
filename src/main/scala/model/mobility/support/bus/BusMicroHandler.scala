@@ -31,7 +31,9 @@ class BusMicroHandler(
   private val checkBusStopAtPositionFn: Double => Unit,
   private val microUpdateLogEvery: Int,
   private val getCurrentLinkIdFn: () => Option[Long] = () => None,
-  private val microUpdateReportEvery: Int = 0
+  private val microUpdateReportEvery: Int = 0,
+  onDelegatedAccessFn: model.mobility.entity.event.node.LinkAccessData => Unit =
+    _ => throw new IllegalStateException("delegated MICRO access handler is not wired")
 ) {
 
   private var microUpdateLogCount: Long = 0L
@@ -72,6 +74,7 @@ class BusMicroHandler(
     )
 
     state.activateMicroMode(initialMicroState)
+    state.movableMicroSchedulingDelegated = data.delegatedScheduling
     state.status = Moving
     journeyReporter.sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
     journeyReporter.sumoIdealTravelTimeSeconds += data.linkLength / math.max(0.1, speedLimitMs)
@@ -101,7 +104,7 @@ class BusMicroHandler(
       "enter_micro_link"
     )
 
-    onFinishSpontaneousFn(Some(tick + 1))
+    onFinishSpontaneousFn(if (data.delegatedScheduling) None else Some(tick + 1))
   }
 
   def handleMicroUpdate(data: MicroUpdateData, state: BusState): Unit =
@@ -182,12 +185,16 @@ class BusMicroHandler(
     // can check for a bus stop.
     setCurrentStopNodeFn(state.currentPath.map(_._2))
 
+    state.movableMicroLeaveHandledByLink = data.leaveDone
     state.deactivateMicroMode()
     setCurrentLinkIdFn(None)
     setLinkEntryTickFn(None)
 
     // Keep the completed path until signal/capacity handling calls leavingLink.
     // That path sends cleanup and advances the route before the next Ready wake.
-    requestSignalStateFn()
+    data.access match {
+      case Some(access) => onDelegatedAccessFn(access)
+      case None => requestSignalStateFn()
+    }
   }
 }

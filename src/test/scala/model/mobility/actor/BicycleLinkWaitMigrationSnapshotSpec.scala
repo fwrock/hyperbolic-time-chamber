@@ -43,6 +43,7 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
     override protected def registerOnTimeManager(tick: Tick): Unit = ()
 
     def testSetState(s: BicycleState): Unit = state = s
+    def testIntern(s: BicycleState): BicycleState = internStateStrings(s)
     def testBuildMigrationSnapshot(): MigrationSnapshot = buildMigrationSnapshot()
     def testApplyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
 
@@ -174,4 +175,15 @@ class BicycleLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers wit
     rehydratedBike.testSignalWaitUntilTick shouldBe None
     rehydratedBike.testSignalWaitNeedsReverify shouldBe false
   }
+  "Bicycle MICRO delegation" should "survive JSON restoration and state interning" in {
+    val actor = newTestBicycle("micro-delegation")
+    val saved = freshState()
+    saved.movableMicroSchedulingDelegated = true
+    saved.movableMicroLeaveHandledByLink = true
+    val restored = core.util.JsonUtil.fromJson[BicycleState](core.util.JsonUtil.toJson(saved))
+    val interned = actor.testIntern(restored)
+    interned.movableMicroSchedulingDelegated shouldBe true
+    interned.movableMicroLeaveHandledByLink shouldBe true
+  }
+
 }

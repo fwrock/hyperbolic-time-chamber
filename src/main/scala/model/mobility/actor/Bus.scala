@@ -68,6 +68,8 @@ class Bus(
     copied.movableBestCost           = s.movableBestCost
     copied.movableReachedDestination = s.movableReachedDestination
     copied.movableLinkExitReported = s.movableLinkExitReported
+    copied.movableMicroSchedulingDelegated = s.movableMicroSchedulingDelegated
+    copied.movableMicroLeaveHandledByLink = s.movableMicroLeaveHandledByLink
     copied.movablePendingRouteQuery = s.movablePendingRouteQuery
     copied.movablePendingJunctionPath = s.movablePendingJunctionPath
     copied.movableCurrentPathIsJunction = s.movableCurrentPathIsJunction
@@ -216,7 +218,11 @@ class Bus(
     checkBusStopAtPositionFn = pos => stopHandler.checkBusStopAtPosition(pos, state),
     microUpdateLogEvery    = microUpdateLogEvery,
     getCurrentLinkIdFn     = () => currentLinkId,
-    microUpdateReportEvery = microUpdateReportEvery
+    microUpdateReportEvery = microUpdateReportEvery,
+    onDelegatedAccessFn = access => {
+      state.status = model.mobility.entity.state.enumeration.MovableStatusEnum.WaitingSignalState
+      signalHandler.handleLinkAccess(access, state)
+    }
   )
 
   private lazy val linkHandler = new BusLinkHandler(
@@ -350,7 +356,9 @@ class Bus(
         }
 
       case Moving =>
-        if (state.isMicroMode) {
+        if (state.isMicroMode && state.movableMicroSchedulingDelegated) {
+          onFinishSpontaneous(None)
+        } else if (state.isMicroMode) {
           var shouldLeave = false
           state.microState.foreach {
             micro =>
@@ -473,7 +481,7 @@ class Bus(
   }
 
   override protected def linkAccessRequest(): Option[model.mobility.entity.event.data.LinkAccessRequest] =
-    if (!model.mobility.util.VehicleSimulationConfig.linkRequestsAccess || state.bestRoute.forall(_.isEmpty) ||
+    if (state.bestRoute.forall(_.isEmpty) ||
       state.currentPath.isEmpty) None
     else {
       val nodeId = getCurrentNode

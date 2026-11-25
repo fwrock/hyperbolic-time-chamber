@@ -29,6 +29,8 @@ final case class LinkFlowRecord(
 trait ModelBindings {
   def namespace: String
 
+  def fractionalClockActorClassTypes: Set[String]
+
   /** Message the micro-aware time manager sends to every link on a global tick. */
   def globalTick(tick: Tick): AnyRef
 

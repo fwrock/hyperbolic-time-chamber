@@ -46,7 +46,8 @@ class LinkVehicleFlowHandler(
   scheduleDelegatedFn: (core.runtime.DelegatedWake, Tick) => Unit = (_, _) => (),
   leaveWithoutReplyFn: () => Boolean = () => model.mobility.util.VehicleSimulationConfig.leaveWithoutReply,
   leavesAtGrantFn: () => Boolean = () => model.mobility.util.VehicleSimulationConfig.linkLeavesAtGrant,
-  leaveVehicleFn: Long => Unit = _ => ()
+  leaveVehicleFn: Long => Unit = _ => (),
+  onMicroAdmittedFn: (Long, EnterLinkData, Long) => Unit = (_, _, _) => ()
 ) {
 
   /** Recomputes `currentSpeed`/`congestionFactor` from the link's current registered-vehicle
@@ -259,6 +260,7 @@ class LinkVehicleFlowHandler(
     require(data.preferredLane.forall(l => l >= 0 && l < requestedState.lanes), "invalid preferred entry lane")
     findVehicleLaneFn(event.actorRefId) match {
       case Some(existingLane) =>
+        onMicroAdmittedFn(event.actorRefId, data, event.seq)
         sendMicroEnterAck(event.actorRefId,event.shardRefId,existingLane,requestSeq=event.seq)
         if (!isMicroScheduledFn()) { setMicroScheduledFn(true); scheduleEventFn(currentTickFn() + 1) }
         return
@@ -380,6 +382,7 @@ class LinkVehicleFlowHandler(
 
     val waitSeconds = if (state.microEntry.enabled)
       math.max(0L,currentTickFn()-requestedTick).toDouble * state.microTimeStep * state.microTicksPerGlobalTick else 0.0
+    onMicroAdmittedFn(actorId, data, requestSeq)
     sendMicroEnterAck(actorId,shardId,assignedLane,waitSeconds,requestSeq)
     if (!isMicroScheduledFn()) { setMicroScheduledFn(true); scheduleEventFn(currentTickFn() + 1) }
   }
@@ -407,7 +410,8 @@ class LinkVehicleFlowHandler(
         junctionPosition = state.junctionGeometry.map(_.positionAt(initialPosition)),
         initialPosition = initialPosition,
         queuedWaitSeconds = waitSeconds,
-        requestSeq = requestSeq
+        requestSeq = requestSeq,
+        delegatedScheduling = state.microDelegations.contains(actorId)
       ),
       "MicroEnterLink"
     )
@@ -424,7 +428,7 @@ class LinkVehicleFlowHandler(
     else if (data.replyRequired) sendLeaveLinkDataMeso(event)
   }
 
-  /** The Link takes a vehicle off a plain MESO link itself, as `handleLeaveLink` does for a request without a reply. */
+  /** Shared occupancy cleanup after a delegated grant or a terminal MICRO exit. */
   def leaveByLink(actorId: Long): Unit =
     removeVehicleFromLink(actorId, getLinkStateFn().registered.containsActor(actorId))
 
@@ -432,6 +436,8 @@ class LinkVehicleFlowHandler(
   private def removeVehicleFromLink(actorId: Long, wasRegistered: Boolean): Long = {
     val state = getLinkStateFn()
     state.pendingMicroEntries = state.pendingMicroEntries.filterNot(_.actorId == actorId)
+    state.microDelegations = state.microDelegations - actorId
+    state.microAccessAwaiting = state.microAccessAwaiting - actorId
     state.registered.removeActor(actorId)
     recomputeAndPublishMesoDynamics()
 

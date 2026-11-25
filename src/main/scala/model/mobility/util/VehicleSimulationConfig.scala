@@ -33,6 +33,11 @@ object VehicleSimulationConfig {
     try com.typesafe.config.ConfigFactory.load().getBoolean("htc.mobility.delegated-entry-scheduling")
     catch { case _: Exception => sys.env.get("HTC_MOBILITY_DELEGATED_ENTRY_SCHEDULING").exists(_.equalsIgnoreCase("true")) }
 
+  /** MICRO exits are timed by physics; delegate the boundary exchange without predicting an exit tick. */
+  lazy val microDelegatedScheduling: Boolean =
+    try com.typesafe.config.ConfigFactory.load().getBoolean("htc.mobility.micro-delegated-scheduling")
+    catch { case _: Exception => sys.env.get("HTC_MOBILITY_MICRO_DELEGATED_SCHEDULING").exists(_.equalsIgnoreCase("true")) }
+
   /** A Car leaving a plain MESO link does not wait for the Link's reply: the reply only repeats the link length
     * the Car stored at entry. Read from `htc.mobility.leave-without-reply` or `HTC_MOBILITY_LEAVE_WITHOUT_REPLY`
     * (default off). Links with MESO capacity and every other vehicle type keep the request/reply exchange.

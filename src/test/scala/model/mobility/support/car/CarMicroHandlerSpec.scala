@@ -41,7 +41,9 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
     )
 
   private def newHandler(reported: scala.collection.mutable.ArrayBuffer[Map[String, Any]],
-                         endTick: Long = 180L, runtimeOwnsHorizon: Boolean = false): (CarMicroHandler, CarJourneyReporter) = {
+                         endTick: Long = 180L, runtimeOwnsHorizon: Boolean = false,
+                         signal: () => Unit = () => (), finish: Option[Tick] => Unit = _ => (),
+                         delegatedAccess: model.mobility.entity.event.node.LinkAccessData => Unit = _ => ()): (CarMicroHandler, CarJourneyReporter) = {
     var currentLinkId: Option[Long] = None
     var currentLinkLength: Double = 0.0
     var linkEntryTick: Option[Tick] = None
@@ -65,8 +67,8 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       simulationEndTickFn = () => endTick,
       extendSimulationFn = () => false,
       journeyReporter = journeyReporter,
-      requestSignalStateFn = () => (),
-      onFinishSpontaneousFn = _ => (),
+      requestSignalStateFn = signal,
+      onFinishSpontaneousFn = finish,
       finishAndCleanupFn = (_, _) => reported += Map("event_type" -> "forced_cleanup"),
       onFinishPrivateVehicleFn = _ => (),
       selfDestructFn = () => (),
@@ -78,7 +80,8 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
       setLinkEntryTickFn = v => linkEntryTick = v,
       getLinkEntryTickFn = () => linkEntryTick,
       getCurrentLinkIdFn = () => currentLinkId,
-      runtimeOwnsHorizonFn = () => runtimeOwnsHorizon
+      runtimeOwnsHorizonFn = () => runtimeOwnsHorizon,
+      onDelegatedAccessFn = delegatedAccess
     )
     (handler, journeyReporter)
   }
@@ -181,4 +184,30 @@ class CarMicroHandlerSpec extends AnyFlatSpec with Matchers {
     state.microState.get.positionInLink shouldBe 1.0
     reported.exists(_.get("event_type").contains("forced_cleanup")) shouldBe false
   }
+  "delegated MICRO scheduling" should "leave timing with the Link and consume its fused boundary answer" in {
+    for (granted <- Seq(false, true)) {
+      val reported = scala.collection.mutable.ArrayBuffer.empty[Map[String, Any]]
+      val finishes = scala.collection.mutable.ArrayBuffer.empty[Option[Tick]]
+      val answers = scala.collection.mutable.ArrayBuffer.empty[model.mobility.entity.event.node.LinkAccessData]
+      var requested = 0
+      val (handler, _) = newHandler(reported, signal = () => requested += 1,
+        finish = next => { finishes += next; () }, delegatedAccess = a => { answers += a; () })
+      val state = newCarState()
+      handler.handleMicroEnterLink(enterLinkData(101L).copy(delegatedScheduling = true), state)
+      finishes.last shouldBe None
+      state.movableMicroSchedulingDelegated shouldBe true
+      val access = model.mobility.entity.event.node.LinkAccessData(
+        model.mobility.entity.state.enumeration.TrafficSignalPhaseStateEnum.Green, 0L,
+        capacityState = if (granted) model.mobility.entity.state.enumeration.LinkCapacityStateEnum.Available
+          else model.mobility.entity.state.enumeration.LinkCapacityStateEnum.Full)
+      handler.handleMicroLeaveLink(model.mobility.entity.event.data.MicroLeaveLinkData(
+        101L, 300, 10, 30, 300, 10, access = Some(access), leaveDone = granted), state)
+      requested shouldBe 0
+      answers.toSeq shouldBe Seq(access)
+      state.movableMicroLeaveHandledByLink shouldBe granted
+      state.isMicroMode shouldBe false
+      state.distance shouldBe 300.0
+    }
+  }
+
 }

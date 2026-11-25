@@ -32,6 +32,8 @@ abstract class MovableState(
 
   // MICRO exit is proactive; the subsequent LeaveLink cleanup does not produce another reply.
   var movableLinkExitReported: Boolean = false
+  var movableMicroSchedulingDelegated: Boolean = false
+  var movableMicroLeaveHandledByLink: Boolean = false
   var movablePendingRouteQuery: Option[PendingRouteQuery] = None
   var movablePendingJunctionPath: Option[model.PrecomputedRouteItem] = None
   var movableCurrentPathIsJunction: Boolean = false

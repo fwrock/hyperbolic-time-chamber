@@ -17,6 +17,9 @@ import scala.concurrent.{ ExecutionContext, Future }
 object MobilityModelBindings extends ModelBindings {
   val namespace = "mobility"
 
+  val fractionalClockActorClassTypes: Set[String] =
+    Set("mobility.actor.Car", "mobility.actor.Link", "mobility.actor.Node", "mobility.actor.TrafficSignal")
+
   def globalTick(tick: Tick): AnyRef = GlobalTickEvent(tick = tick)
 
   def accountedRoutingActorClassType: String = AccountedRoutingConfig.ActorClassType

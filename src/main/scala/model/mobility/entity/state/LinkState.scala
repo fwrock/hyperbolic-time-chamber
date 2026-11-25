@@ -109,7 +109,11 @@ case class LinkState(
   var accessAwaiting: List[model.PendingEntryReply] = Nil,
   /** Destination link -> capacity slots the Node reserved for this Link and it has not spent. */
   @JsonDeserialize(keyAs = classOf[java.lang.Long], contentAs = classOf[java.lang.Integer])
-  var permits: Map[Long, Int] = Map.empty
+  var permits: Map[Long, Int] = Map.empty,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  var microDelegations: Map[Long, model.MicroDelegatedTraversal] = Map.empty,
+  @JsonDeserialize(keyAs = classOf[java.lang.Long])
+  var microAccessAwaiting: Map[Long, model.PendingMicroExit] = Map.empty
 ) extends BaseState(
       startTick = startTick,
       reporterType = reporterType,

@@ -17,6 +17,9 @@ import scala.concurrent.{ ExecutionContext, Future }
 object HybridModelBindings extends ModelBindings {
   val namespace = "hybrid"
 
+  val fractionalClockActorClassTypes: Set[String] =
+    Set("hybrid.actor.Car", "hybrid.actor.Link", "hybrid.actor.Node", "hybrid.actor.TrafficSignal")
+
   def globalTick(tick: Tick): AnyRef = GlobalTickEvent(tick = tick)
 
   def accountedRoutingActorClassType: String = AccountedRoutingConfig.ActorClassType

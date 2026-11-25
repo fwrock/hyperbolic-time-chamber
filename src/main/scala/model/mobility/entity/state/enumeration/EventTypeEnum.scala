@@ -15,6 +15,7 @@ enum EventTypeEnum:
     ReceiveLinkAccess,
     EnterLink,
     LeaveLink,
+    MicroLeaveLink,
     EnterNode,
     LeaveNode,
     ReceiveEnterLinkInfo,

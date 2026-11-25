@@ -261,6 +261,10 @@ abstract class Movable[T <: MovableState](
   /** The Node request the Link makes for this vehicle at the exit tick, when the vehicle would make it itself then. */
   protected def linkAccessRequest(): Option[model.mobility.entity.event.data.LinkAccessRequest] = None
 
+  protected final def delegateMicroScheduling: Boolean =
+    model.mobility.util.VehicleSimulationConfig.microDelegatedScheduling && supportsDelegatedScheduling &&
+      model.mobility.support.link.LinkMicroSchedulingHandler.supports(state.actorType)
+
   protected def enterLink(): Unit = {
     if (state.movableCurrentPath.isEmpty) {
       state.takePendingJunctionPath().foreach { path =>
@@ -274,9 +278,14 @@ abstract class Movable[T <: MovableState](
           case Some((entityId, shardId)) =>
             state.movableStatus = Waiting
             state.movableLinkExitReported = false
+            state.movableMicroSchedulingDelegated = false
+            state.movableMicroLeaveHandledByLink = false
             waitingTicksCounter = 0
 
             val delegation = delegatedEntry()
+            val mesoAccess = delegation.exists(_.deferReply) && model.mobility.util.VehicleSimulationConfig.linkRequestsAccess
+            val microDelegation = delegateMicroScheduling
+            val access = if (mesoAccess || microDelegation) linkAccessRequest() else None
             requestInteraction(
               entityId = entityId,
               shardId = shardId,
@@ -302,14 +311,16 @@ abstract class Movable[T <: MovableState](
                 preferredLane = microEntryLane,
                 mesoOriginAtEnd = mesoOriginAtEnd,
                 delegatedEntry = delegation,
-                accessRequest = if (delegation.exists(_.deferReply)) linkAccessRequest() else None
+                accessRequest = if (mesoAccess) access else None,
+                delegateMicroScheduling = microDelegation,
+                microAccessRequest = if (microDelegation) access else None
               ),
               EventTypeEnum.EnterLink.toString,
               actorType = LoadBalancedDistributed,
               replyKey = Movable.enterLinkAwaitKey(entityId),
               replyKind = "EnterLinkData"
             )
-            if (delegation.exists(_.deferReply)) linkAccessRequest().foreach(r =>
+            access.foreach(r =>
               registerAwaitedReply(s"link-access:${r.request.targetLinkId}", "LinkAccessData"))
             delegation match {
               case Some(d) if !d.deferReply => finishAwaitingDelegate(d.wake)
@@ -397,7 +408,7 @@ abstract class Movable[T <: MovableState](
               return
             }
             val routeContinues = !state.movableBestRoute.forall(_.isEmpty)
-            if (!(routeContinues && holdPreviousLinkUntilNextAdmitted))
+            if (!state.movableMicroLeaveHandledByLink && !(routeContinues && holdPreviousLinkUntilNextAdmitted))
               sendMessageTo(entityId, shardId, leave, EventTypeEnum.LeaveLink.toString)
             if (state.movableBestRoute.forall(_.isEmpty)) {
               state.movableCurrentPath = None

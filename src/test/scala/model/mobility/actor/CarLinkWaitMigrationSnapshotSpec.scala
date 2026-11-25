@@ -51,6 +51,7 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
     override protected def registerOnTimeManager(tick: Tick): Unit = ()
 
     def testSetState(s: CarState): Unit = state = s
+    def testIntern(s: CarState): CarState = internStateStrings(s)
     def testBuildMigrationSnapshot(): MigrationSnapshot = buildMigrationSnapshot()
     def testApplyMigrationSnapshot(snapshot: MigrationSnapshot): Unit = applyMigrationSnapshot(snapshot)
 
@@ -192,4 +193,15 @@ class CarLinkWaitMigrationSnapshotSpec extends AnyFlatSpec with Matchers with Be
     rehydratedCar.testSignalWaitUntilTick shouldBe None
     rehydratedCar.testSignalWaitNeedsReverify shouldBe false
   }
+  "Car MICRO delegation" should "survive JSON restoration and state interning" in {
+    val actor = newTestCar("micro-delegation")
+    val saved = freshState()
+    saved.movableMicroSchedulingDelegated = true
+    saved.movableMicroLeaveHandledByLink = true
+    val restored = core.util.JsonUtil.fromJson[CarState](core.util.JsonUtil.toJson(saved))
+    val interned = actor.testIntern(restored)
+    interned.movableMicroSchedulingDelegated shouldBe true
+    interned.movableMicroLeaveHandledByLink shouldBe true
+  }
+
 }

@@ -35,7 +35,9 @@ class CarMicroHandler(
   private val getLinkEntryTickFn: () => Option[Tick],
   private val getCurrentLinkIdFn: () => Option[Long],
   private val microUpdateReportEvery: Int = 0,
-  private val runtimeOwnsHorizonFn: () => Boolean = () => false
+  private val runtimeOwnsHorizonFn: () => Boolean = () => false,
+  onDelegatedAccessFn: model.mobility.entity.event.node.LinkAccessData => Unit =
+    _ => throw new IllegalStateException("delegated MICRO access handler is not wired")
 ) {
 
   private var microUpdateReportCount: Long = 0L
@@ -75,6 +77,7 @@ class CarMicroHandler(
     )
 
     state.activateMicroMode(initialMicroState)
+    state.movableMicroSchedulingDelegated = data.delegatedScheduling
     state.status = Moving
     state.journey.secondsPerTick = data.microTimeStep * data.ticksPerGlobalTick
     journeyReporter.sumoCurrentMicroTimeStepSeconds = math.max(0.001, data.microTimeStep)
@@ -214,11 +217,15 @@ class CarMicroHandler(
       "leave_micro_link"
     )
 
+    state.movableMicroLeaveHandledByLink = data.leaveDone
     state.deactivateMicroMode()
     setCurrentLinkIdFn(None)
     setCurrentLinkLengthFn(0.0)
     setLinkEntryTickFn(None)
 
-    requestSignalStateFn()
+    data.access match {
+      case Some(access) => onDelegatedAccessFn(access)
+      case None => requestSignalStateFn()
+    }
   }
 }

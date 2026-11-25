@@ -39,5 +39,6 @@ case class MicroEnterLinkData(
   junctionPosition: Option[model.mobility.entity.state.model.MetricPoint] = None,
   initialPosition: Double = 0.0,
   queuedWaitSeconds: Double = 0.0,
-  requestSeq: Long = 0L
+  requestSeq: Long = 0L,
+  delegatedScheduling: Boolean = false
 ) extends BaseEventData
