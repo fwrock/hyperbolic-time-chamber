@@ -351,22 +351,9 @@ class Bus(
 
       case Moving =>
         if (state.isMicroMode) {
-          var shouldLeave = false
-          state.microState.foreach {
-            micro =>
-              checkBusStopAtPosition(micro.positionInLink)
-
-              if (micro.positionInLink >= getCurrentLinkLength) {
-                shouldLeave = true
-              }
-          }
-
-          if (shouldLeave) {
-            leavingLink()
-          } else {
-            // Continue in MICRO mode, schedule next check
-            onFinishSpontaneous(Some(currentTick + 1))
-          }
+          // The Link owns MICRO completion. Clearing currentPath here races its
+          // MicroLeaveLinkData, which still needs the arrival node for signal/capacity checks.
+          onFinishSpontaneous(None)
         } else {
           mesoExitTick match {
             case Some(exitTick) if currentTick < exitTick =>
@@ -393,14 +380,11 @@ class Bus(
             }
         }
 
-      case WaitingSignalState =>
-        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
-        onFinishSpontaneous(Some(currentTick + 1))
-
-      case WaitingCapacity =>
-        // Should never actually fire, same reasoning as WaitingSignalState.
-        logWarn(s"$getEntityId: unexpected actSpontaneous while WaitingCapacity at tick=$currentTick")
-        onFinishSpontaneous(Some(currentTick + 1))
+      case WaitingSignalState | WaitingCapacity =>
+        // A queued wake can outlive the transition to reply-driven waiting. The Node's
+        // reply (including a later capacity grant) owns resumption; polling adds no progress.
+        logDebug(s"$getEntityId: ignoring queued wake while ${state.status} at tick=$currentTick")
+        onFinishSpontaneous(None)
 
       case WaitingLoadPassenger =>
 //        logInfo(s"[BUS-CYCLE] ${getEntityId} WaitingLoadPassenger->enterLink at tick=$currentTick stopCount=$stopArrivalCount")

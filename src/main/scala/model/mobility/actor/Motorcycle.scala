@@ -377,13 +377,11 @@ class Motorcycle(
       case Finished =>
         onFinishSpontaneous()
 
-      case WaitingSignalState =>
-        logWarn(s"Motorcycle ${getEntityId}: unexpected actSpontaneous while WaitingSignalState at tick=$currentTick")
-        onFinishSpontaneous(Some(currentTick + 1))
-
-      case WaitingCapacity =>
-        logWarn(s"Motorcycle ${getEntityId}: unexpected actSpontaneous while WaitingCapacity at tick=$currentTick")
-        onFinishSpontaneous(Some(currentTick + 1))
+      case WaitingSignalState | WaitingCapacity =>
+        // A queued wake can outlive the transition to reply-driven waiting. The Node's
+        // reply (including a later capacity grant) owns resumption; polling adds no progress.
+        logDebug(s"$getEntityId: ignoring queued wake while ${state.status} at tick=$currentTick")
+        onFinishSpontaneous(None)
 
       case _ =>
         super.actSpontaneous(event)

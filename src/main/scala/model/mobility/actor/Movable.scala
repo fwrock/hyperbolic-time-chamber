@@ -26,9 +26,6 @@ abstract class Movable[T <: MovableState](
       properties = properties
     ) {
 
-  private var waitingTicksCounter: Int = 0
-  private val MaxWaitingTicks: Int = 100
-
   protected def requestRoute(): Unit = {
     logDebug(s"Requesting route from ${state.origin} to ${state.destination}")
     if (requestAccountedRoute(state.origin, state.destination, 500_000)) return
@@ -110,19 +107,9 @@ abstract class Movable[T <: MovableState](
         enterLink()
 
       case Waiting =>
-        waitingTicksCounter += 1
-        if (waitingTicksCounter > MaxWaitingTicks) {
-          logWarn(
-            s"[MOVABLE] STUCK in Waiting for $waitingTicksCounter ticks at tick $currentTick | " +
-            s"id=$getEntityId path=${state.movableCurrentPath} route=${state.movableBestRoute.map(_.size)} — RECOVERING by skipping to next segment"
-          )
-          waitingTicksCounter = 0
-          state.movableCurrentPath = None
-          state.movableStatus = Ready
-          onFinishSpontaneous(Some(currentTick + 1))
-        } else {
-          onFinishSpontaneous(Some(currentTick + 1))
-        }
+        // Link admission can wait for physical space. Only its reply may advance the route;
+        // queued wakes must neither poll nor discard the segment awaiting admission.
+        onFinishSpontaneous(None)
 
       case Finished =>
         onFinishSpontaneous(None)
@@ -185,7 +172,6 @@ abstract class Movable[T <: MovableState](
   }
 
   private def handleLinkInfo(event: ActorInteractionEvent, data: LinkInfoData): Unit = {
-    waitingTicksCounter = 0
     EventTypeEnum.valueOf(event.eventType) match {
       case ReceiveEnterLinkInfo => actHandleReceiveEnterLinkInfo(event, data)
       case ReceiveLeaveLinkInfo => actHandleReceiveLeaveLinkInfo(event, data)
@@ -280,7 +266,6 @@ abstract class Movable[T <: MovableState](
             state.movableLinkExitReported = false
             state.movableMicroSchedulingDelegated = false
             state.movableMicroLeaveHandledByLink = false
-            waitingTicksCounter = 0
 
             val delegation = delegatedEntry()
             val mesoAccess = delegation.exists(_.deferReply) && model.mobility.util.VehicleSimulationConfig.linkRequestsAccess
